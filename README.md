@@ -1,6 +1,8 @@
 # Rutivo · Gestor Transfer
 
 App para conductores de transfer: caja diaria, servicios, gasolina, facturas en PDF y hucha.
+**Enlace de la app: https://rutivo.github.io/app/**
+
 Es una **PWA**: se instala en el móvil desde el navegador y funciona sin conexión.
 Los datos se guardan en el móvil y, si se activa la nube, en la cuenta de cada
 usuario (Firebase). Para activarla, sigue **CONFIGURAR-NUBE.md**.
