@@ -575,7 +575,7 @@ button.danger { color: var(--out); }
   position: fixed;
   top: calc(10px + env(safe-area-inset-top, 0px));
   right: max(12px, calc((100vw - 560px) / 2 + 12px));
-  z-index: 15;
+  z-index: 9; /* por debajo de la factura abierta (10) y del visor de fotos */
   width: 40px;
   height: 40px;
   margin: 0;
