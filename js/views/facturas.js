@@ -1,8 +1,8 @@
 // Pantalla "Facturas": datos del emisor, logo, emisión de facturas, PDF y copia de seguridad.
-import { $, $$, confirmTap, confirmTapTimed, loadScript, onClick, saveFile, toast } from '../dom.js';
+import { $, $$, confirmTap, confirmTapTimed, disarm, downloadBlob, loadScript, onClick, saveFile, toast } from '../dom.js';
 import { COLORS, ICON_NAMES, ICONS, accentColor, iconSvg, logoSvg } from '../logo.js';
 import { baseOf, invoiceTotals, nextInvoiceNumber } from '../money.js';
-import { S, exportBackup, importBackup, save } from '../store.js';
+import { S, exportBackup, importBackup, markBackupDone, save } from '../store.js';
 import { esc, eur, fd, r2, slug, today, uid } from '../utils.js';
 
 const HTML2CANVAS = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
@@ -292,17 +292,7 @@ async function exportPdf() {
     const filename = 'Factura-' + (f ? f.num : '') + (f && f.cl && f.cl.nom ? '-' + slug(f.cl.nom) : '') + '.pdf';
     const result = await saveFile(blob, filename, 'application/pdf');
     if (result === 'saved') toast('PDF listo ✓');
-    if (result === 'unavailable') {
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = filename;
-      a.target = '_blank';
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 60000);
-    }
+    if (result === 'unavailable') downloadBlob(blob, filename);
   } catch {
     toast('No se pudo crear el PDF. Revisa la conexión e inténtalo otra vez.');
   }
@@ -316,6 +306,7 @@ async function copyBackup() {
   const text = exportBackup();
   $('#bk').value = text;
   $('#bk').select();
+  markBackupDone();
   try {
     await navigator.clipboard.writeText(text);
     toast('Copia hecha. Pégala donde quieras restaurarla.');
@@ -324,20 +315,69 @@ async function copyBackup() {
   }
 }
 
-function restoreBackup() {
-  const text = $('#bk').value;
+const isValidBackup = (text) => {
   try {
     const d = JSON.parse(text.trim());
-    if (!d || !d.mov || !d.srv || !d.cfg) throw new Error();
+    return !!(d && d.mov && d.srv && d.cfg);
   } catch {
-    toast('La copia no es válida. Pégala completa en la caja.');
-    return;
+    return false;
   }
-  const button = $('#bkr');
-  if (!confirmTapTimed(button, 'Toca otra vez para confirmar', 'Esto sustituye los datos de este dispositivo.')) return;
+};
+
+function applyBackup(text) {
   const ok = importBackup(text);
   rerenderAll();
   toast(ok ? 'Datos restaurados.' : 'Se restauraron, pero no se pudieron guardar en este dispositivo.');
+}
+
+function restoreBackup() {
+  const text = $('#bk').value;
+  if (!isValidBackup(text)) {
+    toast('La copia no es válida. Pégala completa en la caja.');
+    return;
+  }
+  if (!confirmTapTimed($('#bkr'), 'Toca otra vez para confirmar', 'Esto sustituye los datos de este dispositivo.')) return;
+  applyBackup(text);
+}
+
+/** Guarda la copia como archivo .json (compartir en el móvil o descarga). */
+export async function saveBackupFile() {
+  const blob = new Blob([exportBackup()], { type: 'application/json' });
+  const filename = 'rutivo-copia-' + today() + '.json';
+  const result = await saveFile(blob, filename, 'application/json');
+  if (result === 'cancelled') return;
+  if (result === 'unavailable') downloadBlob(blob, filename);
+  markBackupDone();
+  rerenderAll();
+  toast('Copia guardada ✓ Guárdala en un sitio seguro.');
+}
+
+let pendingRestore = null; // texto del archivo elegido, a la espera de confirmar
+
+function restoreFromFile() {
+  const button = $('#bko');
+  if (pendingRestore && button.dataset.arm === '1') {
+    disarm(button);
+    const text = pendingRestore;
+    pendingRestore = null;
+    applyBackup(text);
+    return;
+  }
+  $('#bkfile').click();
+}
+
+async function fileChosen() {
+  const file = $('#bkfile').files[0];
+  $('#bkfile').value = '';
+  if (!file) return;
+  const text = await file.text();
+  if (!isValidBackup(text)) {
+    toast('Ese archivo no es una copia de Rutivo.');
+    return;
+  }
+  pendingRestore = text;
+  confirmTapTimed($('#bko'), 'Toca otra vez para restaurar (sustituye tus datos)', 'Esto sustituye los datos actuales por los de la copia.', 10000);
+  setTimeout(() => (pendingRestore = null), 10000);
 }
 
 // ---------- arranque ----------
@@ -414,4 +454,7 @@ export function initFacturas(rerender) {
 
   $('#bkc').onclick = copyBackup;
   $('#bkr').onclick = restoreBackup;
+  $('#bkf').onclick = saveBackupFile;
+  $('#bko').onclick = restoreFromFile;
+  $('#bkfile').onchange = fileChosen;
 }

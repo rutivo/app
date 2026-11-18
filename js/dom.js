@@ -83,3 +83,34 @@ export const loadScript = (src) =>
     s.onerror = ko;
     document.head.appendChild(s);
   });
+
+/** Descarga un archivo con el método clásico del navegador. */
+export function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.target = '_blank';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
+}
+
+/** Lee un valor de localStorage sin fallar. */
+export function readFlag(key) {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+/** Guarda un valor en localStorage sin fallar. */
+export function writeFlag(key, value) {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    /* sin almacenamiento */
+  }
+}

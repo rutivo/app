@@ -3,6 +3,7 @@ import { $, onClick } from '../dom.js';
 import { cashStats, baseOf } from '../money.js';
 import { S, save } from '../store.js';
 import { cap, esc, eur, monthName, quarterOf, r2, sum, today, uid } from '../utils.js';
+import { renderTips } from './tips.js';
 
 const statsGrid = (cells) =>
   '<div class="grid">' + cells.map(([value, label, cls]) => '<div><b' + (cls ? ' class="' + cls + '"' : '') + '>' + value + '</b>' + label + '</div>').join('') + '</div>';
@@ -72,6 +73,7 @@ function renderQuarter() {
 }
 
 export function renderCaja() {
+  renderTips();
   renderMonths();
   renderQuarter();
 

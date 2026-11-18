@@ -17,6 +17,7 @@
 //   ts   marca de tiempo del último cambio
 
 const STORAGE_KEY = 'cajaTransfer';
+const BACKUP_KEY = 'lastBackup'; // fecha de la última copia de seguridad
 const PHOTO_PREFIX = 'foto_';
 const LISTS = ['mov', 'srv', 'fac', 'gas', 'huc', 'prv'];
 
@@ -28,10 +29,10 @@ const emptyState = () => ({
 /** Estado global. Se modifica en el sitio para que todos los módulos vean lo mismo. */
 export const S = emptyState();
 
-/** Sustituye todo el estado por `data`. */
+/** Sustituye todo el estado por `data` (null = estado vacío). */
 export function replaceState(data) {
   for (const k of Object.keys(S)) delete S[k];
-  Object.assign(S, data);
+  Object.assign(S, data || emptyState());
 }
 
 export function loadLocal() {
@@ -71,6 +72,28 @@ export function save() {
   return ok || !!cloud;
 }
 
+/** Borra del móvil los datos de la app (no la licencia). */
+export function clearLocal() {
+  try {
+    const keys = [];
+    for (let i = 0; i < localStorage.length; i++) keys.push(localStorage.key(i));
+    for (const k of keys) {
+      if (k === STORAGE_KEY || k.startsWith(PHOTO_PREFIX) || k === 'avFired' || k === BACKUP_KEY) localStorage.removeItem(k);
+    }
+  } catch {
+    /* sin almacenamiento */
+  }
+}
+
+/** Pide al navegador que no borre los datos de la app por su cuenta. */
+export function requestPersistentStorage() {
+  try {
+    if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
+  } catch {
+    /* no disponible */
+  }
+}
+
 export function hasLocalData() {
   return LISTS.some((k) => S[k].length > 0) || !!S.cfg.nom;
 }
@@ -105,6 +128,25 @@ export function removePhotoLocal(id) {
 // ---------- copia de seguridad ----------
 
 export const exportBackup = () => JSON.stringify(S);
+
+/** Anota que se ha hecho una copia (para el recordatorio). */
+export function markBackupDone() {
+  try {
+    localStorage.setItem(BACKUP_KEY, String(Date.now()));
+  } catch {
+    /* sin almacenamiento */
+  }
+}
+
+/** Días desde la última copia, o null si nunca se hizo. */
+export function daysSinceBackup(now = Date.now()) {
+  try {
+    const t = +localStorage.getItem(BACKUP_KEY);
+    return t ? Math.floor((now - t) / 864e5) : null;
+  } catch {
+    return null;
+  }
+}
 
 /** Valida y aplica una copia. Lanza un Error si no es válida. */
 export function importBackup(text) {

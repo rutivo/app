@@ -563,3 +563,9 @@ button.danger { color: var(--out); }
   font-weight: 800;
   text-decoration: none;
 }
+
+/* Pantalla de entrada / registro */
+.auth-wall { position: fixed; inset: 0; z-index: 90; background: var(--bg); overflow: auto; padding: calc(24px + env(safe-area-inset-top, 0px)) 18px 24px; }
+.auth-wall > div { max-width: 440px; margin: 0 auto; }
+.auth-wall .card.out { border-color: var(--out); }
+.tip-close { float: right; }

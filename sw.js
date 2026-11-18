@@ -1,7 +1,7 @@
 // Service worker: la app funciona sin conexión.
 // Estrategia "red primero": siempre intenta la versión nueva y, si no hay red,
 // usa la copia guardada. Sube CACHE al cambiar la lista de archivos.
-const CACHE = 'gestor-transfer-v5';
+const CACHE = 'gestor-transfer-v6';
 const FILES = [
   './',
   './index.html',
@@ -11,7 +11,10 @@ const FILES = [
   './css/styles.css',
   './js/main.js',
   './js/agency.js',
+  './js/backend/claude.js',
+  './js/backend/firebase.js',
   './js/cloud.js',
+  './js/config.js',
   './js/dom.js',
   './js/license.js',
   './js/logo.js',
@@ -19,12 +22,14 @@ const FILES = [
   './js/reminders.js',
   './js/store.js',
   './js/utils.js',
-  './js/welcome.js',
   './js/views/caja.js',
+  './js/views/cuenta.js',
   './js/views/facturas.js',
   './js/views/gasolina.js',
   './js/views/hucha.js',
+  './js/views/tips.js',
   './js/views/transfer.js',
+  './js/welcome.js',
 ];
 
 self.addEventListener('install', (e) => {

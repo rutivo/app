@@ -21,6 +21,7 @@
   <section class="v on" id="v-hoy">
     <div id="brand"></div>
     <div id="wl"></div>
+    <div id="tips"></div>
     <div class="road"></div>
     <div id="sync" class="mut">Tus datos se guardan en este dispositivo.</div>
     <h1>Caja diaria</h1>
@@ -214,11 +215,23 @@
     <h2>Facturas emitidas</h2>
     <div class="card" id="lfac"></div>
 
+    <div id="acctsec" hidden>
+      <h2>Mi cuenta</h2>
+      <div class="card" id="acct"></div>
+    </div>
+
     <h2>Copia de seguridad</h2>
     <div class="card">
-      <div class="mut">Copia tus datos y pégalos en otro navegador o en la app de la pantalla de inicio. Las fotos de gasolina no se incluyen.</div>
-      <textarea id="bk" rows="4" class="mt10" placeholder="Aquí aparece tu copia, o pega aquí una copia para restaurarla"></textarea>
-      <div class="row"><button class="sec" id="bkc">Copiar mis datos</button><button id="bkr">Restaurar</button></div>
+      <div class="mut">Guarda un archivo con todos tus datos (en Archivos, iCloud, Drive o mándatelo por WhatsApp). Si pierdes el móvil o se borran los datos, lo recuperas desde ese archivo. Las fotos de gasolina no se incluyen.</div>
+      <div class="row">
+        <button class="sec" id="bkf">Guardar copia en archivo</button>
+        <button class="sec" id="bko">Restaurar desde archivo</button>
+      </div>
+      <input type="file" id="bkfile" accept="application/json,.json,text/plain" hidden>
+      <details class="mt10"><summary class="mut">Copiar y pegar como texto</summary>
+        <textarea id="bk" rows="4" class="mt10" placeholder="Aquí aparece tu copia, o pega aquí una copia para restaurarla"></textarea>
+        <div class="row"><button class="sec" id="bkc">Copiar mis datos</button><button id="bkr">Restaurar</button></div>
+      </details>
     </div>
   </section>
 </div>

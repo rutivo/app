@@ -1,13 +1,14 @@
 // Punto de entrada: carga los datos, conecta las pantallas y pinta la app.
-import { initCloud } from './cloud.js';
 import { $$, toast } from './dom.js';
 import { checkLicense } from './license.js';
 import { renderReminders, scheduleReminders } from './reminders.js';
-import { loadLocal } from './store.js';
+import { loadLocal, requestPersistentStorage } from './store.js';
 import { initCaja, renderCaja } from './views/caja.js';
-import { initFacturas, renderBrand, renderFacturas } from './views/facturas.js';
+import { initAccount, renderAccount } from './views/cuenta.js';
+import { initFacturas, renderBrand, renderFacturas, saveBackupFile } from './views/facturas.js';
 import { initGasolina, renderGasolina } from './views/gasolina.js';
 import { initHucha, renderHucha } from './views/hucha.js';
+import { initTips } from './views/tips.js';
 import { initTransfer, renderTransfer } from './views/transfer.js';
 
 /** Vuelve a pintar todas las pantallas a partir del estado. */
@@ -18,6 +19,7 @@ function render() {
   renderGasolina();
   renderFacturas();
   renderHucha();
+  renderAccount();
   renderReminders();
   scheduleReminders();
 }
@@ -66,10 +68,12 @@ initTransfer(render);
 initGasolina(render);
 initHucha();
 initFacturas(render);
+initTips(saveBackupFile);
 render();
+requestPersistentStorage();
 
 if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
   navigator.serviceWorker.register('sw.js').catch(() => {});
 }
-initCloud(render);
+initAccount(render);
 checkLicense(() => toast('App activada ✓'));

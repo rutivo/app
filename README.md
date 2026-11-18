@@ -2,7 +2,8 @@
 
 App para conductores de transfer: caja diaria, servicios, gasolina, facturas en PDF y hucha.
 Es una **PWA**: se instala en el móvil desde el navegador y funciona sin conexión.
-Los datos se guardan en el propio móvil (y en la cuenta de Claude si se abre como artefacto).
+Los datos se guardan en el móvil y, si se activa la nube, en la cuenta de cada
+usuario (Firebase). Para activarla, sigue **CONFIGURAR-NUBE.md**.
 
 ## Publicarla
 
@@ -25,8 +26,10 @@ css/styles.css        estilos (modo claro/oscuro, factura A4, impresión)
 sw.js                 service worker (sin conexión). Sube CACHE al añadir archivos
 js/
   main.js             arranque y navegación entre pestañas
+  config.js           datos del proyecto de Firebase (null = sin nube)
   store.js            estado y guardado en el móvil, copia de seguridad
-  cloud.js            sincronización con la cuenta de Claude
+  cloud.js            sincronización con la nube y migración de datos del móvil
+  backend/            conexión con Firebase y con Claude
   utils.js            formato de importes y fechas
   money.js            IVA, totales de factura, numeración, caja y hucha
   agency.js           lectura del texto del servicio de la agencia
@@ -35,8 +38,10 @@ js/
   reminders.js        avisos de recogida, bienvenida y hucha
   license.js          prueba de 15 días y código de activación
   dom.js              ayudas de interfaz (avisos, confirmación en dos toques, guardar archivos)
-  views/              una pantalla por archivo: caja, transfer, gasolina, facturas, hucha
+  views/              una pantalla por archivo: caja, transfer, gasolina, facturas, hucha,
+                      cuenta (registro/entrada) y tips (avisos de instalar y de copia)
 tests/                pruebas de money, agency, welcome y license
+firestore.rules       reglas de seguridad de la base de datos
 ```
 
 `utils`, `money`, `agency` y `welcome` no tocan la pantalla, por eso se pueden probar en Node.
