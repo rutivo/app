@@ -13,7 +13,7 @@ GESTOR TRANSFER - cómo convertirla en app
 3) Mandársela a otros
    - Envía el enlace por WhatsApp. Cada persona la instala en su móvil.
    - Los datos de cada uno se guardan solo en su móvil. Para pasarlos a otro
-     móvil: Facturas > Copiar mis datos, y Restaurar en el otro.
+     móvil: Cuenta (botón redondo de arriba) > Exportar copia, y en el otro móvil: Importar copia.
 
 4) Google Play y App Store (más adelante)
    - Con el enlace https puedes usar pwabuilder.com, que genera el paquete

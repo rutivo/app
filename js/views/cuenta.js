@@ -102,29 +102,67 @@ function hideWall() {
   wall = null;
 }
 
-// ---------- sección "Mi cuenta" ----------
+// ---------- pantalla "Cuenta" ----------
+
+const PERSON_ICON =
+  '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="8" r="4.2"/><path d="M3.5 20.5c.9-4.2 4.3-6.5 8.5-6.5s7.6 2.3 8.5 6.5z"/></svg>';
+
+const initial = (email) => esc((email || '?').trim().charAt(0).toUpperCase());
+
+/** Fila de lista estilo ajustes. */
+const row = (id, icon, title, subtitle, extraClass = '') =>
+  '<button class="row-btn ' + extraClass + '" id="' + id + '" type="button">' +
+  '<span class="ico" aria-hidden="true">' + icon + '</span>' +
+  '<span class="txt"><b data-label>' + title + '</b><small>' + subtitle + '</small></span>' +
+  '<span class="chev" aria-hidden="true">›</span></button>';
+
+function renderAvatarButton() {
+  const btn = $('#acctbtn');
+  if (!btn) return;
+  btn.innerHTML = currentUser ? initial(currentUser.email) : PERSON_ICON;
+}
+
+function profileCard() {
+  if (!accountsEnabled()) {
+    return (
+      '<div class="card profile"><div class="avatar">' + PERSON_ICON + '</div><div>' +
+      '<b>Este dispositivo</b><small>Tus datos se guardan solo en este móvil. Haz copias de seguridad.</small></div></div>'
+    );
+  }
+  if (!currentUser) {
+    return (
+      '<div class="card profile"><div class="avatar">' + PERSON_ICON + '</div><div>' +
+      '<b>Sin conexión</b><small>Trabajando con los datos de este móvil. Se sincronizarán al volver internet.</small></div></div>'
+    );
+  }
+  return (
+    '<div class="card profile"><div class="avatar">' + initial(currentUser.email) + '</div><div>' +
+    '<b>' + esc(currentUser.email) + '</b><small class="ok">● Sincronizado en la nube</small></div></div>' +
+    '<h3 class="sect">Sesión</h3>' +
+    '<div class="card list">' +
+    row('alo', '⎋', 'Cerrar sesión', 'Tus datos seguirán guardados en tu cuenta') +
+    '</div>' +
+    '<h3 class="sect">Privacidad</h3>' +
+    '<div class="card list"><details class="row-more" id="adel">' +
+    '<summary class="row-btn danger"><span class="ico" aria-hidden="true">✕</span>' +
+    '<span class="txt"><b>Eliminar cuenta</b><small>Borra tu cuenta y todos tus datos</small></span>' +
+    '<span class="chev" aria-hidden="true">›</span></summary>' +
+    '<div class="row-body"><div class="mut">Se eliminarán tu cuenta y todos tus datos, en la nube y en este móvil. ' +
+    'Esta acción no se puede deshacer. Si quieres conservarlos, exporta antes una copia.</div>' +
+    '<label class="f" for="adpw">Contraseña</label><input id="adpw" type="password" autocomplete="current-password">' +
+    '<div id="aderr" class="out mt8" role="alert"></div>' +
+    '<button class="sec danger" id="adgo" type="button">Eliminar cuenta definitivamente</button></div></details></div>'
+  );
+}
 
 export function renderAccount() {
+  renderAvatarButton();
   const box = $('#acct');
-  if (!box) return;
-  if (!accountsEnabled()) {
-    box.innerHTML = '';
-    box.parentElement.hidden = true;
-    return;
-  }
-  box.parentElement.hidden = false;
-  box.innerHTML = currentUser
-    ? '<div class="mut">Has entrado como</div><div><b>' + esc(currentUser.email) + '</b></div>' +
-      '<div class="mut mt8">Tus datos se guardan en la nube y los recuperas entrando con este email en cualquier móvil.</div>' +
-      '<button class="sec" id="alo">Cerrar sesión</button>' +
-      '<details class="mt14" id="adel"><summary class="mut">Borrar mi cuenta</summary>' +
-      '<div class="mut mt8">Se borran tu cuenta y <b>todos tus datos</b> de la nube y de este móvil. No se puede deshacer. ' +
-      'Si quieres conservarlos, guarda antes una copia de seguridad en archivo.</div>' +
-      '<label class="f" for="adpw">Escribe tu contraseña para confirmar</label>' +
-      '<input id="adpw" type="password" autocomplete="current-password">' +
-      '<div id="aderr" class="out mt8" role="alert"></div>' +
-      '<button class="sec danger" id="adgo">Borrar mi cuenta y mis datos para siempre</button></details>'
-    : '<div class="mut">Sin conexión con tu cuenta. Trabajando con los datos de este móvil.</div>';
+  // No repintar mientras se escribe (p. ej. la contraseña para eliminar la cuenta).
+  if (!box || box.contains(document.activeElement)) return;
+  const wasOpen = $('#adel') && $('#adel').open;
+  box.innerHTML = profileCard();
+  if (wasOpen && $('#adel')) $('#adel').open = true;
   const out = $('#alo');
   if (out) out.onclick = () => signOut(out);
   const del = $('#adgo');
@@ -135,7 +173,7 @@ async function deleteMyAccount(button) {
   const password = $('#adpw').value;
   const error = (t) => ($('#aderr').textContent = t);
   if (!password) return error('Escribe tu contraseña.');
-  if (!confirmTapTimed(button, 'Toca otra vez para borrar todo', null, 8000)) return;
+  if (!confirmTapTimed(button, 'Toca otra vez para confirmar', null, 8000)) return;
   button.disabled = true;
   error('');
   try {
@@ -154,7 +192,7 @@ async function signOut(button) {
   // Antes de salir, subir lo pendiente: al salir se borran los datos del móvil.
   const saved = await flush();
   const risky = !saved || hasUnsavedChanges();
-  const text = risky ? 'Hay cambios sin subir (sin conexión). Toca otra vez para salir y perderlos' : 'Toca otra vez para cerrar sesión';
+  const text = risky ? 'Cambios sin subir. Toca otra vez para salir igualmente' : 'Toca otra vez para cerrar sesión';
   if (!confirmTapTimed(button, text, risky ? null : 'Al salir se borran los datos de este móvil; seguirán en tu cuenta.')) return;
   try {
     await fb.logout();
@@ -217,5 +255,5 @@ export function initAccount(rerender) {
   renderAccount();
   if (accountsEnabled()) startFirebase();
   else if (window.claude) startClaude();
-  else status('Tus datos se guardan en este dispositivo. Haz copias de seguridad (Facturas) para no perderlos.');
+  else status('Tus datos se guardan en este dispositivo. Haz copias de seguridad desde Cuenta (arriba a la derecha) para no perderlos.');
 }

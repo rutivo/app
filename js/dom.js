@@ -19,9 +19,11 @@ export function toast(text) {
  */
 export function confirmTap(button, armedText, hint) {
   if (button.dataset.arm === '1') return true;
+  // En los botones de lista solo cambia el título (elemento con data-label).
+  const label = button.querySelector('[data-label]') || button;
   button.dataset.arm = '1';
-  button.dataset.text ??= button.textContent;
-  button.textContent = armedText;
+  button.dataset.text ??= label.textContent;
+  label.textContent = armedText;
   if (hint) toast(hint);
   return false;
 }
@@ -39,7 +41,8 @@ export function confirmTapTimed(button, armedText, hint, ms = 6000) {
 
 export function disarm(button) {
   button.dataset.arm = '';
-  if (button.dataset.text) button.textContent = button.dataset.text;
+  const label = button.querySelector('[data-label]') || button;
+  if (button.dataset.text) label.textContent = button.dataset.text;
 }
 
 /** Delegación de clics: ejecuta handler(el, event) si el clic cae en `selector`. */

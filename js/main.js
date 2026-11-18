@@ -1,5 +1,5 @@
 // Punto de entrada: carga los datos, conecta las pantallas y pinta la app.
-import { $$, toast } from './dom.js';
+import { $, $$, toast } from './dom.js';
 import { TRIAL_ENABLED } from './config.js';
 import { checkLicense } from './license.js';
 import { renderReminders, scheduleReminders } from './reminders.js';
@@ -25,16 +25,22 @@ function render() {
   scheduleReminders();
 }
 
+let lastTab = 'hoy';
+
+/** Muestra una pantalla: 'hoy', 'tr', 'ga', 'fa', 'hu' o 'cu' (Cuenta). */
+function showView(view) {
+  $$('.tabs button').forEach((t) => t.classList.toggle('on', t.dataset.v === view));
+  $$('.v').forEach((v) => v.classList.toggle('on', v.id === 'v-' + view));
+  $('#acctbtn').classList.toggle('hide', view === 'cu');
+  if (view !== 'cu') lastTab = view;
+  scrollTo(0, 0);
+  render();
+}
+
 function initTabs() {
-  const tabs = $$('.tabs button');
-  for (const tab of tabs) {
-    tab.onclick = () => {
-      tabs.forEach((t) => t.classList.toggle('on', t === tab));
-      $$('.v').forEach((v) => v.classList.toggle('on', v.id === 'v-' + tab.dataset.v));
-      scrollTo(0, 0);
-      render();
-    };
-  }
+  $$('.tabs button').forEach((tab) => (tab.onclick = () => showView(tab.dataset.v)));
+  $('#acctbtn').onclick = () => showView('cu');
+  $('#cuback').onclick = () => showView(lastTab);
 }
 
 /** Icono provisional dibujado al vuelo (pestaña del navegador / atajo de inicio). */

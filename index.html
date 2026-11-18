@@ -214,27 +214,46 @@
 
     <h2>Facturas emitidas</h2>
     <div class="card" id="lfac"></div>
+  </section>
 
-    <div id="acctsec" hidden>
-      <h2>Mi cuenta</h2>
-      <div class="card" id="acct"></div>
-    </div>
+  <!-- ============ CUENTA (se abre con el botón del avatar) ============ -->
+  <section class="v" id="v-cu">
+    <button class="back" id="cuback" type="button">‹ Volver</button>
+    <h1>Cuenta</h1>
+    <div id="acct"></div>
 
-    <h2>Copia de seguridad</h2>
-    <div class="card">
-      <div class="mut">Guarda un archivo con todos tus datos (en Archivos, iCloud, Drive o mándatelo por WhatsApp). Si pierdes el móvil o se borran los datos, lo recuperas desde ese archivo. Las fotos de gasolina no se incluyen.</div>
-      <div class="row">
-        <button class="sec" id="bkf">Guardar copia en archivo</button>
-        <button class="sec" id="bko">Restaurar desde archivo</button>
-      </div>
-      <input type="file" id="bkfile" accept="application/json,.json,text/plain" hidden>
-      <details class="mt10"><summary class="mut">Copiar y pegar como texto</summary>
-        <textarea id="bk" rows="4" class="mt10" placeholder="Aquí aparece tu copia, o pega aquí una copia para restaurarla"></textarea>
-        <div class="row"><button class="sec" id="bkc">Copiar mis datos</button><button id="bkr">Restaurar</button></div>
+    <h3 class="sect">Copia de seguridad</h3>
+    <div class="card list">
+      <button class="row-btn" id="bkf" type="button">
+        <span class="ico" aria-hidden="true">⤓</span>
+        <span class="txt"><b data-label>Exportar copia</b><small>Descarga un archivo con todos tus datos</small></span>
+        <span class="chev" aria-hidden="true">›</span>
+      </button>
+      <button class="row-btn" id="bko" type="button">
+        <span class="ico" aria-hidden="true">⤒</span>
+        <span class="txt"><b data-label>Importar copia</b><small>Recupera tus datos desde un archivo</small></span>
+        <span class="chev" aria-hidden="true">›</span>
+      </button>
+      <details class="row-more">
+        <summary class="row-btn">
+          <span class="ico" aria-hidden="true">⧉</span>
+          <span class="txt"><b>Copiar como texto</b><small>Alternativa si no puedes usar archivos</small></span>
+          <span class="chev" aria-hidden="true">›</span>
+        </summary>
+        <div class="row-body">
+          <textarea id="bk" rows="4" placeholder="Aquí aparece tu copia, o pega aquí una copia para restaurarla"></textarea>
+          <div class="row"><button class="sec" id="bkc" type="button">Copiar mis datos</button><button id="bkr" type="button">Restaurar</button></div>
+        </div>
       </details>
     </div>
+    <p class="note">La copia incluye caja, servicios, facturas, gasolina, hucha y tus datos de emisor. No incluye las fotos de los tickets.</p>
+    <input type="file" id="bkfile" accept="application/json,.json,text/plain" hidden>
+
+    <p class="note center">Rutivo · Gestor Transfer</p>
   </section>
 </div>
+
+<button id="acctbtn" class="avatar-btn" type="button" aria-label="Cuenta"></button>
 
 <div id="toast" role="status"></div>
 
