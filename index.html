@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Rutivo</title>
+  <meta name="apple-mobile-web-app-title" content="Rutivo">
+  <meta name="application-name" content="Rutivo">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="theme-color" content="#1d5fe0">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+<div class="app">
+
+  <!-- ============ CAJA ============ -->
+  <section class="v on" id="v-hoy">
+    <div id="brand"></div>
+    <div id="wl"></div>
+    <div class="road"></div>
+    <div id="sync" class="mut">Tus datos se guardan en este dispositivo.</div>
+    <h1>Caja diaria</h1>
+    <div class="card" id="mes"></div>
+    <details class="card"><summary><b>Todos los meses</b></summary><div id="lmes"></div></details>
+    <div class="card" id="avc"></div>
+
+    <h2>Trimestres</h2>
+    <div class="card"><select id="tq"></select><div id="tres" class="mt12"></div></div>
+
+    <h2>Día a día</h2>
+    <label class="f" for="dia">Día</label><input type="date" id="dia">
+    <div class="card mt12" id="res"></div>
+    <div class="card">
+      <form id="fm">
+        <div class="seg">
+          <input type="radio" name="t" id="t1" value="in" checked><label for="t1">Ingreso</label>
+          <input type="radio" name="t" id="t2" value="out"><label for="t2">Gasto</label>
+        </div>
+        <div class="seg mt8">
+          <input type="radio" name="p" id="p1" value="efectivo" checked><label for="p1">Efectivo</label>
+          <input type="radio" name="p" id="p2" value="tarjeta"><label for="p2">Tarjeta</label>
+        </div>
+        <label class="f" for="mi">Importe (€)</label>
+        <input id="mi" type="number" step="0.01" min="0" inputmode="decimal" required>
+        <label class="f" for="mc">Concepto</label>
+        <input id="mc" placeholder="Ej.: gasolina, peaje, propina" required>
+        <button>Guardar movimiento</button>
+      </form>
+    </div>
+    <h2>Movimientos del día</h2>
+    <div class="card" id="lm"></div>
+  </section>
+
+  <!-- ============ TRANSFER ============ -->
+  <section class="v" id="v-tr">
+    <h1>Transfer</h1>
+    <div class="card">
+      <label class="f" for="agt">Pegar servicio de la agencia</label>
+      <textarea id="agt" rows="5" placeholder="Pega aquí el servicio tal como te llega"></textarea><button id="ag">Leer servicio</button>
+    </div>
+
+    <details class="card" id="pdet"><summary><b id="pt">Proveedores</b></summary>
+      <form id="fp">
+        <label class="f" for="pn">Nombre o empresa</label><input id="pn" required>
+        <label class="f" for="pnif">NIF / CIF</label><input id="pnif">
+        <label class="f" for="pd">Dirección</label><input id="pd">
+        <div class="row">
+          <div><label class="f" for="pcp">Código postal</label><input id="pcp" inputmode="numeric"></div>
+          <div><label class="f" for="pl2">Localidad</label><input id="pl2"></div>
+        </div>
+        <button id="pb">Guardar proveedor</button>
+      </form>
+      <div id="plist" class="mt10"></div>
+    </details>
+
+    <div class="card">
+      <form id="fs">
+        <div class="row">
+          <div><label class="f" for="sf">Fecha</label><input type="date" id="sf" required></div>
+          <div><label class="f" for="sh">Hora</label><input type="time" id="sh"></div>
+        </div>
+        <label class="f" for="sc">Proveedor</label><select id="sc" required></select>
+        <label class="f" for="so">Origen</label><input id="so" required>
+        <label class="f" for="sd">Destino</label><input id="sd" required>
+        <div class="row">
+          <div><label class="f" for="si">Importe total (€, con IVA)</label><input id="si" type="number" step="0.01" min="0" inputmode="decimal" required></div>
+          <div><label class="f" for="sp">Pago</label>
+            <select id="sp"><option value="efectivo">Efectivo</option><option value="tarjeta">Tarjeta</option><option value="pendiente">Pendiente</option></select>
+          </div>
+        </div>
+        <label class="f" for="sn">Notas (equipaje, espera, peaje...)</label><input id="sn">
+        <details open class="mt10"><summary><b>Pasajero y vuelo</b></summary>
+          <label class="f" for="spa">Nombre del pasajero (cartel)</label><input id="spa">
+          <div class="row">
+            <div><label class="f" for="svu">Vuelo</label><input id="svu"></div>
+            <div><label class="f" for="ssv">Salida del vuelo (hora origen)</label><input id="ssv" type="time"></div>
+          </div>
+          <label class="f" for="stl">Teléfono del pasajero</label><input id="stl" type="tel">
+        </details>
+        <button>Guardar servicio</button>
+      </form>
+    </div>
+
+    <details class="card"><summary><b>Mensaje de bienvenida</b></summary>
+      <div class="mut mt8">Escríbelo a tu gusto. Puedes usar: {nombre} {pasajero} {chofer} {punto} {vuelo} {hora} {destino} {fecha} {recogida}. Si un dato falta, esa frase no se envía.</div>
+      <label class="f" for="wen">Mensaje en inglés (opcional)</label><textarea id="wen" rows="4"></textarea>
+      <label class="f" for="wes">Mensaje en español (opcional)</label><textarea id="wes" rows="3"></textarea>
+      <label class="f">Así le llegará al cliente (ejemplo)</label><div id="wpv" class="mut preview"></div>
+      <button type="button" class="sec" id="wrs">Volver al mensaje original</button>
+    </details>
+
+    <h2>Servicios</h2>
+    <div class="card" id="ls"></div>
+    <button class="sec danger" id="dsa">Borrar todos los servicios</button>
+  </section>
+
+  <!-- ============ GASOLINA ============ -->
+  <section class="v" id="v-ga">
+    <h1>Gasolina del vehículo</h1>
+    <div class="card" id="gres"></div>
+    <div class="card">
+      <form id="fg">
+        <div class="row">
+          <div><label class="f" for="gf">Fecha</label><input type="date" id="gf" required></div>
+          <div><label class="f" for="gi">Importe (€)</label><input id="gi" type="number" step="0.01" min="0" inputmode="decimal" required></div>
+        </div>
+        <div class="row">
+          <div><label class="f" for="gl">Litros</label><input id="gl" type="number" step="0.01" min="0" inputmode="decimal"></div>
+          <div><label class="f" for="gp">Pago</label><select id="gp"><option value="tarjeta">Tarjeta</option><option value="efectivo">Efectivo</option></select></div>
+        </div>
+        <label class="f" for="gs">Gasolinera</label><input id="gs">
+        <label class="f" for="gh">Foto o PDF de la factura</label><input type="file" id="gh" accept="image/*,application/pdf">
+        <button>Guardar factura de gasolina</button>
+      </form>
+    </div>
+    <h2>Facturas guardadas</h2>
+    <div class="card" id="lg"></div>
+  </section>
+
+  <!-- ============ HUCHA ============ -->
+  <section class="v" id="v-hu">
+    <h1>Hucha</h1>
+    <div class="card" id="hres"></div>
+    <div class="card">
+      <button id="hq" class="mt0">Meter hoy</button>
+      <form id="fh">
+        <div class="row">
+          <div><label class="f" for="hdt">Día</label><input type="date" id="hdt"></div>
+          <div><label class="f" for="hi">Importe (€)</label><input id="hi" type="number" step="0.01" min="0" inputmode="decimal" required></div>
+        </div>
+        <button class="sec">Meter otra cantidad</button>
+      </form>
+    </div>
+    <h2>Este periodo</h2>
+    <div class="card" id="hl"></div>
+    <details class="card"><summary><b>Periodos anteriores</b></summary><div id="hh"></div></details>
+    <details class="card"><summary><b>Cambiar objetivo</b></summary>
+      <label class="f" for="hm">Ahorro por periodo (€)</label><input id="hm" type="number" step="1" min="0" inputmode="decimal">
+      <label class="f" for="hd">El periodo empieza el día (1 a 28)</label><input id="hd" type="number" min="1" max="28" inputmode="numeric">
+    </details>
+  </section>
+
+  <!-- ============ FACTURAS ============ -->
+  <section class="v" id="v-fa">
+    <h1>Facturas</h1>
+    <details class="card" id="emisor"><summary><b>Mis datos de emisor</b></summary>
+      <label class="f">Tu logo</label><div id="lpv" class="logo-preview"></div>
+      <div class="row">
+        <div><label class="f" for="lt">Tipo de logo</label>
+          <select id="lt"><option value="icono">Icono</option><option value="letras">Iniciales</option><option value="imagen">Mi imagen</option><option value="texto">Solo texto</option></select>
+        </div>
+        <div><label class="f" for="lf">Forma</label>
+          <select id="lf"><option value="circulo">Círculo</option><option value="cuadrado">Cuadrado</option></select>
+        </div>
+      </div>
+      <div id="icobox"><label class="f">Elige tu icono</label><div id="icg" class="icon-grid"></div></div>
+      <div id="imgbox">
+        <label class="f" for="lim">Sube tu imagen o logo</label><input type="file" id="lim" accept="image/*">
+        <button type="button" class="sec mt8" id="limx">Quitar imagen</button>
+      </div>
+      <label class="f">Color</label><div id="cog" class="color-row"></div>
+      <label class="f" for="ln">Texto del logo (si lo dejas vacío, tu nombre)</label><input id="ln" placeholder="Ej.: Taxi Sol">
+      <label class="f" for="ls">Segunda línea del logo (opcional)</label><input id="ls" placeholder="Ej.: Servicio de transfers">
+      <label class="f" for="en">Nombre o empresa</label><input id="en">
+      <label class="f" for="enif">NIF / DNI</label><input id="enif">
+      <label class="f" for="lic">Licencia o matrícula (opcional)</label><input id="lic">
+      <label class="f" for="ed">Dirección (calle y número)</label><input id="ed">
+      <div class="row">
+        <div><label class="f" for="ecp">Código postal</label><input id="ecp" inputmode="numeric"></div>
+        <div><label class="f" for="eloc">Localidad</label><input id="eloc"></div>
+      </div>
+      <label class="f" for="eib">Número de cuenta (IBAN)</label><input id="eib">
+      <label class="f" for="eul">Última factura emitida (nº)</label><input id="eul" type="number" min="0" inputmode="numeric">
+      <label class="f" for="iva">IVA (%)</label><input id="iva" type="number" step="0.1" min="0" inputmode="decimal">
+      <label class="f" for="echof">Tu nombre en el mensaje de bienvenida</label><input id="echof">
+      <label class="f" for="epunto">Punto de encuentro habitual (opcional)</label><input id="epunto" placeholder="Ej.: llegadas, puerta 3">
+    </details>
+
+    <div class="card">
+      <label class="f" for="fc">Cliente a facturar</label><select id="fc"></select>
+      <div id="cd">
+        <label class="f" for="cnif">NIF del cliente</label><input id="cnif">
+        <label class="f" for="cdir">Dirección del cliente</label><input id="cdir">
+      </div>
+      <h2 class="mt14">Servicios sin facturar</h2>
+      <div id="pk"></div>
+      <button id="mk">Crear factura</button>
+    </div>
+
+    <h2>Facturas emitidas</h2>
+    <div class="card" id="lfac"></div>
+
+    <h2>Copia de seguridad</h2>
+    <div class="card">
+      <div class="mut">Copia tus datos y pégalos en otro navegador o en la app de la pantalla de inicio. Las fotos de gasolina no se incluyen.</div>
+      <textarea id="bk" rows="4" class="mt10" placeholder="Aquí aparece tu copia, o pega aquí una copia para restaurarla"></textarea>
+      <div class="row"><button class="sec" id="bkc">Copiar mis datos</button><button id="bkr">Restaurar</button></div>
+    </div>
+  </section>
+</div>
+
+<div id="toast" role="status"></div>
+
+<div id="ph" class="photo-viewer">
+  <button class="sec" id="phx">Cerrar</button>
+  <img id="phi" alt="Factura de gasolina">
+</div>
+
+<div id="invwrap">
+  <div class="bar"><button class="sec" id="cl">Cerrar</button><button id="pr">Enviar / guardar PDF</button></div>
+  <div class="sheet" id="sheet"></div>
+</div>
+
+<nav class="tabs">
+  <button class="on" data-v="hoy">Caja</button>
+  <button data-v="tr">Transfer</button>
+  <button data-v="ga">Gasolina</button>
+  <button data-v="fa">Facturas</button>
+  <button data-v="hu">Hucha</button>
+</nav>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>

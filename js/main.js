@@ -1,0 +1,75 @@
+// Punto de entrada: carga los datos, conecta las pantallas y pinta la app.
+import { initCloud } from './cloud.js';
+import { $$, toast } from './dom.js';
+import { checkLicense } from './license.js';
+import { renderReminders, scheduleReminders } from './reminders.js';
+import { loadLocal } from './store.js';
+import { initCaja, renderCaja } from './views/caja.js';
+import { initFacturas, renderBrand, renderFacturas } from './views/facturas.js';
+import { initGasolina, renderGasolina } from './views/gasolina.js';
+import { initHucha, renderHucha } from './views/hucha.js';
+import { initTransfer, renderTransfer } from './views/transfer.js';
+
+/** Vuelve a pintar todas las pantallas a partir del estado. */
+function render() {
+  renderBrand();
+  renderCaja();
+  renderTransfer();
+  renderGasolina();
+  renderFacturas();
+  renderHucha();
+  renderReminders();
+  scheduleReminders();
+}
+
+function initTabs() {
+  const tabs = $$('.tabs button');
+  for (const tab of tabs) {
+    tab.onclick = () => {
+      tabs.forEach((t) => t.classList.toggle('on', t === tab));
+      $$('.v').forEach((v) => v.classList.toggle('on', v.id === 'v-' + tab.dataset.v));
+      scrollTo(0, 0);
+      render();
+    };
+  }
+}
+
+/** Icono provisional dibujado al vuelo (pestaña del navegador / atajo de inicio). */
+function drawFavicon() {
+  try {
+    const c = document.createElement('canvas');
+    c.width = c.height = 180;
+    const x = c.getContext('2d');
+    x.fillStyle = '#1d5fe0';
+    x.fillRect(0, 0, 180, 180);
+    x.fillStyle = '#fff';
+    x.textAlign = 'center';
+    x.font = '800 44px Arial,sans-serif';
+    x.fillText('RUTIVO', 90, 118);
+    const url = c.toDataURL('image/png');
+    for (const rel of ['apple-touch-icon', 'icon']) {
+      const l = document.createElement('link');
+      l.rel = rel;
+      l.href = url;
+      document.head.appendChild(l);
+    }
+  } catch {
+    /* sin canvas */
+  }
+}
+
+loadLocal();
+initTabs();
+drawFavicon();
+initCaja();
+initTransfer(render);
+initGasolina(render);
+initHucha();
+initFacturas(render);
+render();
+
+if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
+initCloud(render);
+checkLicense(() => toast('App activada ✓'));

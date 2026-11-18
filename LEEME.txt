@@ -1,0 +1,21 @@
+GESTOR TRANSFER - cómo convertirla en app
+
+1) Subirla a internet (gratis, 2 minutos)
+   - Entra en app.netlify.com/drop desde el ordenador.
+   - Arrastra la carpeta "gestor-transfer" entera (no el zip).
+   - Te da un enlace https. Ese enlace es tu app.
+
+2) Instalarla en el móvil
+   - Android (Chrome): abre el enlace > menú ⋮ > "Instalar app" o "Añadir a pantalla de inicio".
+   - iPhone (Safari): abre el enlace > botón Compartir > "Añadir a pantalla de inicio".
+   Se abre a pantalla completa y funciona sin conexión.
+
+3) Mandársela a otros
+   - Envía el enlace por WhatsApp. Cada persona la instala en su móvil.
+   - Los datos de cada uno se guardan solo en su móvil. Para pasarlos a otro
+     móvil: Facturas > Copiar mis datos, y Restaurar en el otro.
+
+4) Google Play y App Store (más adelante)
+   - Con el enlace https puedes usar pwabuilder.com, que genera el paquete
+     para Google Play. La App Store de Apple exige además un Mac y su cuenta
+     de desarrollador.

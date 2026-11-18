@@ -1,67 +1,52 @@
-# Gestor Transfer
+# Rutivo · Gestor Transfer
 
-Aplicación web para gestionar traslados de pasajeros: reservas, conductores y vehículos.
+App para conductores de transfer: caja diaria, servicios, gasolina, facturas en PDF y hucha.
+Es una **PWA**: se instala en el móvil desde el navegador y funciona sin conexión.
+Los datos se guardan en el propio móvil (y en la cuenta de Claude si se abre como artefacto).
 
-## Funcionalidades
+## Publicarla
 
-- **Traslados**: alta, edición, filtros por estado y día, y ciclo de vida
-  `pendiente → asignado → en curso → completado` (o `cancelado`).
-- **Asignación** de conductor y vehículo con validación de:
-  - conductor y vehículo activos,
-  - plazas suficientes para los pasajeros,
-  - que ninguno de los dos tenga otro servicio que se solape en el tiempo.
-- **Conductores y vehículos**: alta, activar/desactivar y borrado (solo si no tienen traslados).
+No necesita compilación. Sube la carpeta tal cual (por ejemplo, arrastrándola a
+app.netlify.com/drop). Más detalles en `LEEME.txt`.
 
-## Requisitos
-
-Node.js 22.5 o superior (usa el módulo SQLite integrado `node:sqlite`; no hay dependencias nativas).
-
-## Uso
+Para probarla en el ordenador hace falta un servidor (los módulos JavaScript no
+funcionan abriendo el archivo con doble clic):
 
 ```bash
-npm install
-npm run dev          # desarrollo con recarga: http://localhost:3000
-npm test             # tests de la API
-npm run typecheck
-npm run build && npm start   # producción
+npm start      # http://localhost:8080
+npm test       # pruebas de la lógica (Node 20 o superior, sin dependencias)
 ```
 
-Variables de entorno:
-
-| Variable        | Por defecto                  |
-| --------------- | ---------------------------- |
-| `PORT`          | `3000`                       |
-| `DATABASE_PATH` | `data/gestor-transfer.db`    |
-
-## Arquitectura
+## Estructura
 
 ```
-src/
-  domain/        modelos, esquemas de validación (zod) y errores de dominio
-  db/            conexión SQLite y migraciones versionadas
-  repositories/  acceso a datos (SQL parametrizado)
-  services/      reglas de negocio (asignación, solapamientos, estados)
-  http/          rutas Express, validación y manejo de errores
-  app.ts         composición de la aplicación
-  server.ts      arranque y apagado ordenado
-public/          interfaz web (HTML, CSS y JS sin frameworks)
-tests/           tests de integración de la API (vitest + supertest)
+index.html            estructura de las pantallas
+css/styles.css        estilos (modo claro/oscuro, factura A4, impresión)
+sw.js                 service worker (sin conexión). Sube CACHE al añadir archivos
+js/
+  main.js             arranque y navegación entre pestañas
+  store.js            estado y guardado en el móvil, copia de seguridad
+  cloud.js            sincronización con la cuenta de Claude
+  utils.js            formato de importes y fechas
+  money.js            IVA, totales de factura, numeración, caja y hucha
+  agency.js           lectura del texto del servicio de la agencia
+  welcome.js          mensaje de bienvenida por WhatsApp
+  logo.js             iconos y logo en SVG
+  reminders.js        avisos de recogida, bienvenida y hucha
+  license.js          prueba de 15 días y código de activación
+  dom.js              ayudas de interfaz (avisos, confirmación en dos toques, guardar archivos)
+  views/              una pantalla por archivo: caja, transfer, gasolina, facturas, hucha
+tests/                pruebas de money, agency, welcome y license
 ```
 
-Las fechas se guardan en UTC (ISO 8601) y el dinero en céntimos para evitar errores de redondeo.
+`utils`, `money`, `agency` y `welcome` no tocan la pantalla, por eso se pueden probar en Node.
 
-## API
+## Compatibilidad de datos
 
-| Método | Ruta                          | Descripción                              |
-| ------ | ----------------------------- | ---------------------------------------- |
-| GET    | `/api/transfers`              | Lista (`?status=&from=&to=&driverId=`)   |
-| POST   | `/api/transfers`              | Crea un traslado                         |
-| GET    | `/api/transfers/:id`          | Detalle                                  |
-| PATCH  | `/api/transfers/:id`          | Edita (solo pendiente o asignado)        |
-| POST   | `/api/transfers/:id/assign`   | `{ driverId, vehicleId }`                |
-| POST   | `/api/transfers/:id/status`   | `{ status }`                             |
-| DELETE | `/api/transfers/:id`          | Borra (solo pendiente o cancelado)       |
-| …      | `/api/drivers`, `/api/vehicles` | CRUD (GET, POST, PATCH, DELETE)        |
+Se mantienen la clave `cajaTransfer` de localStorage y el formato de los datos de
+versiones anteriores: al actualizar, cada usuario conserva lo que tenía. Por eso
+los campos usan nombres cortos (`mov`, `srv`, `f`, `i`…); su significado está
+documentado en `js/store.js`.
 
-Los errores siguen el formato `{ "error": { "code", "message", "details" } }` con
-códigos 400 (validación), 404, 409 (conflicto) y 422 (regla de negocio).
+No cambies `LICENSE_SECRET` ni `licenseCode()` en `js/license.js`: invalidaría los
+códigos de activación ya entregados.
