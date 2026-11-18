@@ -5,7 +5,7 @@
 //  - Dentro de Claude: se sincroniza con la cuenta de Claude, sin registro.
 //  - Sin nada configurado: solo en el móvil (como versiones anteriores).
 import { claudeStore } from '../backend/claude.js';
-import { connect, disconnectAndWipe, flush, hasUnsavedChanges, localOwner, status } from '../cloud.js';
+import { connect, disconnectAndWipe, flush, hasUnsavedChanges, localOwner, status, stopSync } from '../cloud.js';
 import { FIREBASE_CONFIG } from '../config.js';
 import { $, confirmTapTimed, toast } from '../dom.js';
 import { hasLocalData } from '../store.js';
@@ -116,10 +116,38 @@ export function renderAccount() {
   box.innerHTML = currentUser
     ? '<div class="mut">Has entrado como</div><div><b>' + esc(currentUser.email) + '</b></div>' +
       '<div class="mut mt8">Tus datos se guardan en la nube y los recuperas entrando con este email en cualquier móvil.</div>' +
-      '<button class="sec" id="alo">Cerrar sesión</button>'
+      '<button class="sec" id="alo">Cerrar sesión</button>' +
+      '<details class="mt14" id="adel"><summary class="mut">Borrar mi cuenta</summary>' +
+      '<div class="mut mt8">Se borran tu cuenta y <b>todos tus datos</b> de la nube y de este móvil. No se puede deshacer. ' +
+      'Si quieres conservarlos, guarda antes una copia de seguridad en archivo.</div>' +
+      '<label class="f" for="adpw">Escribe tu contraseña para confirmar</label>' +
+      '<input id="adpw" type="password" autocomplete="current-password">' +
+      '<div id="aderr" class="out mt8" role="alert"></div>' +
+      '<button class="sec danger" id="adgo">Borrar mi cuenta y mis datos para siempre</button></details>'
     : '<div class="mut">Sin conexión con tu cuenta. Trabajando con los datos de este móvil.</div>';
   const out = $('#alo');
   if (out) out.onclick = () => signOut(out);
+  const del = $('#adgo');
+  if (del) del.onclick = () => deleteMyAccount(del);
+}
+
+async function deleteMyAccount(button) {
+  const password = $('#adpw').value;
+  const error = (t) => ($('#aderr').textContent = t);
+  if (!password) return error('Escribe tu contraseña.');
+  if (!confirmTapTimed(button, 'Toca otra vez para borrar todo', null, 8000)) return;
+  button.disabled = true;
+  error('');
+  try {
+    await fb.deleteAccount(password, stopSync);
+  } catch (err) {
+    button.disabled = false;
+    error(fb.authErrorMessage(err));
+    return;
+  }
+  disconnectAndWipe();
+  toast('Cuenta borrada.');
+  setTimeout(() => location.reload(), 1200);
 }
 
 async function signOut(button) {

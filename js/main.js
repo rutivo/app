@@ -1,5 +1,6 @@
 // Punto de entrada: carga los datos, conecta las pantallas y pinta la app.
 import { $$, toast } from './dom.js';
+import { TRIAL_ENABLED } from './config.js';
 import { checkLicense } from './license.js';
 import { renderReminders, scheduleReminders } from './reminders.js';
 import { loadLocal, requestPersistentStorage } from './store.js';
@@ -76,4 +77,4 @@ if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
   navigator.serviceWorker.register('sw.js').catch(() => {});
 }
 initAccount(render);
-checkLicense(() => toast('App activada ✓'));
+if (TRIAL_ENABLED) checkLicense(() => toast('App activada ✓'));

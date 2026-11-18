@@ -220,14 +220,19 @@ export async function connect(store, uid, rerender) {
   }
 }
 
-/** Desconecta y borra los datos de este móvil (al cerrar sesión). */
-export function disconnectAndWipe() {
+/** Deja de sincronizar (los cambios ya no se suben). */
+export function stopSync() {
   remote = null;
   clearTimeout(timer);
   pending = false;
   failed = false;
   lastSent = {};
   setSaveListener(() => false);
+}
+
+/** Desconecta y borra los datos de este móvil (al cerrar sesión). */
+export function disconnectAndWipe() {
+  stopSync();
   clearLocal();
   try {
     localStorage.removeItem(OWNER_KEY);

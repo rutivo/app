@@ -69,6 +69,23 @@ export async function logout() {
 }
 
 /**
+ * Borra la cuenta y todos sus datos en la nube. Pide la contraseña porque
+ * Firebase exige haber entrado hace poco para borrar una cuenta.
+ * `beforeDelete()` se llama tras comprobar la contraseña y antes de borrar.
+ */
+export async function deleteAccount(password, beforeDelete) {
+  const { auth, fs, authInstance, db } = await load();
+  const user = authInstance.currentUser;
+  await auth.reauthenticateWithCredential(user, auth.EmailAuthProvider.credential(user.email, password));
+  beforeDelete();
+  for (const name of ['data', 'fotos']) {
+    const snap = await fs.getDocs(fs.collection(db, 'users', user.uid, name));
+    await Promise.all(snap.docs.map((d) => fs.deleteDoc(d.ref)));
+  }
+  await auth.deleteUser(user);
+}
+
+/**
  * Almacén remoto del usuario con la misma forma que usa cloud.js:
  * list() → [{id, data}], put(id, data), remove(id), y fotos.
  */

@@ -24,4 +24,8 @@ export const FIREBASE_CONFIG = {
 };
 */
 
+// Periodo de prueba de 15 días con código de activación (js/license.js).
+// Desactivado: la app es gratis. Ponlo a true para volver a exigir activación.
+export const TRIAL_ENABLED = false;
+
 export const FIREBASE_SDK = 'https://www.gstatic.com/firebasejs/10.14.1';
