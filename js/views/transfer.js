@@ -47,7 +47,8 @@ function renderServices() {
             '<div class="it"><div>' + esc(s.cl) +
             '<small>' + fd(s.f) + ' ' + esc(s.h) + ' · ' + esc(s.o) + ' a ' + esc(s.d) + '</small>' +
             '<span class="tag' + (s.fid ? ' ok' : '') + '">' + (s.fid ? 'Facturado' : 'Sin facturar') + '</span> ' +
-            '<span class="tag">' + esc(cap(s.p)) + '</span>' + serviceActions(s) +
+            '<span class="tag pay ' + (s.p === 'pendiente' ? 'pend' : 'paid') + '" role="button" data-pay="' + esc(s.id) + '">' +
+            (s.p === 'pendiente' ? 'Pendiente de cobro' : 'Cobrado: ' + esc(s.p)) + ' ▾</span>' + serviceActions(s) +
             '</div><div><b>' + eur(s.i) + '</b>' +
             (s.fid ? '' : '<button class="x" data-ds="' + esc(s.id) + '" aria-label="Borrar">×</button>') +
             '</div></div>',
@@ -103,6 +104,46 @@ function deleteService(id) {
   if (s.mid) S.mov = S.mov.filter((m) => m.id !== s.mid);
   save();
   rerenderAll();
+}
+
+/**
+ * Cambia cómo se cobró un servicio ya guardado. Al cobrarlo entra en la caja
+ * de hoy; al volver a "pendiente" sale de la caja.
+ */
+function setPayment(s, method) {
+  if (s.p === method) return;
+  const movement = s.mid && S.mov.find((m) => m.id === s.mid);
+  if (method === 'pendiente') {
+    if (s.mid) S.mov = S.mov.filter((m) => m.id !== s.mid);
+    delete s.mid;
+  } else if (movement) {
+    movement.p = method;
+  } else {
+    s.mid = uid();
+    S.mov.push({ id: s.mid, f: today(), t: 'in', p: method, i: s.i, c: 'Transfer: ' + s.cl });
+  }
+  s.p = method;
+  save();
+  rerenderAll();
+  toast(method === 'pendiente' ? 'Marcado como pendiente de cobro.' : 'Cobrado en ' + method + ' ✓ Añadido a la caja de hoy.');
+}
+
+function choosePayment(s) {
+  const sheet = document.createElement('div');
+  sheet.className = 'pay-sheet';
+  const option = (method, label) =>
+    '<button type="button" data-set="' + method + '"' + (s.p === method ? ' class="sec" disabled' : '') + '>' + label + (s.p === method ? ' ✓' : '') + '</button>';
+  sheet.innerHTML =
+    '<div><b>¿Cómo se ha pagado?</b><div class="mut mt8">' + esc(s.cl) + ' · ' + fd(s.f) + ' · ' + eur(s.i) + '</div>' +
+    option('efectivo', '💶 Cobrado en efectivo') + option('tarjeta', '💳 Cobrado con tarjeta') + option('pendiente', '⏳ Pendiente de cobro') +
+    '<button type="button" class="sec" data-set="">Cancelar</button></div>';
+  sheet.onclick = (e) => {
+    const b = e.target.closest('[data-set]');
+    if (e.target !== sheet && !b) return;
+    if (b && b.dataset.set) setPayment(s, b.dataset.set);
+    sheet.remove();
+  };
+  document.body.appendChild(sheet);
 }
 
 function deleteAllServices(button) {
@@ -347,6 +388,10 @@ export function initTransfer(rerender) {
   };
 
   onClick('[data-ds]', (el) => deleteService(el.dataset.ds));
+  onClick('[data-pay]', (el) => {
+    const s = S.srv.find((x) => x.id === el.dataset.pay);
+    if (s) choosePayment(s);
+  });
   onClick('[data-ep]', (el) => editProvider(el.dataset.ep));
   onClick('[data-dp]', (el) => deleteProvider(el));
   onClick('[data-ct]', (el) => {
