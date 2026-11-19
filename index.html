@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <!-- Seguridad: solo se ejecuta código de la propia app, de Firebase (Google) y del lector de tickets (el tiempo: Open-Meteo).
        Si añades un servicio externo nuevo, hay que añadir su dirección aquí. -->
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://www.gstatic.com https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https://tile.openstreetmap.org https://server.arcgisonline.com; connect-src 'self' data: blob: https://*.googleapis.com https://www.gstatic.com https://cdn.jsdelivr.net https://rutivo-vuelos.pokeboostmlg.workers.dev https://api.adsbdb.com https://api.open-meteo.com https://geocoding-api.open-meteo.com; frame-src https://rutivo-a8890.firebaseapp.com; object-src 'none'; base-uri 'self'; form-action 'self'; manifest-src 'self'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://www.gstatic.com https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https://tile.openstreetmap.org https://server.arcgisonline.com; connect-src 'self' data: blob: https://*.googleapis.com https://www.gstatic.com https://cdn.jsdelivr.net https://rutivo-vuelos.pokeboostmlg.workers.dev https://api.adsbdb.com https://api.open-meteo.com https://geocoding-api.open-meteo.com; frame-src https://rutivo-a8890.firebaseapp.com; media-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; manifest-src 'self'">
   <meta name="referrer" content="strict-origin-when-cross-origin">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Rutivo</title>
@@ -64,7 +64,10 @@
     <h1>Transfer</h1>
     <div class="card">
       <label class="f" for="agt">Pegar servicio de la agencia</label>
-      <textarea id="agt" rows="5" placeholder="Pega aquí el servicio tal como te llega"></textarea><button id="ag">Leer servicio</button>
+      <textarea id="agt" rows="5" placeholder="Pega aquí el servicio tal como te llega (de cualquier app o agencia)"></textarea>
+      <div class="row2"><button type="button" id="ag">Leer servicio</button><label class="btn sec ag-file" for="agimg">📷 Foto o vídeo</label></div>
+      <input type="file" id="agimg" accept="image/*,video/*,application/pdf" hidden>
+      <div id="agocr" class="mut mt8" role="status"></div>
     </div>
 
     <details class="card" id="pdet"><summary><b id="pt">Proveedores</b></summary>

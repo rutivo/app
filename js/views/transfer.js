@@ -1,5 +1,6 @@
 // Pantalla "Transfer": servicios, proveedores, mensaje de bienvenida y cartel.
-import { parseAgencyService } from '../agency.js';
+import { readFileText } from '../ocr.js';
+import { readService } from '../serviceReader.js';
 import { $, bottomSheet, confirmTap, confirmTapTimed, onClick, saveFile, toast } from '../dom.js';
 import { openFlight } from '../flight.js';
 import { openWelcome } from './bienvenida.js';
@@ -58,10 +59,10 @@ function renderServices() {
 }
 
 function fillFromAgency() {
-  const data = parseAgencyService($('#agt').value);
+  const data = readService($('#agt').value, today());
   if (!data) {
-    toast('No encuentro los datos. Pega el servicio completo.');
-    return;
+    toast('No encuentro la fecha ni la hora. Revisa el texto o pega el servicio completo.');
+    return false;
   }
   $('#sf').value = data.date;
   $('#sh').value = data.time;
@@ -76,6 +77,21 @@ function fillFromAgency() {
   $('#sc').value = '';
   $('#sc').focus();
   toast('Servicio leído. Elige el proveedor, revisa el importe y guarda.');
+  return true;
+}
+
+/** Foto, captura, vídeo o PDF de un servicio (de cualquier app): leer el texto y rellenar. */
+async function readServiceFile(file) {
+  const status = (s) => ($('#agocr').textContent = s);
+  try {
+    const text = await readFileText(file, status);
+    if (!text.trim()) { status('No he encontrado texto. Prueba con una captura más nítida.'); return; }
+    $('#agt').value = text;
+    status(fillFromAgency() ? '✓ Leído de la ' + (file.type.startsWith('video/') ? 'grabación' : 'imagen') + '. Revisa los datos (el texto leído está arriba).'
+      : 'He leído el texto (arriba), pero no encuentro la fecha ni la hora. Corrígelo y toca «Leer servicio».');
+  } catch {
+    status('No se pudo leer el archivo (¿sin internet la primera vez?). Prueba otra vez o pega el texto.');
+  }
 }
 
 function saveService(e) {
@@ -373,6 +389,11 @@ export function initTransfer(rerender) {
   rerenderAll = rerender;
   $('#sf').value = today();
   $('#ag').onclick = fillFromAgency;
+  $('#agimg').onchange = () => {
+    const f = $('#agimg').files[0];
+    $('#agimg').value = '';
+    if (f) readServiceFile(f);
+  };
   $('#fs').onsubmit = saveService;
   $('#fp').onsubmit = saveProvider;
   $('#dsa').onclick = () => deleteAllServices($('#dsa'));
