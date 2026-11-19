@@ -838,3 +838,4 @@ details[open] > summary.row-btn .chev { transform: rotate(90deg); }
 .hemo button { margin: 0; padding: 8px 0; font-size: 22px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; }
 .hemo button.on { border-color: var(--acc); box-shadow: inset 0 0 0 2px var(--acc); }
 .danger-btn { color: var(--out); }
+.fl-plane.est > div { opacity: .7; }

@@ -49,7 +49,7 @@ test('el seguimiento empieza a la hora de despegue y acaba al aterrizar', async 
   assert.equal(shouldTrack(null, pickup - 12 * 36e5, pickup), true); // 12 h antes: la primera consulta
   assert.equal(shouldTrack(f, Date.parse('2026-11-19T11:30:00Z')), false); // retrasado: aún no despega
   assert.equal(shouldTrack(f, Date.parse('2026-11-19T11:50:00Z')), true);
-  assert.equal(isAirborne(f), false);
+  assert.equal(isAirborne(f, Date.parse('2026-11-19T11:30:00Z')), false);
   const flying = { ...f, status: 'EnRoute', dep: { ...f.dep, runway: '2026-11-19T11:55:00Z' } };
   assert.equal(isAirborne(flying), true);
   const landed = { ...flying, status: 'Arrived', arr: { ...f.arr, runway: '2026-11-19T14:20:00Z' } };
@@ -64,4 +64,15 @@ test('el seguimiento empieza a la hora de despegue y acaba al aterrizar', async 
   const near = { ...flying, at: Date.parse('2026-11-19T14:00:00Z') };
   assert.equal(shouldTrack(near, Date.parse('2026-11-19T14:05:00Z')), true);
   assert.equal(shouldTrack({ found: false, at: t0 }, t0 + 7 * 36e5), true);
+});
+
+test('sin datos en vivo: despegue estimado con el retraso y en el aire por horario', async () => {
+  const { estDeparture, isAirborne, flightProgress } = await import('../js/flightStatus.js');
+  // Caso real FR4250: programado 11:20 → 14:15, llegada revisada 14:44, sin hora de despegue
+  const f = { found: true, status: 'Expected', dep: { sched: '2026-11-19T11:20:00Z' }, arr: { sched: '2026-11-19T14:15:00Z', revised: '2026-11-19T14:44:00Z' } };
+  assert.equal(new Date(estDeparture(f)).toISOString(), '2026-11-19T11:49:00.000Z');
+  assert.equal(isAirborne(f, Date.parse('2026-11-19T11:45:00Z')), false);
+  assert.equal(isAirborne(f, Date.parse('2026-11-19T11:58:00Z')), true);
+  assert.equal(isAirborne(f, Date.parse('2026-11-19T14:50:00Z')), false);
+  assert.equal(Math.round(flightProgress(f, Date.parse('2026-11-19T13:16:30Z')) * 100), 50);
 });

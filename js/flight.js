@@ -8,7 +8,7 @@
 import { FLIGHT_API } from './config.js';
 import { bottomSheet, loadScript, readFlag, writeFlag } from './dom.js';
 import {
-  arrivalDelay, arrivalTime, changeNotice, delayLabel, departureTime, hasLanded, hhmm, isAirborne, isCanceled, shouldTrack, statusLabel,
+  arrivalDelay, arrivalTime, changeNotice, delayLabel, estDeparture, flightProgress, hasLanded, hhmm, isAirborne, isCanceled, shouldTrack, statusLabel,
 } from './flightStatus.js';
 import { serviceTime } from './trips.js';
 import { esc } from './utils.js';
@@ -92,8 +92,13 @@ function liveHtml(f, live) {
   const t = arrivalTime(f);
   const d = arrivalDelay(f);
   const late = d !== null && d >= 5;
-  const dep = departureTime(f);
+  const dep = estDeparture(f);
+  const sched = f.dep && f.dep.sched ? Date.parse(f.dep.sched) : null;
   const waiting = !live && !hasLanded(f) && !isCanceled(f) && dep && Date.now() < dep;
+  const depLine = !dep ? ''
+    : f.dep.runway ? 'Despegó a las ' + hhmm(dep)
+      : sched && dep - sched >= 5 * 6e4 ? 'Salida prevista a las ' + hhmm(dep) + ' (programada ' + hhmm(sched) + ')'
+        : 'Sale a las ' + hhmm(dep);
   return (
     '<div class="fl-route"><b>' + esc(f.airline || '') + '</b> · ' + esc(statusLabel(f.status)) + (f.model ? ' · ' + esc(f.model) : '') + '</div>' +
     '<div class="fl-from">Desde <b>' + place(f.from) + '</b> → ' + place(f.to) + '</div>' +
@@ -102,7 +107,7 @@ function liveHtml(f, live) {
       : '<div class="fl-eta ' + (late ? 'out' : 'in') + '">' + (hasLanded(f) ? 'Aterrizó a las ' : 'Llega a las ') + (t ? hhmm(t) : '—') + '</div>' +
         '<div class="mut">' + (f.arr && f.arr.sched ? 'Programado ' + hhmm(Date.parse(f.arr.sched)) : '') + (d !== null ? ' · ' + delayLabel(d) : '') +
         (f.arr && f.arr.terminal ? ' · Terminal ' + esc(f.arr.terminal) : '') + '</div>') +
-    (dep ? '<div class="mut mt8">' + (f.dep.runway ? 'Despegó a las ' : 'Sale a las ') + hhmm(dep) + ' (hora de aquí)</div>' : '') +
+    (depLine ? '<div class="mut mt8">' + depLine + ' (hora de aquí)</div>' : '') +
     (waiting
       ? '<div class="fl-wait mt8">📡 El seguimiento en directo y el mapa se activan al despegar (' + hhmm(dep) + ').</div>'
       : hasLanded(f) || isCanceled(f)
@@ -154,7 +159,7 @@ async function flightMap(box, f) {
   const update = (pos) => {
     if (!pos || typeof pos.lat !== 'number') return;
     const p = [pos.lat, pos.lon];
-    const icon = L.divIcon({ className: 'fl-plane', html: '<div style="transform:rotate(' + (pos.track || 0) + 'deg)">' + PLANE_SVG + '</div>', iconSize: [34, 34], iconAnchor: [17, 17] });
+    const icon = L.divIcon({ className: 'fl-plane' + (pos.est ? ' est' : ''), html: '<div style="transform:rotate(' + (pos.track || 0) + 'deg)">' + PLANE_SVG + '</div>', iconSize: [34, 34], iconAnchor: [17, 17] });
     if (plane) plane.setLatLng(p).setIcon(icon);
     else plane = L.marker(p, { icon, zIndexOffset: 1000 }).addTo(map);
     if (flown) flown.setLatLngs([from, p]);
@@ -172,8 +177,12 @@ async function flightMap(box, f) {
   };
 }
 
-function posLine(pos) {
+function posLine(pos, f) {
   if (!pos) return 'Buscando el avión…';
+  if (pos.est) {
+    const t = f ? arrivalTime(f) : null;
+    return '✈️ Posición aproximada según el horario' + (t ? ' · llega a las ' + hhmm(t) : '') + ' · la real aparece en cuanto el avión la emita';
+  }
   const parts = [];
   if (pos.ground) parts.push('En tierra');
   else if (pos.ft) parts.push('A ' + Math.round(pos.ft * 0.3048).toLocaleString('es-ES') + ' m');
@@ -183,6 +192,31 @@ function posLine(pos) {
     parts.push(s < 90 ? 'posición de hace ' + s + ' s' : 'posición de hace ' + Math.round(s / 60) + ' min');
   }
   return '✈️ ' + parts.join(' · ') + ' · se mueve cada 30 s';
+}
+
+/** Punto del arco entre dos aeropuertos (fracción t) y rumbo en ese punto. */
+function routePoint(a, b, t) {
+  const r = (x) => (x * Math.PI) / 180;
+  const g = (x) => (x * 180) / Math.PI;
+  const [p1, l1, p2, l2] = [r(a.lat), r(a.lon), r(b.lat), r(b.lon)];
+  const d = 2 * Math.asin(Math.sqrt(Math.sin((p2 - p1) / 2) ** 2 + Math.cos(p1) * Math.cos(p2) * Math.sin((l2 - l1) / 2) ** 2));
+  if (!d) return { lat: a.lat, lon: a.lon, track: 0 };
+  const A = Math.sin((1 - t) * d) / Math.sin(d);
+  const B = Math.sin(t * d) / Math.sin(d);
+  const x = A * Math.cos(p1) * Math.cos(l1) + B * Math.cos(p2) * Math.cos(l2);
+  const y = A * Math.cos(p1) * Math.sin(l1) + B * Math.cos(p2) * Math.sin(l2);
+  const z = A * Math.sin(p1) + B * Math.sin(p2);
+  const lat = Math.atan2(z, Math.sqrt(x * x + y * y));
+  const lon = Math.atan2(y, x);
+  const track = (g(Math.atan2(Math.sin(l2 - lon) * Math.cos(p2), Math.cos(lat) * Math.sin(p2) - Math.sin(lat) * Math.cos(p2) * Math.cos(l2 - lon))) + 360) % 360;
+  return { lat: g(lat), lon: g(lon), track };
+}
+
+/** Posición aproximada según el horario, cuando no hay datos del avión en directo. */
+function estimatedPos(f) {
+  const t = flightProgress(f);
+  if (t === null || !f.from || !f.to || typeof f.from.lat !== 'number' || typeof f.to.lat !== 'number') return null;
+  return { ...routePoint(f.from, f.to, t), est: true };
 }
 
 async function fetchPosition(hex) {
@@ -236,7 +270,9 @@ export function openFlight(code, extra = '', date = '', time = '') {
     }
   };
 
+  let last = null; // último estado del vuelo
   const showMap = async (f) => {
+    last = f;
     if (!isAirborne(f)) {
       mapWrap.hidden = true;
       return;
@@ -253,10 +289,16 @@ export function openFlight(code, extra = '', date = '', time = '') {
       if (hex) {
         movePlane();
         timers.push(setInterval(movePlane, POS_MS));
+      } else {
+        // Sin código del avión: la posición de AeroDataBox si la hay; si no, la aproximada por horario.
+        const tick = () => {
+          if (!map || !sheet.isConnected || hex) return;
+          const p = last.pos || estimatedPos(last);
+          if (p) { map.update(p); posInfo.textContent = posLine(p, last); }
+        };
+        tick();
+        timers.push(setInterval(tick, POS_MS));
       }
-    } else if (map && !hex && f.pos) {
-      map.update(f.pos);
-      posInfo.textContent = posLine(f.pos);
     }
   };
 

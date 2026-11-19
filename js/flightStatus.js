@@ -66,9 +66,38 @@ export function departureTime(f) {
 }
 
 /** El avión está en el aire. */
-export const isAirborne = (f) =>
-  !!f && f.found !== false && !isCanceled(f) && !hasLanded(f) &&
-  (/^(Departed|EnRoute|Approaching)$/.test(f.status || '') || !!(f.dep && f.dep.runway) || !!f.pos);
+/**
+ * Despegue estimado: el real, revisado o previsto; si no hay ninguno, la
+ * llegada estimada menos la duración programada (así cuenta el retraso).
+ */
+export function estDeparture(f) {
+  const d = f && f.dep;
+  if (!d) return null;
+  const known = d.runway || d.revised || d.predicted;
+  if (known) return Date.parse(known);
+  if (!d.sched) return null;
+  const s = Date.parse(d.sched);
+  const a = f.arr && f.arr.sched ? Date.parse(f.arr.sched) : null;
+  const eta = arrivalTime(f);
+  return a !== null && eta !== null && eta - a >= 10 * 6e4 ? s + (eta - a) : s; // retrasos pequeños: sale a su hora
+}
+
+/** El avión está en el aire (por su estado, su posición o, si no hay datos en vivo, por su horario). */
+export function isAirborne(f, now = Date.now()) {
+  if (!f || f.found === false || isCanceled(f) || hasLanded(f)) return false;
+  if (/^(Departed|EnRoute|Approaching)$/.test(f.status || '') || (f.dep && f.dep.runway) || f.pos) return true;
+  const dep = estDeparture(f);
+  const eta = arrivalTime(f);
+  return dep !== null && eta !== null && now >= dep + 5 * 6e4 && now < eta;
+}
+
+/** Parte del vuelo hecha según el horario (0 a 1), o null. */
+export function flightProgress(f, now = Date.now()) {
+  const dep = estDeparture(f);
+  const eta = arrivalTime(f);
+  if (dep === null || eta === null || eta <= dep) return null;
+  return Math.min(1, Math.max(0, (now - dep) / (eta - dep)));
+}
 
 /**
  * ¿Merece la pena consultar el vuelo ahora? Para no gastar consultas:
@@ -81,7 +110,7 @@ export function shouldTrack(f, now, serviceMs = null) {
   if (!f) return serviceMs === null || now >= serviceMs - 12 * 36e5; // primera consulta: 12 h antes del servicio
   if (f.found === false) return !!f.at && now - f.at > 6 * 36e5; // no encontrado: reintentar cada 6 h
   if (isCanceled(f) || hasLanded(f)) return false;
-  const t = departureTime(f);
+  const t = estDeparture(f);
   if (t !== null && now < t) return false;
   // Ya en hora: en el aire cada 15 min (cada 5 en la última media hora); en tierra con retraso, cada 10.
   const eta = arrivalTime(f);
