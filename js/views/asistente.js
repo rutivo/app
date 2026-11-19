@@ -192,6 +192,8 @@ async function weather(entry, r) {
 // ---------- oído ----------
 
 let rec = null;
+let misses = 0; // escuchas seguidas sin oír nada
+let recLive = false; // el micro llegó a arrancar de verdad
 
 function stopListening() {
   if (rec) try { rec.abort(); } catch { /* */ }
@@ -221,7 +223,11 @@ function listen() {
   unlockVoice();
   try { speechSynthesis.cancel(); } catch { /* */ }
   if (!Recognition) return showKeyboard(micHelp());
-  if (rec) { stopListening(); setState('idle'); return; }
+  // Tocar mientras escucha = parar. Si una escucha anterior se quedó colgada, se descarta y se empieza otra.
+  if (rec && recLive && ui && ui.root.dataset.state === 'listening') { stopListening(); setState('idle'); return; }
+  stopListening();
+  recLive = false;
+  let started = false;
   let heard = false;
   let failed = '';
   let finals = []; // [[alternativa1, alternativa2…], …] por cada trozo de frase
@@ -231,10 +237,10 @@ function listen() {
   rec = r;
   r.lang = 'es-ES';
   r.interimResults = true;
-  r.continuous = true; // no cortar en las pausas: se cierra tras un silencio
+  r.continuous = !isIOS; // en iPhone el modo continuo a veces no termina nunca; allí, el normal
   r.maxAlternatives = 4;
   const quiet = (ms) => { clearTimeout(silence); silence = setTimeout(() => { if (rec === r) try { r.stop(); } catch { /* */ } }, ms); };
-  r.onstart = () => { setState('listening'); quiet(7000); };
+  r.onstart = () => { started = true; if (rec === r) recLive = true; setState('listening'); quiet(isIOS ? 9000 : 7000); };
   r.onresult = (e) => {
     heard = true;
     interim = '';
@@ -250,7 +256,7 @@ function listen() {
   r.onerror = (e) => { failed = e.error || 'error'; };
   r.onend = () => {
     clearTimeout(silence);
-    if (rec === r) rec = null;
+    if (rec === r) { rec = null; recLive = false; }
     if (!ui) return;
     const parts = finals.filter(Boolean);
     const main = (parts.map((alts) => alts[0]).join(' ') + ' ' + interim).trim() || ui.live.textContent.trim();
@@ -258,7 +264,12 @@ function listen() {
     const alts = [];
     parts.forEach((options, i) => options.slice(1).forEach((o) => alts.push(parts.map((x, j) => (j === i ? o : x[0])).join(' '))));
     ui.live.textContent = '';
-    if (main) return handle(main, alts);
+    if (main) { misses = 0; return handle(main, alts); }
+    misses++;
+    if (misses >= 2 && failed !== 'aborted') {
+      misses = 0;
+      return showKeyboard('No consigo oírte bien con el micro de la app. Toca el 🎤 del teclado y dicta: funciona igual.');
+    }
     if (failed === 'aborted') return setState('idle');
     if (failed && failed !== 'no-speech') return showKeyboard(micHelp(failed));
     setState('idle', heard ? LABELS.idle : micHelp('no-speech'));
@@ -270,8 +281,12 @@ function listen() {
     rec = null;
     showKeyboard(micHelp('error'));
   }
+  // Si el micro no arranca en 3 s, decirlo
+  setTimeout(() => {
+    if (rec === r && !started && !heard && ui) setState('listening', 'No noto el micrófono… Habla, o toca ⌨️ y usa el 🎤 del teclado.');
+  }, 3000);
   // Por si el sistema no cierra solo
-  setTimeout(() => { if (rec === r) try { r.stop(); } catch { /* */ } }, 20000);
+  setTimeout(() => { if (rec === r) { try { r.stop(); } catch { /* */ } setTimeout(() => { if (rec === r) { stopListening(); setState('idle'); } }, 1500); } }, 15000);
 }
 
 // ---------- abrir / cerrar ----------
