@@ -74,7 +74,7 @@ export function checkNotice() {
   );
   open.querySelector('#ntgo').onclick = () => { open.close(); chooseRoute(next); };
   const fl = open.querySelector('#ntfl');
-  if (fl) fl.onclick = () => { open.close(); openFlight(next.vu, esc(next.pa || ''), next.f); };
+  if (fl) fl.onclick = () => { open.close(); openFlight(next.vu, esc(next.pa || ''), next.f, next.h); };
 }
 
 /**

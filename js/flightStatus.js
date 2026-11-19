@@ -72,13 +72,13 @@ export const isAirborne = (f) =>
 
 /**
  * ¿Merece la pena consultar el vuelo ahora? Para no gastar consultas:
- * - sin datos todavía → sí, una vez (para saber su horario);
+ * - sin datos todavía → una vez, 12 h antes del servicio (para saber la hora prevista);
  * - aterrizado o cancelado → no; sin encontrar → otra vez pasadas 6 h;
  * - antes de la hora de despegue → no; desde esa hora, sí, pero espaciado:
  *   en el aire cada 15 min (5 en la última media hora), en tierra cada 10.
  */
-export function shouldTrack(f, now) {
-  if (!f) return true;
+export function shouldTrack(f, now, serviceMs = null) {
+  if (!f) return serviceMs === null || now >= serviceMs - 12 * 36e5; // primera consulta: 12 h antes del servicio
   if (f.found === false) return !!f.at && now - f.at > 6 * 36e5; // no encontrado: reintentar cada 6 h
   if (isCanceled(f) || hasLanded(f)) return false;
   const t = departureTime(f);

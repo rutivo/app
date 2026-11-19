@@ -403,7 +403,7 @@ export function initTransfer(rerender) {
   onClick('[data-go]', (el) => { const s = byId(el.dataset.go); if (s) chooseRoute(s); });
   onClick('[data-fl]', (el) => {
     const s = byId(el.dataset.fl);
-    if (s) openFlight(s.vu, esc(s.pa || '') + (s.pa ? ' · ' : '') + fd(s.f) + ' ' + esc(s.h), s.f);
+    if (s) openFlight(s.vu, esc(s.pa || '') + (s.pa ? ' · ' : '') + fd(s.f) + ' ' + esc(s.h), s.f, s.h);
   });
   onClick('[data-pay]', (el) => {
     const s = S.srv.find((x) => x.id === el.dataset.pay);

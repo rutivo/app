@@ -44,6 +44,9 @@ test('el seguimiento empieza a la hora de despegue y acaba al aterrizar', async 
   const { shouldTrack, isAirborne } = await import('../js/flightStatus.js');
   const f = { found: true, status: 'Expected', dep: { sched: '2026-11-19T11:20:00Z', revised: '2026-11-19T11:50:00Z' }, arr: { sched: '2026-11-19T14:15:00Z' } };
   assert.equal(shouldTrack(null, 0), true);
+  const pickup = Date.parse('2026-11-20T15:00:00Z');
+  assert.equal(shouldTrack(null, pickup - 13 * 36e5, pickup), false); // más de 12 h antes: aún no
+  assert.equal(shouldTrack(null, pickup - 12 * 36e5, pickup), true); // 12 h antes: la primera consulta
   assert.equal(shouldTrack(f, Date.parse('2026-11-19T11:30:00Z')), false); // retrasado: aún no despega
   assert.equal(shouldTrack(f, Date.parse('2026-11-19T11:50:00Z')), true);
   assert.equal(isAirborne(f), false);

@@ -1,8 +1,8 @@
 // Vuelos: estado en tiempo real, hora estimada de llegada, avisos de cambios y mapa.
 // - Con FLIGHT_API (intermediario de Cloudflare, ver worker/): datos de
 //   AeroDataBox con horas programadas, estimadas y reales.
-// - Para no gastar consultas: una sola consulta para saber el horario y,
-//   después, nada hasta la hora de despegue. Al aterrizar se deja de consultar.
+// - Para no gastar consultas: la primera, 12 h antes del servicio (hora
+//   prevista); después, nada hasta la hora de despegue. Al aterrizar, se para.
 // - Con el avión en el aire, el mapa se mueve con la posición ADS-B (gratis).
 // - Sin intermediario: solo la ruta (api.adsbdb.com), y el enlace a Flightradar24.
 import { FLIGHT_API } from './config.js';
@@ -10,6 +10,7 @@ import { bottomSheet, loadScript, readFlag, writeFlag } from './dom.js';
 import {
   arrivalDelay, arrivalTime, changeNotice, delayLabel, departureTime, hasLanded, hhmm, isAirborne, isCanceled, shouldTrack, statusLabel,
 } from './flightStatus.js';
+import { serviceTime } from './trips.js';
 import { esc } from './utils.js';
 
 const ROUTE_API = 'https://api.adsbdb.com/v0/callsign/';
@@ -65,9 +66,10 @@ function rememberStatus(code, date, data) {
  * Estado del vuelo gastando consultas solo cuando hace falta (ver shouldTrack).
  * Devuelve {f, live}: live = false si es el último guardado, sin consultar.
  */
-async function trackedStatus(code, date) {
+async function trackedStatus(code, date, time = '') {
   const prev = cachedStatus(code, date);
-  if (!shouldTrack(prev, Date.now())) return { f: prev, prev, live: false };
+  const serviceMs = time ? serviceTime({ f: date, h: time }) : null;
+  if (!shouldTrack(prev, Date.now(), serviceMs)) return { f: prev, prev, live: false };
   const f = await fetchStatus(code, date);
   if (f) rememberStatus(code, date, f);
   return { f, prev, live: true };
@@ -196,8 +198,8 @@ async function fetchRoute(code) {
 
 const flightradarUrl = (code) => 'https://www.flightradar24.com/data/flights/' + encodeURIComponent(code.toLowerCase());
 
-/** Abre el panel del vuelo `code` del día `date` ("AAAA-MM-DD"). */
-export function openFlight(code, extra = '', date = '') {
+/** Abre el panel del vuelo `code` del servicio del día `date` ("AAAA-MM-DD") a la hora `time` ("HH:MM"). */
+export function openFlight(code, extra = '', date = '', time = '') {
   const flight = normalizeFlight(code);
   const timers = [];
   let map = null;
@@ -259,9 +261,15 @@ export function openFlight(code, extra = '', date = '') {
       showMap(saved);
     }
     const load = () =>
-      trackedStatus(flight, date)
+      trackedStatus(flight, date, time)
         .then(({ f, live }) => {
           if (!sheet.isConnected) return;
+          if (!f) {
+            const first = serviceTime({ f: date, h: time }) - 12 * 36e5;
+            info.innerHTML = '<div class="fl-wait">🕒 La hora prevista del vuelo se consulta sola 12 h antes del servicio (el ' +
+              new Date(first).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit' }) + ' a las ' + hhmm(first) + '). Así se ahorran consultas.</div>';
+            return;
+          }
           info.innerHTML = liveHtml(f, live);
           if (f && f.found) showMap(f);
         })
@@ -293,7 +301,7 @@ export async function checkFlights(services) {
     const code = normalizeFlight(s.vu);
     if (!code) continue;
     try {
-      const { f, prev, live } = await trackedStatus(code, s.f);
+      const { f, prev, live } = await trackedStatus(code, s.f, s.h);
       if (!live || !f || !f.found) continue;
       const n = changeNotice(prev, f, code);
       if (n) notices.push({ ...n, service: s, flight: f });
