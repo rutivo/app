@@ -179,3 +179,22 @@ test('preguntas nuevas: resumen, cuántas carreras, qué he apuntado, cómo voy'
   assert.match(ask('qué he apuntado hoy', state, NOW).text, /−6,00\s€ · Lavado/);
   assert.match(ask('cómo voy', state, NOW).text, /Hoy: \*\*159,50\s€ limpios/);
 });
+
+test('con ruido: palabras mal oídas, números colados y confirmación', () => {
+  const item = (q) => ask(q, state, NOW).action?.item;
+  assert.deepEqual(item('apúntame 12 héroes en efectiva'), { f: '2026-11-19', t: 'in', p: 'efectivo', i: 12, c: 'Carrera' });
+  assert.deepEqual(item('apuntamos 30 en targeta'), { f: '2026-11-19', t: 'in', p: 'tarjeta', i: 30, c: 'Carrera' });
+  // La radio dice números: vale el que va con «euros» / detrás de «apunta»
+  assert.equal(item('en la radio 3 y 7 apunta 25 euros con tarjeta').i, 25);
+  assert.equal(item('carril 2 apúntame 40 en efectivo').i, 40);
+  // Frase larga (mucho ruido) → pregunta antes de apuntar
+  const long = ask('bla bla la radio y el tráfico están fatal hoy en la autovía apúntame 18 euros con tarjeta vale gracias', state, NOW);
+  assert.equal(long.kind, 'confirm');
+  assert.match(long.text, /¿Apunto \*\*18,00\s€ \(Carrera\) con tarjeta\*\*\?/);
+  assert.deepEqual(ask('sí', state, NOW, {}, long.ctx).action.item, { f: '2026-11-19', t: 'in', p: 'tarjeta', i: 18, c: 'Carrera' });
+  assert.match(ask('no', state, NOW, {}, long.ctx).text, /no lo apunto/);
+  // El móvil dice que no está seguro de lo que oyó → también pregunta
+  assert.equal(ask('apunta 20 euros', state, NOW, { confidence: 0.4 }).kind, 'confirm');
+  assert.equal(ask('apunta 20 euros', state, NOW, { confidence: 0.9 }).kind, 'action');
+  assert.equal(ask('apunta 20 euros', state, NOW, { confidence: 0 }).kind, 'action'); // 0 = el iPhone no lo dice
+});

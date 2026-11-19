@@ -888,3 +888,8 @@ span.siri-kb { background: none; }
 .siri[data-state="thinking"] .siri-orb i { animation-duration: .5s, .6s, .7s; }
 .siri[data-state="speaking"] .siri-orb i { inset: 6px; animation-duration: .7s, .9s, 1.1s; }
 .ag-file { display: flex; align-items: center; justify-content: center; margin-top: 8px; cursor: pointer; }
+.siri-orb { touch-action: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+.siri-orb.held { transform: scale(1.12); transition: transform .15s; }
+.siri-yn { display: flex; gap: 8px; margin-top: 10px; }
+.siri-yn button { flex: 1; margin: 0; padding: 10px; font-size: 15px; border-radius: 12px; }
+.siri-yn button.sec { background: rgba(255, 255, 255, .12); color: #fff; border: 0; }

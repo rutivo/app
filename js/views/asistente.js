@@ -69,7 +69,7 @@ function eta(s) {
   return line ? '(' + line.replace(/^\S+\s/, '') + ')' : '';
 }
 
-const LABELS = { idle: 'Toca la bola y habla', listening: 'Te escucho…', thinking: 'Pensando…', speaking: 'Hablando… (toca la bola para hablar tú)' };
+const LABELS = { idle: 'Toca la bola y habla · con ruido, mantenla pulsada mientras hablas', listening: 'Te escucho…', thinking: 'Pensando…', speaking: 'Hablando… (toca la bola para hablar tú)' };
 
 function setState(state, label) {
   if (!ui) return;
@@ -102,20 +102,22 @@ function undoAt(i) {
  * De varias transcripciones posibles (el móvil a veces duda: «bulla»/«falla»),
  * se queda con la primera que tiene sentido.
  */
-function best(options) {
+function best(options, conf = 0) {
   const list = [...new Set(options.map((o) => String(o || '').trim()).filter(Boolean))];
   // Una orden completa vale más que una a medias, y esta más que algo que no se entiende.
-  const score = (r) => (r.kind === 'action' || r.kind === 'undo' || r.kind === 'weather' ? 3 : /No te he entendido/.test(r.text || '') ? 0 : r.pending ? 1 : 2);
+  const score = (r) => (r.kind === 'action' || r.kind === 'confirm' || r.kind === 'undo' || r.kind === 'weather' ? 3 : /No te he entendido/.test(r.text || '') ? 0 : r.pending ? 1 : 2);
   let top = null;
   for (const q of list) {
-    const r = ask(q, S, new Date(), { eta }, ctx);
+    const r = ask(q, S, new Date(), { eta, confidence: conf }, ctx);
     if (!top || score(r) > score(top.r)) top = { q, r };
   }
   return top;
 }
 
-function handle(text, alternatives = []) {
-  const pick = best([text, ...alternatives]);
+function handle(text, alternatives = [], conf = 0) {
+  // Las preguntas «¿Lo apunto?» anteriores ya no se pueden contestar con botones
+  history.forEach((m) => { m.html = m.html.replace(/<div class="siri-yn">[\s\S]*?<\/div>/, ''); });
+  const pick = best([text, ...alternatives], conf);
   if (!pick) return;
   const q = pick.q;
   history.push({ from: 'yo', html: esc(q) });
@@ -128,6 +130,9 @@ function handle(text, alternatives = []) {
     const ok = i >= 0 && undoAt(i);
     history.push({ from: 'rutivo', html: ok ? '↩️ Hecho, he quitado lo último que apunté.' : 'No hay nada que deshacer.' });
     speech = ok ? 'Hecho, lo he quitado.' : 'No hay nada que deshacer.';
+  } else if (r.kind === 'confirm') {
+    history.push({ from: 'rutivo', html: rich(r.text) + '<div class="siri-yn"><button type="button" data-asyes>✅ Sí, apúntalo</button><button type="button" class="sec" data-asno>❌ No</button></div>' });
+    speech = r.speech;
   } else if (r.kind === 'weather') {
     const entry = { from: 'rutivo', html: rich(r.text) };
     history.push(entry);
@@ -230,7 +235,8 @@ function listen() {
   let started = false;
   let heard = false;
   let failed = '';
-  let finals = []; // [[alternativa1, alternativa2…], …] por cada trozo de frase
+  let finals = [];
+  const confs = []; // [[alternativa1, alternativa2…], …] por cada trozo de frase
   let interim = '';
   let silence = null;
   const r = new Recognition();
@@ -246,12 +252,12 @@ function listen() {
     interim = '';
     for (let i = e.resultIndex; i < e.results.length; i++) {
       const res = e.results[i];
-      if (res.isFinal) finals[i] = Array.from({ length: res.length }, (_, k) => res[k].transcript);
+      if (res.isFinal) { finals[i] = Array.from({ length: res.length }, (_, k) => res[k].transcript); confs[i] = res[0].confidence || 0; }
       else interim += res[0].transcript;
     }
     const said = finals.filter(Boolean).map((alts) => alts[0]).join(' ');
     if (ui) ui.live.textContent = (said + ' ' + interim).trim();
-    quiet(1400); // 1,4 s sin hablar = has terminado
+    if (!document.querySelector('.siri-orb.held')) quiet(1400); // 1,4 s sin hablar = has terminado (si no la tienes pulsada)
   };
   r.onerror = (e) => { failed = e.error || 'error'; };
   r.onend = () => {
@@ -264,7 +270,9 @@ function listen() {
     const alts = [];
     parts.forEach((options, i) => options.slice(1).forEach((o) => alts.push(parts.map((x, j) => (j === i ? o : x[0])).join(' '))));
     ui.live.textContent = '';
-    if (main) { misses = 0; return handle(main, alts); }
+    const known = confs.filter((c) => c > 0);
+    const conf = known.length ? Math.min(...known) : 0;
+    if (main) { misses = 0; return handle(main, alts, conf); }
     misses++;
     if (misses >= 2 && failed !== 'aborted') {
       misses = 0;
@@ -318,11 +326,30 @@ export function openAssistant() {
     if (!el) return;
     if (el.matches('[data-sx]')) return closeAssistant();
     if (el.matches('[data-svoz]')) { writeFlag(VOICE_KEY, voiceOn() ? '0' : '1'); paintVoz(); try { speechSynthesis.cancel(); } catch { /* */ } return setState('idle'); }
-    if (el.matches('[data-sorb]')) return listen(); // si está hablando, se calla y te escucha (como Siri)
+    if (el.matches('[data-sorb]')) { if (e.detail === 0) listen(); return; } // teclado; con el dedo va por pointerdown
+    if (el.matches('[data-asyes]')) { unlockVoice(); return handle('sí'); }
+    if (el.matches('[data-asno]')) { unlockVoice(); return handle('no'); }
     if (el.matches('[data-skb]')) { if (ui.form.hidden) showKeyboard(); else ui.form.hidden = true; return; }
     if (el.matches('[data-asq]')) { unlockVoice(); return handle(el.dataset.asq); }
     if (el.matches('[data-asundo]')) { undoAt(+el.dataset.asundo); paint(); }
   });
+  // La bola: un toque = escucha hasta que te calles; mantenerla pulsada = escucha solo mientras la pulsas
+  const orb = root.querySelector('[data-sorb]');
+  let downAt = 0;
+  orb.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    downAt = Date.now();
+    orb.classList.add('held');
+    listen();
+  });
+  const release = () => {
+    orb.classList.remove('held');
+    if (downAt && Date.now() - downAt > 450 && rec) { try { rec.stop(); } catch { /* */ } } // soltaste: ya has terminado
+    downAt = 0;
+  };
+  orb.addEventListener('pointerup', release);
+  orb.addEventListener('pointercancel', release);
+  orb.addEventListener('contextmenu', (e) => e.preventDefault());
   ui.form.onsubmit = (e) => {
     e.preventDefault();
     unlockVoice();

@@ -23,8 +23,49 @@ export function normalize(text) {
   return fixDictation(t);
 }
 
+// Palabras que Rutivo conoce; con ruido, el dictado las cambia por otras parecidas.
+const VOCAB = ['apunta', 'apuntame', 'apuntar', 'anotame', 'ingresa', 'ingresame', 'ingresar', 'ponme', 'meteme', 'sumame',
+  'euros', 'efectivo', 'tarjeta', 'datafono', 'bizum', 'transferencia', 'gasolina', 'gasoil', 'diesel', 'peaje', 'parking', 'propina',
+  'lavado', 'taller', 'desayuno', 'hucha', 'resumen', 'kilometros', 'trimestre',
+  'apuntado', 'anotado', 'ingresado', 'pagado', 'cobrado', 'gastado', 'apuntando', 'ingresos', 'tarjetas'];
+// Palabras normales que se parecen a las de arriba y NO hay que tocar
+const KNOWN = ['pasado', 'pasada', 'semana', 'cuando', 'cuanto', 'cuantos', 'cuantas', 'llevo', 'llevado', 'lleve', 'gastos', 'ganado', 'pagar',
+  'pague', 'gaste', 'cobre', 'pasaje', 'pasajero', 'tardes', 'hecho', 'mismo', 'resto', 'cuenta', 'puesto', 'ponemos', 'metido', 'sumado',
+  'efecto', 'tarde', 'hacia', 'manana', 'carrera', 'carreras', 'servicio', 'servicios', 'trabajo', 'gracias', 'ingreso', 'tengo', 'proximo'];
+const VSET = new Set([...VOCAB, ...KNOWN]);
+// Confusiones típicas que la distancia no arregla bien
+const SOUNDS = { heroes: 'euros', eros: 'euros', uros: 'euros', ueros: 'euros', euroz: 'euros', efectiva: 'efectivo', electivo: 'efectivo',
+  afectivo: 'efectivo', defectivo: 'efectivo', targeta: 'tarjeta', tarjetas: 'tarjeta', apuntamos: 'apunta', apuntan: 'apunta', apuntes: 'apunta',
+  apunte: 'apunta', apuntadme: 'apuntame', ingreso: 'ingreso', propinas: 'propina', peajes: 'peaje', gasolinera: 'gasolina' };
+
+function dist(a, b) {
+  if (Math.abs(a.length - b.length) > 2) return 9;
+  const d = Array.from({ length: a.length + 1 }, (_, i) => [i]);
+  for (let j = 1; j <= b.length; j++) d[0][j] = j;
+  for (let i = 1; i <= a.length; i++) {
+    for (let j = 1; j <= b.length; j++) d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+  }
+  return d[a.length][b.length];
+}
+
+/** Cambia cada palabra desconocida por la conocida más parecida (si se parece mucho). */
+export function fuzzyFix(t) {
+  return t.split(' ').map((w) => {
+    if (SOUNDS[w]) return SOUNDS[w];
+    if (w.length < 5 || VSET.has(w) || /\d/.test(w)) return w;
+    let best = null;
+    let bd = w.length >= 8 ? 3 : 2;
+    for (const v of VOCAB) {
+      const dd = dist(w, v);
+      if (dd < bd || (dd === bd && best && v.length === w.length)) { best = v; bd = dd; }
+    }
+    return best && bd <= (w.length >= 8 ? 2 : 1) ? best : w;
+  }).join(' ');
+}
+
 /** Errores típicos del dictado y formas de decir importes. */
 function fixDictation(t) {
+  t = fuzzyFix(t);
   return t
     .replace(/\ba (puntame|punta|puntalo|puntar|notame|nota|notar)\b/g, 'a$1')
     .replace(/\b(apunta|anota|ingresa|pon|mete|suma|guarda|registra) (me|melo|lo)\b/g, '$1$2')
@@ -145,7 +186,11 @@ function findName(t, names) {
 }
 
 const amountOf = (t) => {
-  const m = t.match(/(\d+(?:\.\d{1,2})?)\s*(?:euros?|pavos)?/);
+  const withEuros = t.match(/(\d+(?:\.\d{1,2})?)\s*(?:euros?|pavos)\b/);
+  if (withEuros) return +withEuros[1];
+  const afterVerb = t.match(/\b(?:apunt|anot|ingres|pon|mete|sum|cobr|pag|gast|ech|carrera|gasto|ingreso|propina)[a-z]*\s+(?:(?:un|una|de|me|lo|el|la)\s+)*(\d+(?:\.\d{1,2})?)/);
+  if (afterVerb) return +afterVerb[1];
+  const m = t.match(/(\d+(?:\.\d{1,2})?)/);
   return m ? +m[1] : null;
 };
 
@@ -505,6 +550,13 @@ export function ask(input, state, now = new Date(), helpers = {}, ctx = {}) {
   // "Hola, apunta 50 euros": saludar y seguir con la orden
   const g = GREET.test(t) ? null : t.match(/^(buenos dias|buenas tardes|buenas noches|hola|buenas)\s+(.{6,})$/);
   if (g) { hello = '¡Hola! '; t = stripFillers(g[2]); }
+  // Respuesta a «¿Lo apunto?»
+  if (ctx.confirm) {
+    if (/^(si|sí|vale|ok|correcto|exacto|eso es|apuntalo|apunta|dale|venga|claro|perfecto)( |$)/.test(t)) {
+      return { kind: 'action', action: ctx.confirm.action, text: ctx.confirm.text, speech: ctx.confirm.speech, ctx: {} };
+    }
+    if (/^(no|nada|cancela|dejalo|olvidalo|para|mal|incorrecto)( |$)/.test(t)) return { ...reply('Vale, no lo apunto. Dímelo otra vez cuando quieras.', 'Vale, no lo apunto.'), ctx: {} };
+  }
   if (UNDO.test(t)) return { kind: 'undo', text: '', speech: '', ctx };
   const chat = smallTalk(t, state, now, helpers, ctx);
   if (chat) return { ...chat, ctx: chat.ctx || {} };
@@ -513,6 +565,14 @@ export function ask(input, state, now = new Date(), helpers = {}, ctx = {}) {
   else if (ctx.last && FOLLOW.test(t)) t = ctx.last.replace(/\b(hoy|ayer|anteayer|esta semana|la semana pasada|este mes|el mes pasado|este ano|el ano pasado|este trimestre|el trimestre pasado|(en )?(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre))\b/g, '').trim() + ' ' + t.replace(/^y /, '');
   const r = answer(t, state, now, helpers);
   if (hello) { r.text = hello + r.text; r.speech = 'Hola. ' + r.speech; }
+  // Con ruido: si el móvil no estaba seguro o la frase llegó muy larga, preguntar antes de apuntar
+  const doubtful = (helpers.confidence > 0 && helpers.confidence < 0.55) || t.split(' ').length > 14;
+  if (r.kind === 'action' && doubtful && !helpers.noConfirm) {
+    const it = r.action.item;
+    const what = r.action.list === 'huc' ? eur(it.i) + ' en la hucha' : eur(it.i) + (it.t === 'out' ? ' de gasto (' + it.c + ')' : ' (' + it.c + ')') + (it.p === 'tarjeta' ? ' con tarjeta' : ' en efectivo');
+    return { kind: 'confirm', text: '🤔 ¿Apunto **' + what + '**?', speech: '¿Apunto ' + spoken(it.i) + (it.p === 'tarjeta' && r.action.list !== 'huc' ? ' con tarjeta' : r.action.list === 'huc' ? ' en la hucha' : ' en efectivo') + '?',
+      ctx: { confirm: { action: r.action, text: r.text, speech: r.speech } } };
+  }
   const next = {};
   if (r.pending) next.pending = r.pending;
   else if (r.kind === 'answer' && !/No te he entendido/.test(r.text)) next.last = t;
