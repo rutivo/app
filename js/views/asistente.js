@@ -69,7 +69,7 @@ function eta(s) {
   return line ? '(' + line.replace(/^\S+\s/, '') + ')' : '';
 }
 
-const LABELS = { idle: 'Toca la bola y habla · con ruido, mantenla pulsada mientras hablas', listening: 'Te escucho…', thinking: 'Pensando…', speaking: 'Hablando… (toca la bola para hablar tú)' };
+const LABELS = { idle: 'Toca la bola y habla', listening: 'Te escucho… (con ruido, toca la bola al terminar)', thinking: 'Pensando…', speaking: 'Hablando… (toca la bola para hablar tú)' };
 
 function setState(state, label) {
   if (!ui) return;
@@ -200,6 +200,13 @@ let rec = null;
 let misses = 0; // escuchas seguidas sin oír nada
 let recLive = false; // el micro llegó a arrancar de verdad
 
+/** Has terminado de hablar: cerrar el micro y procesar lo oído. */
+function finishListening() {
+  if (!rec) return;
+  setState('thinking', 'Un momento…');
+  try { rec.stop(); } catch { stopListening(); }
+}
+
 function stopListening() {
   if (rec) try { rec.abort(); } catch { /* */ }
   rec = null;
@@ -229,7 +236,7 @@ function listen() {
   try { speechSynthesis.cancel(); } catch { /* */ }
   if (!Recognition) return showKeyboard(micHelp());
   // Tocar mientras escucha = parar. Si una escucha anterior se quedó colgada, se descarta y se empieza otra.
-  if (rec && recLive && ui && ui.root.dataset.state === 'listening') { stopListening(); setState('idle'); return; }
+  if (rec && recLive && ui && ui.root.dataset.state === 'listening') { finishListening(); return; }
   stopListening();
   recLive = false;
   let started = false;
@@ -257,7 +264,7 @@ function listen() {
     }
     const said = finals.filter(Boolean).map((alts) => alts[0]).join(' ');
     if (ui) ui.live.textContent = (said + ' ' + interim).trim();
-    if (!document.querySelector('.siri-orb.held')) quiet(1400); // 1,4 s sin hablar = has terminado (si no la tienes pulsada)
+    quiet(1400); // 1,4 s sin hablar = has terminado
   };
   r.onerror = (e) => { failed = e.error || 'error'; };
   r.onend = () => {
@@ -289,10 +296,13 @@ function listen() {
     rec = null;
     showKeyboard(micHelp('error'));
   }
-  // Si el micro no arranca en 3 s, decirlo
+  // Si el micro no arranca en 4 s, no quedarse en «Te escucho…»: abrir el teclado para dictar
   setTimeout(() => {
-    if (rec === r && !started && !heard && ui) setState('listening', 'No noto el micrófono… Habla, o toca ⌨️ y usa el 🎤 del teclado.');
-  }, 3000);
+    if (rec === r && !started && !heard && ui) {
+      stopListening();
+      showKeyboard('El micrófono no ha arrancado. Toca el 🎤 del teclado y dicta, o vuelve a tocar la bola.');
+    }
+  }, 4000);
   // Por si el sistema no cierra solo
   setTimeout(() => { if (rec === r) { try { r.stop(); } catch { /* */ } setTimeout(() => { if (rec === r) { stopListening(); setState('idle'); } }, 1500); } }, 15000);
 }
@@ -326,30 +336,13 @@ export function openAssistant() {
     if (!el) return;
     if (el.matches('[data-sx]')) return closeAssistant();
     if (el.matches('[data-svoz]')) { writeFlag(VOICE_KEY, voiceOn() ? '0' : '1'); paintVoz(); try { speechSynthesis.cancel(); } catch { /* */ } return setState('idle'); }
-    if (el.matches('[data-sorb]')) { if (e.detail === 0) listen(); return; } // teclado; con el dedo va por pointerdown
+    if (el.matches('[data-sorb]')) return listen(); // escuchar; si ya escucha, «he terminado»; si habla, se calla y te escucha
     if (el.matches('[data-asyes]')) { unlockVoice(); return handle('sí'); }
     if (el.matches('[data-asno]')) { unlockVoice(); return handle('no'); }
     if (el.matches('[data-skb]')) { if (ui.form.hidden) showKeyboard(); else ui.form.hidden = true; return; }
     if (el.matches('[data-asq]')) { unlockVoice(); return handle(el.dataset.asq); }
     if (el.matches('[data-asundo]')) { undoAt(+el.dataset.asundo); paint(); }
   });
-  // La bola: un toque = escucha hasta que te calles; mantenerla pulsada = escucha solo mientras la pulsas
-  const orb = root.querySelector('[data-sorb]');
-  let downAt = 0;
-  orb.addEventListener('pointerdown', (e) => {
-    e.preventDefault();
-    downAt = Date.now();
-    orb.classList.add('held');
-    listen();
-  });
-  const release = () => {
-    orb.classList.remove('held');
-    if (downAt && Date.now() - downAt > 450 && rec) { try { rec.stop(); } catch { /* */ } } // soltaste: ya has terminado
-    downAt = 0;
-  };
-  orb.addEventListener('pointerup', release);
-  orb.addEventListener('pointercancel', release);
-  orb.addEventListener('contextmenu', (e) => e.preventDefault());
   ui.form.onsubmit = (e) => {
     e.preventDefault();
     unlockVoice();
