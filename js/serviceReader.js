@@ -13,28 +13,58 @@ const LABELS = {
   flight: ['numero de vuelo', 'nº vuelo', 'n vuelo', 'flight number', 'flight no', 'flight nº', 'vuelo', 'flight'],
   origin: ['lugar de recogida', 'punto de recogida', 'pickup location', 'pick-up location', 'pick up', 'pickup', 'pick-up', 'recogida', 'origen', 'desde', 'from'],
   destination: ['direccion de destino', 'lugar de destino', 'drop-off location', 'dropoff location', 'drop off', 'dropoff', 'drop-off', 'destino', 'destination', 'hasta', 'to'],
-  amount: ['importe a cobrar al cliente', 'importe a cobrar', 'a cobrar', 'importe', 'precio', 'price', 'total', 'amount', 'tarifa', 'fare', 'pvp', 'cobrar'],
+  amount: ['precio chofer', 'precio conductor', 'importe conductor', 'importe chofer', 'driver price', 'importe a cobrar al cliente', 'importe a cobrar', 'a cobrar', 'importe', 'precio', 'price', 'total', 'amount', 'tarifa', 'fare', 'pvp'],
+  collect: ['cobrar al cliente', 'cobrar al pasajero', 'collect from customer', 'cobro al cliente', 'pago en vehiculo'],
+  kind: ['tipo servicio', 'tipo de servicio', 'service type', 'tipo traslado'],
   phone: ['telefono', 'phone', 'tel', 'movil', 'mobile', 'whatsapp', 'contacto'],
   pax: ['numero de pasajeros', 'passengers', 'pasajeros', 'pax', 'adults', 'adultos', 'personas'],
   code: ['codigo servicio', 'codigo de reserva', 'localizador', 'referencia', 'booking ref', 'booking', 'reserva', 'codigo', 'ref', 'id'],
 };
 
+// Palabras con las que empieza una línea que ya es otro apartado (para cortar direcciones de varias líneas)
+const STOP = /^(referencia|fecha|hora|detalle|tipo|origen|destino|desti|pax|ruta|vuelo|notas|extras|nombre|telefono|movil|precio|cobrar|colaborador|conductor|vehiculo|servicios|voucher|datos|pasajero|economia|from|to|flight|price|phone|passengers?|booking|pick|drop)\b/;
+
 const MONTHS = { ene: 1, jan: 1, feb: 2, mar: 3, abr: 4, apr: 4, may: 5, jun: 6, jul: 7, ago: 8, aug: 8, sep: 9, set: 9, oct: 10, nov: 11, dic: 12, dec: 12 };
 const pad = (n) => String(n).padStart(2, '0');
 
-/** Valor de una etiqueta: en la misma línea ("Fecha: 20/11") o en la siguiente (captura de app). */
-function labelValue(lines, names) {
+/** Una línea "basura" de la lectura (restos de etiquetas, signos sueltos). */
+const junk = (l) => (strip(l).match(/[a-z0-9]/gi) || []).length < 4 || /^[a-z]{2,7}\s*[,.]\s*[,.]?$/i.test(strip(l).trim());
+
+/**
+ * Valor de una etiqueta: en la misma línea ("Fecha: 20/11" o en dos columnas),
+ * o en la siguiente (captura de app). Con `multi`, sigue en las líneas de abajo
+ * (direcciones largas) hasta el siguiente apartado.
+ */
+function labelValue(lines, names, multi = false, accept = () => true) {
   for (let i = 0; i < lines.length; i++) {
     const l = strip(lines[i]).toLowerCase().trim();
-    for (const n of names) {
-      const m = l.match(new RegExp('^[^a-z0-9]*' + n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b\\s*([:\\-–=]?)\\s*(.*)$'));
+    for (const n0 of names) {
+      // La lectura a veces parte la etiqueta ("Desti" … "estino"): vale el principio si es largo
+      const n = multi && n0.length >= 6 && !/\s/.test(n0) ? n0.slice(0, 5) + '[a-z]*' : n0.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const m = l.match(new RegExp('^[^a-z0-9]*' + n + '\\b\\s*([:\\-–=]?)\\s*(.*)$'));
       if (!m) continue;
       const rest = lines[i].trim().slice(lines[i].trim().length - m[2].length).trim();
       // "Pick-up date" no es el valor de "Pick-up": es otra etiqueta
-      if (!m[1] && /^(date|time|location|point|number|no|name|ref|fecha|hora|lugar|punto|numero|nombre)\b/.test(m[2])) continue;
-      if (rest) return rest;
-      const next = lines.slice(i + 1).find((x) => x.trim());
-      if (next) return next.trim();
+      if (!m[1] && /^(date|time|location|point|number|name|ref|fecha|hora|lugar|punto|numero|nombre)\b/.test(m[2])) continue;
+      let value = /[a-z0-9€]/i.test(rest) ? rest : ''; // ", ." no es un valor; "2" o "No" sí
+      let j = i + 1;
+      // Dos columnas con dirección larga: la etiqueta sale a media altura y su primera línea queda encima
+      if (multi && !value && rest && i > 0 && !STOP.test(strip(lines[i - 1]).toLowerCase().trim()) && !junk(lines[i - 1])) value = lines[i - 1].trim();
+      if (!value) { while (j < lines.length && !lines[j].trim()) j++; value = (lines[j] || '').trim(); j++; }
+      if (multi) {
+        for (let k = 0; k < 4 && j < lines.length; k++, j++) {
+          const nx = strip(lines[j]).toLowerCase().trim();
+          if (STOP.test(nx) || /^\d{1,2}:\d{2}/.test(nx)) break;
+          // Esta línea es el principio del siguiente apartado (su etiqueta viene justo debajo, sin valor)
+          const after = strip(lines[j + 1] || '').toLowerCase().trim();
+          const m2 = after.match(/^(origen|destino|desti|recogida|from|to|pick|drop|direccion)\b/);
+          if (m2 && !/[a-z0-9]/i.test(after.slice(m2[0].length))) break;
+          if (junk(lines[j])) continue;
+          value += ' ' + lines[j].trim();
+        }
+      }
+      value = value.replace(/^[^A-Za-zÀ-ÿ0-9+€]+/, '').replace(/\s+/g, ' ').trim();
+      if (value && accept(value)) return value;
     }
   }
   return '';
@@ -71,8 +101,9 @@ function findAmount(s) {
   return parseFloat((m[1] || m[2]).replace(',', '.')) || 0;
 }
 
-const findFlight = (s) => {
-  const m = String(s).toUpperCase().match(/\b([A-Z]{2}|[A-Z]\d|\d[A-Z])\s?(\d{2,4}[A-Z]?)\b/);
+const findFlight = (s0) => {
+  const s = String(s0).trim().replace(/^([A-Za-z0-9])l(?=\s?\d)/, '$1I').replace(/^([A-Za-z])0(?=\s?\d)/, '$1O');
+  const m = s.toUpperCase().match(/\b([A-Z]{2}|[A-Z]\d|\d[A-Z])\s?(\d{2,4}[A-Z]?)\b/);
   return m && !/^(KM|EU|ES|CP|AM|PM|TO|ID|NO)$/.test(m[1]) ? m[1] + m[2] : '';
 };
 
@@ -110,25 +141,32 @@ export function readService(text, today) {
   const get = (k) => labelValue(lines, LABELS[k]);
 
   const date = findDate(get('date'), today) || findDate(raw, today);
-  const time = findTime(get('time')) || findTime(raw);
+  const body = lines.filter((l, i) => !(i < 3 && /^\d{1,2}:\d{2}\b/.test(l))).join('\n'); // sin la hora del móvil
+  const time = findTime(get('time')) || findTime(get('date')) || findTime(body);
   if (!date && !time) return null;
-  let origin = get('origin');
-  let destination = get('destination');
+  let origin = labelValue(lines, LABELS.origin, true);
+  let destination = labelValue(lines, LABELS.destination, true);
   if (!origin || !destination) {
     const [a, b] = findRoute(lines);
     origin = origin || a;
     destination = destination || b;
   }
-  const passenger = cleanName(get('passenger')) || cleanName((raw.match(/\b(?:mr|mrs|ms|miss)\.?\s+([A-Za-zÀ-ÿ'-]+(?:\s+[A-Za-zÀ-ÿ'-]+){0,2})/i) || [])[1] || '');
-  const code = get('code');
+  // Un nombre de verdad, no el título del apartado ("Pasajero y contacto")
+  const isName = (v) => /[a-zà-ÿ]{2,}/i.test(v) && !/(contacto|datos|document|confirm|informaci|detalle|\by \w+$)/i.test(strip(v)) && v.split(/\s+/).length <= 5;
+  const passenger = cleanName(labelValue(lines, LABELS.passenger, false, isName)) || cleanName((raw.match(/\b(?:mr|mrs|ms|miss)\.?\s+([A-Za-zÀ-ÿ'-]+(?:\s+[A-Za-zÀ-ÿ'-]+){0,2})/i) || [])[1] || '');
+  const code = labelValue(lines, LABELS.code, false, (v) => /\d/.test(v) && v.length <= 30);
   const pax = (get('pax').match(/\d+/) || [''])[0];
+  const kind = get('kind');
+  const collect = strip(get('collect')).toLowerCase();
+  const route = raw.match(/(\d+(?:[.,]\d)?)\s*km\D{0,12}?(\d+)\s*min/i);
   return {
     date: date || today,
     time,
     origin: placeOf(origin),
     destination: placeOf(destination),
     amount: findAmount(get('amount')) || findAmount(raw),
-    notes: [code && 'Ref. ' + code.replace(/^[:#\s]+/, ''), pax && pax + ' pax'].filter(Boolean).join(' · '),
+    notes: [code && 'Ref. ' + code.replace(/^[:#\s]+/, ''), pax && pax + ' pax', kind && titleCase(kind), route && route[1] + ' km · ' + route[2] + ' min',
+      /^no\b/.test(collect) && 'No cobrar al cliente (paga la agencia)'].filter(Boolean).join(' · '),
     passenger,
     flight: findFlight(get('flight')) || findFlight(raw.replace(/\b\d{1,2}[:.]\d{2}\b/g, ' ')),
     phone: findPhone(get('phone')) || findPhone(raw),

@@ -59,3 +59,16 @@ test('fechas en muchos formatos', () => {
 test('si no hay ni fecha ni hora, no es un servicio', () => {
   assert.equal(readService('Hola qué tal', TODAY), null);
 });
+
+test('app de dos columnas (como la de tu grabación): todo lo importante', async () => {
+  const fs = await import('node:fs');
+  const text = fs.readFileSync(new URL('./fixtures/reserva-dos-columnas.txt', import.meta.url), 'utf8');
+  assert.deepEqual(readService(text, '2026-11-20'), {
+    date: '2026-12-27', time: '10:10',
+    origin: 'Aeropuerto De Málaga - Costa Del Sol — Av. Del Comandante García Morato, S/n, Churriana, 29004, Málaga',
+    destination: 'Beneste Villa Flamenca Hotel — C. Andalucía, 1, 29780 Nerja, Málaga',
+    amount: 62,
+    notes: 'Ref. PRUEBA_123/1 · 2 pax · Llegada Sedan · 69,6 km · 49 min · No cobrar al cliente (paga la agencia)',
+    passenger: 'Mary Jones', flight: 'EI882', phone: '+34 600 000 000',
+  });
+});

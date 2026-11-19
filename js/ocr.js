@@ -39,8 +39,25 @@ const loadImage = (file) =>
     img.src = url;
   });
 
-/** Fotogramas de un vídeo (p. ej. grabación de pantalla), repartidos a lo largo del vídeo. */
-async function videoFrames(file, max = 6) {
+/** Huella pequeña de un fotograma, para saltar los que salen casi iguales. */
+function thumb(source, w, h) {
+  const c = document.createElement('canvas');
+  c.width = 48;
+  c.height = Math.max(16, Math.round((48 * h) / w));
+  const x = c.getContext('2d', { willReadFrequently: true });
+  x.drawImage(source, 0, 0, c.width, c.height);
+  const d = x.getImageData(0, 0, c.width, c.height).data;
+  const out = [];
+  for (let i = 0; i < d.length; i += 4) out.push((d[i] + d[i + 1] + d[i + 2]) / 3);
+  return out;
+}
+const differs = (a, b) => !b || a.reduce((s, v, i) => s + Math.abs(v - b[i]), 0) / a.length > 1.5; // solo los casi idénticos
+
+/**
+ * Fotogramas de un vídeo (grabación de pantalla bajando por el servicio): uno
+ * cada segundo, más o menos, sin repetir los que salen casi iguales.
+ */
+async function videoFrames(file, max = 16) {
   const url = URL.createObjectURL(file);
   const v = document.createElement('video');
   v.muted = true;
@@ -49,11 +66,15 @@ async function videoFrames(file, max = 6) {
   v.src = url;
   await new Promise((resolve, reject) => { v.onloadeddata = resolve; v.onerror = () => reject(new Error('video')); });
   const dur = Number.isFinite(v.duration) && v.duration > 0 ? v.duration : 1;
-  const n = Math.max(1, Math.min(max, Math.ceil(dur / 1.5)));
+  const n = Math.max(1, Math.min(max, Math.round(dur / 0.8) + 1));
   const frames = [];
+  let last = null;
   for (let i = 0; i < n; i++) {
     const t = n === 1 ? Math.min(0.5, dur / 2) : 0.2 + ((dur - 0.4) * i) / (n - 1);
     await new Promise((resolve) => { v.onseeked = resolve; v.currentTime = Math.max(0, Math.min(dur - 0.05, t)); setTimeout(resolve, 2500); });
+    const th = thumb(v, v.videoWidth, v.videoHeight);
+    if (!differs(th, last)) continue;
+    last = th;
     frames.push(prepare(v, v.videoWidth, v.videoHeight));
   }
   URL.revokeObjectURL(url);
