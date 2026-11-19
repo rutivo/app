@@ -104,7 +104,7 @@ function liveHtml(f, live) {
         (f.arr && f.arr.terminal ? ' · Terminal ' + esc(f.arr.terminal) : '') + '</div>') +
     (dep ? '<div class="mut mt8">' + (f.dep.runway ? 'Despegó a las ' : 'Sale a las ') + hhmm(dep) + ' (hora de aquí)</div>' : '') +
     (waiting
-      ? '<div class="fl-wait mt8">⏱️ El seguimiento en directo empieza solo a la hora de despegue (' + hhmm(dep) + '). Hasta entonces no se gastan consultas.</div>'
+      ? '<div class="fl-wait mt8">📡 El seguimiento en directo y el mapa se activan al despegar (' + hhmm(dep) + ').</div>'
       : hasLanded(f) || isCanceled(f)
         ? ''
         : '<div class="mut mt8">Actualizado a las ' + hhmm(f.at || Date.now()) + ' · se actualiza solo mientras vuela</div>')
@@ -266,8 +266,8 @@ export function openFlight(code, extra = '', date = '', time = '') {
           if (!sheet.isConnected) return;
           if (!f) {
             const first = serviceTime({ f: date, h: time }) - 12 * 36e5;
-            info.innerHTML = '<div class="fl-wait">🕒 La hora prevista del vuelo se consulta sola 12 h antes del servicio (el ' +
-              new Date(first).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit' }) + ' a las ' + hhmm(first) + '). Así se ahorran consultas.</div>';
+            info.innerHTML = '<div class="fl-wait">🕒 Los datos del vuelo (origen y hora prevista de llegada) aparecerán aquí el ' +
+              new Date(first).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit' }) + ' a partir de las ' + hhmm(first) + '.</div>';
             return;
           }
           info.innerHTML = liveHtml(f, live);
