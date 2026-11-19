@@ -10,6 +10,16 @@ export const statusLabel = (s) => STATUS[s] || s || 'Sin datos';
 export const isCanceled = (f) => /^Cancel|Diverted/.test(f.status || '');
 export const hasLanded = (f) => f.status === 'Arrived' || f.status === 'Landed' || !!(f.arr && f.arr.runway);
 
+/**
+ * Sin confirmación de aterrizaje, pero ya pasaron 10 min de la llegada estimada:
+ * se da por aterrizado (los datos gratuitos a veces no lo registran).
+ */
+export function probablyLanded(f, now = Date.now()) {
+  if (!f || f.found === false || isCanceled(f) || hasLanded(f)) return false;
+  const eta = arrivalTime(f);
+  return eta !== null && now > eta + 10 * 6e4;
+}
+
 /** Hora de llegada más fiable que haya: real > revisada > prevista > programada. */
 export function arrivalTime(f) {
   const a = f && f.arr;
@@ -110,6 +120,8 @@ export function shouldTrack(f, now, serviceMs = null) {
   if (!f) return serviceMs === null || now >= serviceMs - 12 * 36e5; // primera consulta: 12 h antes del servicio
   if (f.found === false) return !!f.at && now - f.at > 6 * 36e5; // no encontrado: reintentar cada 6 h
   if (isCanceled(f) || hasLanded(f)) return false;
+  const eta0 = arrivalTime(f);
+  if (eta0 !== null && now > eta0 + 45 * 6e4) return false; // ya debería estar en tierra hace rato
   const t = estDeparture(f);
   if (t !== null && now < t) return false;
   // Ya en hora: en el aire cada 15 min (cada 5 en la última media hora); en tierra con retraso, cada 10.

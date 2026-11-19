@@ -8,7 +8,7 @@
 import { FLIGHT_API } from './config.js';
 import { bottomSheet, loadScript, readFlag, writeFlag } from './dom.js';
 import {
-  arrivalDelay, arrivalTime, changeNotice, delayLabel, estDeparture, flightProgress, hasLanded, hhmm, isAirborne, isCanceled, shouldTrack, statusLabel,
+  arrivalDelay, arrivalTime, changeNotice, delayLabel, estDeparture, flightProgress, hasLanded, hhmm, isAirborne, isCanceled, probablyLanded, shouldTrack, statusLabel,
 } from './flightStatus.js';
 import { serviceTime } from './trips.js';
 import { esc } from './utils.js';
@@ -84,6 +84,7 @@ export function etaLine(f) {
   const t = arrivalTime(f);
   if (t === null) return '';
   const d = arrivalDelay(f);
+  if (probablyLanded(f)) return '🛬 Aterrizó hacia las ' + hhmm(t);
   return (hasLanded(f) ? '🛬 Aterrizó ' : isAirborne(f) ? '✈️ En el aire · llega ' : '✈️ Llega ') + hhmm(t) + (d !== null ? ' (' + delayLabel(d) + ')' : '');
 }
 
@@ -95,6 +96,7 @@ function liveHtml(f, live) {
   const d = arrivalDelay(f);
   const late = d !== null && d >= 5;
   const dep = estDeparture(f);
+  const landedEst = probablyLanded(f);
   const sched = f.dep && f.dep.sched ? Date.parse(f.dep.sched) : null;
   const waiting = !live && !hasLanded(f) && !isCanceled(f) && dep && Date.now() < dep;
   const depLine = !dep ? ''
@@ -106,13 +108,14 @@ function liveHtml(f, live) {
     '<div class="fl-from">Desde <b>' + place(f.from) + '</b> → ' + place(f.to) + '</div>' +
     (isCanceled(f)
       ? '<div class="fl-eta out">❌ ' + esc(statusLabel(f.status)) + '</div>'
-      : '<div class="fl-eta ' + (late ? 'out' : 'in') + '">' + (hasLanded(f) ? 'Aterrizó a las ' : 'Llega a las ') + (t ? hhmm(t) : '—') + '</div>' +
+      : '<div class="fl-eta ' + (late && !landedEst ? 'out' : 'in') + '">' + (hasLanded(f) ? 'Aterrizó a las ' : landedEst ? '🛬 Aterrizó hacia las ' : 'Llega a las ') + (t ? hhmm(t) : '—') + '</div>' +
+        (landedEst ? '<div class="mut">Hora estimada: la aerolínea aún no ha confirmado el aterrizaje.</div>' : '') +
         '<div class="mut">' + (f.arr && f.arr.sched ? 'Programado ' + hhmm(Date.parse(f.arr.sched)) : '') + (d !== null ? ' · ' + delayLabel(d) : '') +
         (f.arr && f.arr.terminal ? ' · Terminal ' + esc(f.arr.terminal) : '') + '</div>') +
     (depLine ? '<div class="mut mt8">' + depLine + ' (hora de aquí)</div>' : '') +
     (waiting
       ? '<div class="fl-wait mt8">📡 El seguimiento en directo y el mapa se activan al despegar (' + hhmm(dep) + ').</div>'
-      : hasLanded(f) || isCanceled(f)
+      : hasLanded(f) || isCanceled(f) || landedEst
         ? ''
         : '<div class="mut mt8">Actualizado a las ' + hhmm(f.at || Date.now()) + ' · se actualiza solo mientras vuela</div>')
   );

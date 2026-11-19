@@ -76,3 +76,12 @@ test('sin datos en vivo: despegue estimado con el retraso y en el aire por horar
   assert.equal(isAirborne(f, Date.parse('2026-11-19T14:50:00Z')), false);
   assert.equal(Math.round(flightProgress(f, Date.parse('2026-11-19T13:16:30Z')) * 100), 50);
 });
+
+test('sin confirmación de aterrizaje: se da por aterrizado al pasar la hora y se deja de consultar', async () => {
+  const { probablyLanded, shouldTrack, isAirborne } = await import('../js/flightStatus.js');
+  const f = { found: true, status: 'Delayed', dep: { sched: '2026-11-19T11:20:00Z' }, arr: { sched: '2026-11-19T14:15:00Z', revised: '2026-11-19T14:55:00Z' }, at: Date.parse('2026-11-19T14:40:00Z') };
+  assert.equal(probablyLanded(f, Date.parse('2026-11-19T14:58:00Z')), false);
+  assert.equal(probablyLanded(f, Date.parse('2026-11-19T15:06:00Z')), true);
+  assert.equal(isAirborne(f, Date.parse('2026-11-19T15:06:00Z')), false);
+  assert.equal(shouldTrack(f, Date.parse('2026-11-19T15:41:00Z')), false);
+});
