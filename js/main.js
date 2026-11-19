@@ -12,6 +12,7 @@ import { initGasolina, renderGasolina } from './views/gasolina.js';
 import { initHucha, renderHucha } from './views/hucha.js';
 import { initJornada } from './views/jornada.js';
 import { initUpcoming } from './views/proximos.js';
+import { initAssistant } from './views/asistente.js';
 import { initTips } from './views/tips.js';
 import { initTransfer, renderTransfer } from './views/transfer.js';
 
@@ -83,6 +84,7 @@ initJornada(render);
 initFacturas(render);
 initTips(saveBackupFile);
 initUpcoming();
+initAssistant(render);
 render();
 requestPersistentStorage();
 
