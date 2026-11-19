@@ -71,6 +71,7 @@ export function simplify(list, day = '') {
     number: (f.number || '').replace(/\s/g, ''),
     status: f.status || 'Unknown',
     airline: f.airline ? f.airline.name : '',
+    airlineIcao: f.airline && f.airline.icao ? f.airline.icao : '',
     from: airport(f.departure && f.departure.airport),
     to: airport(f.arrival && f.arrival.airport),
     dep: times(f.departure),
@@ -98,6 +99,60 @@ async function position(hex) {
     }
   }
   return null;
+}
+
+
+// ---------- avión sin código: localizarlo al despegar ----------
+
+const rad = (x) => (x * Math.PI) / 180;
+const distKm = (a, b) => 12742 * Math.asin(Math.sqrt(Math.sin(rad(b.lat - a.lat) / 2) ** 2 + Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(rad(b.lon - a.lon) / 2) ** 2));
+const bearing = (a, b) => (Math.atan2(Math.sin(rad(b.lon - a.lon)) * Math.cos(rad(b.lat)), Math.cos(rad(a.lat)) * Math.sin(rad(b.lat)) - Math.sin(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.cos(rad(b.lon - a.lon))) * 180) / Math.PI;
+const angle = (x, y) => Math.abs(((x - y + 540) % 360) - 180);
+
+/** Despegue estimado (igual que la app): real/revisado/previsto, o el programado más el retraso de la llegada. */
+function estDeparture(f) {
+  const d = f.dep || {};
+  const known = d.runway || d.revised || d.predicted;
+  if (known) return Date.parse(known);
+  if (!d.sched) return null;
+  const s = Date.parse(d.sched);
+  const a = f.arr && f.arr.sched ? Date.parse(f.arr.sched) : null;
+  const t = f.arr ? f.arr.runway || f.arr.revised || f.arr.predicted || f.arr.sched : null;
+  const eta = t ? Date.parse(t) : null;
+  return a !== null && eta !== null && eta - a >= 10 * 6e4 ? s + (eta - a) : s;
+}
+
+/**
+ * Si AeroDataBox no da el código del avión, se busca en el radar justo después
+ * del despegue: el avión de esa aerolínea que sale de ese aeropuerto hacia el
+ * destino. Solo se acepta si hay uno (nunca un avión dudoso). Se guarda 8 h.
+ */
+export async function captureHex(cache, f, n, day, now = Date.now()) {
+  const key = new Request('https://cache.rutivo/hex/' + n + '/' + day);
+  const got = await cache.match(key);
+  if (got) return (await got.json()).hex || '';
+  const o = f.from;
+  const t = f.to;
+  if (!f.airlineIcao || !o || !t || typeof o.lat !== 'number' || typeof t.lat !== 'number') return '';
+  const dep = estDeparture(f);
+  if (!dep || now < dep - 10 * 6e4 || now > dep + 50 * 6e4) return '';
+  const r = await fetch('https://api.adsb.lol/v2/point/' + o.lat.toFixed(3) + '/' + o.lon.toFixed(3) + '/150', { headers: { 'User-Agent': 'rutivo-vuelos/1.0', Accept: 'application/json' } });
+  if (!r.ok) return '';
+  const d = await r.json();
+  const course = bearing(o, t);
+  const maxKm = Math.max(40, ((now - dep) / 6e4 + 15) * 14); // lo que puede haber volado desde el despegue
+  const found = (d.ac || []).filter((a) => {
+    if (typeof a.lat !== 'number' || a.alt_baro === 'ground' || !(a.flight || '').trim().startsWith(f.airlineIcao)) return false;
+    const p = { lat: a.lat, lon: a.lon };
+    const km = distKm(o, p);
+    if (km > maxKm) return false;
+    if (km < 25) return typeof a.alt_baro === 'number' && a.alt_baro < 12000; // recién despegado
+    return angle(bearing(o, p), course) < 30 && (a.track == null || angle(a.track, bearing(p, t)) < 35);
+  });
+  if (found.length !== 1) return '';
+  const hex = found[0].hex;
+  await cache.put(key, new Response(JSON.stringify({ hex }), { headers: { 'cache-control': 'max-age=28800' } }));
+  return hex;
 }
 
 export default {
@@ -144,6 +199,13 @@ export default {
     if (res.status === 204 || res.status === 404) body = { found: false };
     else if (!res.ok) return json({ error: 'upstream' }, 502, cors);
     else body = simplify(await res.json(), d);
+    if (body.found && !body.hex) {
+      try {
+        body.hex = await captureHex(cache, body, n, d);
+      } catch {
+        /* sin código: la app enseña la posición aproximada */
+      }
+    }
 
     ctx.waitUntil(cache.put(cacheKey, new Response(JSON.stringify(body), { headers: { 'cache-control': 'max-age=' + CACHE_SECONDS } })));
     return json(body, 200, { ...cors, 'x-cache': 'miss' });

@@ -189,7 +189,8 @@ function posLine(pos, f) {
   if (!pos) return 'Buscando el avión…';
   if (pos.est) {
     const t = f ? arrivalTime(f) : null;
-    return '✈️ Posición aproximada según el horario' + (t ? ' · llega a las ' + hhmm(t) : '') + ' · la real aparece en cuanto el avión la emita';
+    return '🕒 Posición ESTIMADA por horario' + (t ? ' (llega a las ' + hhmm(t) + ')' : '') +
+      ': de este vuelo no llega señal en directo. Para verlo exacto, toca «Ver en Flightradar24».';
   }
   const parts = [];
   if (pos.ground) parts.push('En tierra');
@@ -286,7 +287,13 @@ export function openFlight(code, extra = '', date = '', time = '') {
       return;
     }
     mapWrap.hidden = false;
+    const newHex = !hex && f.hex;
     hex = f.hex || hex;
+    // El intermediario ha localizado el avión con el mapa ya abierto: pasar a la posición real.
+    if (map && newHex) {
+      movePlane();
+      timers.push(setInterval(movePlane, POS_MS));
+    }
     if (!map && !mapBusy) {
       mapBusy = true;
       map = await flightMap(sheet.querySelector('#flmap'), f);
