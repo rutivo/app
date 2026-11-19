@@ -2,8 +2,10 @@
 import { $, onClick } from '../dom.js';
 import { cashStats, baseOf } from '../money.js';
 import { S, save } from '../store.js';
+import { kmOf } from '../trips.js';
 import { cap, esc, eur, monthName, quarterOf, r2, sum, today, uid } from '../utils.js';
 import { sendQuarterToAccountant } from './gestor.js';
+import { renderJornada } from './jornada.js';
 import { renderUpcoming } from './proximos.js';
 import { renderTips } from './tips.js';
 
@@ -16,6 +18,7 @@ function monthStats(month) {
     ...c,
     gas: sum(S.gas.filter((g) => g.f.startsWith(month)), (g) => g.i),
     services: S.srv.filter((x) => x.f.startsWith(month)).length,
+    km: r2(sum((S.jor || []).filter((j) => j.f.startsWith(month)), (j) => kmOf(j) || 0)),
   };
 }
 
@@ -34,6 +37,8 @@ function renderMonths() {
       [c.services, 'Servicios Transfer'],
       [eur(c.netCash), 'Neto en efectivo'],
       [eur(c.netCard), 'Neto con tarjeta'],
+      [c.km ? c.km.toLocaleString('es-ES') + ' km' : '—', 'Km del mes'],
+      [c.km ? eur(r2((c.in - c.out) / c.km)) + '/km' : '—', 'Beneficio por km'],
     ]);
 
   $('#lmes').innerHTML = months
@@ -79,6 +84,7 @@ export function renderCaja() {
   renderUpcoming();
   renderMonths();
   renderQuarter();
+  renderJornada();
 
   const day = $('#dia').value;
   const list = S.mov.filter((m) => m.f === day);

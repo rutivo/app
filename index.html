@@ -30,13 +30,10 @@
     <details class="card"><summary><b>Todos los meses</b></summary><div id="lmes"></div></details>
     <div class="card" id="avc"></div>
 
-    <h2>Trimestres</h2>
-    <div class="card"><select id="tq"></select><div id="tres" class="mt12"></div>
-      <button class="sec" id="tqsend" type="button">📤 Enviar este trimestre a mi gestor</button>
-    </div>
 
     <h2>Día a día</h2>
     <label class="f" for="dia">Día</label><input type="date" id="dia">
+    <div class="card jor" id="jor"></div>
     <div class="card mt12" id="res"></div>
     <div class="card">
       <form id="fm">
@@ -97,10 +94,6 @@
           </div>
         </div>
         <label class="f" for="sn">Notas (equipaje, espera, peaje...)</label><input id="sn">
-        <div class="row">
-          <div><label class="f" for="ski">Km al empezar (opcional)</label><input id="ski" type="number" min="0" step="1" inputmode="numeric"></div>
-          <div><label class="f" for="skf">Km al terminar (opcional)</label><input id="skf" type="number" min="0" step="1" inputmode="numeric"></div>
-        </div>
         <details open class="mt10"><summary><b>Pasajero y vuelo</b></summary>
           <label class="f" for="spa">Nombre del pasajero (cartel)</label><input id="spa">
           <div class="row">
@@ -122,7 +115,6 @@
     </details>
 
     <h2>Servicios</h2>
-    <div class="card" id="kms" hidden></div>
     <div class="card" id="ls"></div>
     <button class="sec danger" id="dsa">Borrar todos los servicios</button>
   </section>
@@ -177,8 +169,9 @@
   <!-- ============ FACTURAS ============ -->
   <section class="v" id="v-fa">
     <h1>Facturas</h1>
-    <details class="card" id="emisor"><summary><b>Mis datos de emisor</b></summary>
-      <label class="f">Tu logo</label><div id="lpv" class="logo-preview"></div>
+    <details class="card" id="logoed"><summary><b>🎨 Mi logo</b></summary>
+      <div class="mut mt8">Así se ve en la app y en tus facturas. Puedes cambiarlo cuando quieras.</div>
+      <div id="lpv" class="logo-preview"></div>
       <div class="row">
         <div><label class="f" for="lt">Tipo de logo</label>
           <select id="lt"><option value="icono">Icono</option><option value="letras">Iniciales</option><option value="imagen">Mi imagen</option><option value="texto">Solo texto</option></select>
@@ -194,7 +187,12 @@
       </div>
       <label class="f">Color</label><div id="cog" class="color-row"></div>
       <label class="f" for="ln">Texto del logo (si lo dejas vacío, tu nombre)</label><input id="ln" placeholder="Ej.: Taxi Sol">
-      <label class="f" for="ls">Segunda línea del logo (opcional)</label><input id="ls" placeholder="Ej.: Servicio de transfers">
+      <label class="f" for="lsub">Segunda línea del logo (opcional)</label><input id="lsub" placeholder="Ej.: Servicio de transfers">
+      <label class="f" for="l3">Tercera línea del logo (opcional)</label><input id="l3" placeholder="Ej.: Málaga">
+      <button type="button" class="sec" id="lreset">Volver al logo por defecto</button>
+    </details>
+
+    <details class="card" id="emisor"><summary><b>Mis datos de emisor</b></summary>
       <label class="f" for="en">Nombre o empresa</label><input id="en">
       <label class="f" for="enif">NIF / DNI</label><input id="enif">
       <label class="f" for="lic">Licencia o matrícula (opcional)</label><input id="lic">
@@ -221,6 +219,12 @@
       <div id="pk"></div>
       <button id="mk">Crear factura</button>
     </div>
+
+    <details class="card" id="trim"><summary><b>📊 Trimestres e impuestos</b></summary>
+      <div class="mut mt8">Lo facturado en cada trimestre, la base, el IVA y los gastos. Desde aquí se lo mandas a tu gestor.</div>
+      <select id="tq" class="mt10"></select><div id="tres" class="mt12"></div>
+      <button class="sec" id="tqsend" type="button">📤 Enviar este trimestre a mi gestor</button>
+    </details>
 
     <h2>Facturas emitidas</h2>
     <div class="card" id="lfac"></div>

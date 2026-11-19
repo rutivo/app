@@ -94,14 +94,17 @@ export function logoSvg(width, ink) {
   const textOnly = (S.cfg.lt || 'icono') === 'texto';
   const name = (S.cfg.ln || S.cfg.nom || 'Tu negocio').toUpperCase();
   const sub = S.cfg.ls || S.cfg.lic || '';
+  const third = (S.cfg.l3 || '').toUpperCase();
   const x0 = textOnly ? 4 : 100;
   const fs = Math.max(12, Math.min(textOnly ? 40 : 34, (266 - x0) / (name.length * 0.7)));
+  const y1 = sub ? (third ? 44 : 46) : 54;
   return (
     '<svg viewBox="0 0 270 90" width="' + width + '" overflow="visible" role="img" aria-label="' + esc(name) + '">' +
     mark(c) +
     '<g font-family="Manrope,Arial,sans-serif" font-weight="800">' +
-    '<text x="' + x0 + '" y="' + (sub ? 46 : 54) + '" font-size="' + fs + '" style="fill:' + ink + '">' + esc(name) + '</text>' +
-    (sub ? '<text x="' + x0 + '" y="70" font-size="' + Math.min(22, fs * 0.8) + '" letter-spacing="1" fill="' + c + '">' + esc(sub) + '</text>' : '') +
+    '<text x="' + x0 + '" y="' + y1 + '" font-size="' + fs + '" style="fill:' + ink + '">' + esc(name) + '</text>' +
+    (sub ? '<text x="' + x0 + '" y="' + (third ? 67 : 70) + '" font-size="' + Math.min(22, fs * 0.8) + '" letter-spacing="1" fill="' + c + '">' + esc(sub) + '</text>' : '') +
+    (third ? '<text class="lg3" x="' + (x0 + 1) + '" y="84" font-size="11" letter-spacing="5" fill="#5d6b78">' + esc(third) + '</text>' : '') +
     '</g></svg>'
   );
 }

@@ -57,6 +57,7 @@ function shards() {
   add('srv', S.srv, byMonth);
   add('gas', S.gas, byMonth);
   add('huc', S.huc, byMonth);
+  add('jor', S.jor || [], byMonth);
   add('prv', S.prv, () => 'all');
   add('fac', S.fac, (x) => x.fecha.slice(0, 4));
   for (const k in groups) out[k] = JSON.stringify(groups[k]);
@@ -120,7 +121,7 @@ function schedule() {
 async function fetchRemote() {
   const docs = await remote.list();
   const meta = docs.find((d) => d.id === 'meta');
-  const R = { mov: [], srv: [], fac: [], gas: [], huc: [], prv: [], cli: {}, cfg: null, ts: meta ? meta.data.ts || 0 : 0 };
+  const R = { mov: [], srv: [], fac: [], gas: [], huc: [], prv: [], jor: [], cli: {}, cfg: null, ts: meta ? meta.data.ts || 0 : 0 };
   const sent = {};
   for (const d of docs) {
     if (d.id === 'meta') continue;

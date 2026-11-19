@@ -12,6 +12,7 @@
 //   gas  gasolina               {id, mid, f, i, l: litros, p, s: gasolinera, ph?: tiene foto}
 //   huc  hucha                  {id, f, i}
 //   prv  proveedores            {id, nom, nif, dir, cp, loc}
+//   jor  jornadas (una por día)  {id, f, ki: km al empezar, kf: km al terminar, hi: hora inicio, hf: hora fin}
 //   cli  datos de cliente por nombre {nif, dir}
 //   cfg  configuración y datos del emisor
 //   ts   marca de tiempo del último cambio
@@ -19,10 +20,10 @@
 const STORAGE_KEY = 'cajaTransfer';
 const BACKUP_KEY = 'lastBackup'; // fecha de la última copia de seguridad
 const PHOTO_PREFIX = 'foto_';
-const LISTS = ['mov', 'srv', 'fac', 'gas', 'huc', 'prv'];
+const LISTS = ['mov', 'srv', 'fac', 'gas', 'huc', 'prv', 'jor'];
 
 const emptyState = () => ({
-  mov: [], srv: [], fac: [], gas: [], huc: [], prv: [], cli: {},
+  mov: [], srv: [], fac: [], gas: [], huc: [], prv: [], jor: [], cli: {},
   cfg: { nom: '', nif: '', dir: '', iva: 10, lic: '', cp: '', loc: '', ico: 'taxi', col: 'azul', hd: 1, hm: 500 },
 });
 
@@ -95,7 +96,7 @@ export function requestPersistentStorage() {
 }
 
 export function hasLocalData() {
-  return LISTS.some((k) => S[k].length > 0) || !!S.cfg.nom;
+  return LISTS.some((k) => (S[k] || []).length > 0) || !!S.cfg.nom;
 }
 
 // ---------- fotos de gasolina ----------

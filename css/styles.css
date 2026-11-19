@@ -758,3 +758,27 @@ details[open] > summary.row-btn .chev { transform: rotate(90deg); }
 :root[data-theme="elegante"] .road { opacity: 0.45; }
 :root[data-theme="elegante"] #toast { background: #e9eef8; color: #0b1830; }
 .theme-swatch { width: 32px; height: 32px; border-radius: 8px; border: 1px solid var(--line); flex: none; }
+
+/* ---------- Mi jornada y cierre del día ---------- */
+.row > * { min-width: 0; }
+.jor-head { display: flex; justify-content: space-between; align-items: baseline; }
+.jor .tm { display: flex; gap: 6px; align-items: center; }
+.jor .tm input { flex: 1; min-width: 0; width: 100%; padding: 10px 8px; }
+.jor .tm button { margin: 0; width: auto; flex: none; padding: 10px 9px; font-size: 13px; }
+.bsheet > div { overflow-x: hidden; }
+.close-big { font-size: 40px; font-weight: 800; line-height: 1.1; margin: 4px 0; }
+.badge {
+  display: inline-block;
+  max-width: 100%;
+  margin: 8px 6px 0 0;
+  padding: 6px 10px;
+  border-radius: 99px;
+  font-size: 13px;
+  font-weight: 700;
+  background: var(--bg);
+  border: 1px solid var(--line);
+}
+.badge.gold { border-color: #d9a52b; color: #d9a52b; }
+.badge.up { border-color: var(--in); color: var(--in); }
+.badge.down { border-color: var(--out); color: var(--out); }
+:root[data-theme="elegante"] #brand .lg3 { fill: #9fb2cf; }

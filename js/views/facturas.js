@@ -40,7 +40,8 @@ function renderLogoEditor() {
   $('#lt').value = type;
   $('#lf').value = S.cfg.lf || 'circulo';
   $('#ln').value = S.cfg.ln || '';
-  $('#ls').value = S.cfg.ls || '';
+  $('#lsub').value = S.cfg.ls || '';
+  $('#l3').value = S.cfg.l3 || '';
   $('#icobox').style.display = type === 'icono' ? 'block' : 'none';
   $('#imgbox').style.display = type === 'imagen' ? 'block' : 'none';
   $('#lpv').innerHTML = logoSvg(220, 'var(--ink)');
@@ -89,12 +90,12 @@ const shrinkLogo = (file) =>
 const ISSUER_FIELDS = {
   // id del campo → clave en cfg
   en: 'nom', enif: 'nif', ed: 'dir', ecp: 'cp', eloc: 'loc', eib: 'iban',
-  lic: 'lic', echof: 'chof', epunto: 'punto', ln: 'ln', ls: 'ls', egest: 'gestor',
+  lic: 'lic', echof: 'chof', epunto: 'punto', ln: 'ln', lsub: 'ls', l3: 'l3', egest: 'gestor',
 };
 
 function renderIssuer() {
   for (const [id, key] of Object.entries(ISSUER_FIELDS)) {
-    if (id !== 'ln' && id !== 'ls') $('#' + id).value = S.cfg[key] || '';
+    if (!['ln', 'lsub', 'l3'].includes(id)) $('#' + id).value = S.cfg[key] || '';
   }
   $('#iva').value = S.cfg.iva;
   $('#eul').value = lastIssued();
@@ -421,6 +422,14 @@ export function initFacturas(rerender) {
       toast('No se pudo leer la imagen.');
     }
     $('#lim').value = '';
+  };
+  $('#lreset').onclick = () => {
+    if (!confirmTapTimed($('#lreset'), 'Toca otra vez para volver al logo por defecto')) return;
+    for (const k of ['lt', 'ico', 'col', 'lf', 'ln', 'ls', 'l3', 'limg']) delete S.cfg[k];
+    save();
+    renderBrand();
+    renderLogoEditor();
+    toast('Logo por defecto restablecido ✓');
   };
   $('#limx').onclick = () => {
     delete S.cfg.limg;
