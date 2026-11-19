@@ -1,7 +1,7 @@
 // Service worker: la app funciona sin conexión.
 // Estrategia "red primero": siempre intenta la versión nueva y, si no hay red,
 // usa la copia guardada. Sube CACHE al cambiar la lista de archivos.
-const CACHE = 'gestor-transfer-v16';
+const CACHE = 'gestor-transfer-v17';
 const FILES = [
   './',
   './index.html',
@@ -61,8 +61,11 @@ const KEEP = [self.location.origin, 'https://cdnjs.cloudflare.com', 'https://cdn
 self.addEventListener('fetch', (e) => {
   if (e.request.method !== 'GET') return;
   if (!KEEP.some((o) => e.request.url.startsWith(o + '/'))) return;
+  // Los archivos de la app se piden sin la caché del navegador (GitHub Pages
+  // la deja 10 min), para que una versión nueva se vea al momento.
+  const own = e.request.url.startsWith(self.location.origin + '/');
   e.respondWith(
-    fetch(e.request)
+    fetch(e.request, own ? { cache: 'no-cache' } : undefined)
       .then((res) => {
         const copy = res.clone();
         caches.open(CACHE).then((c) => c.put(e.request, copy)).catch(() => {});
