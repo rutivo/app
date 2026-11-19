@@ -139,6 +139,17 @@
         <button>Guardar factura de gasolina</button>
       </form>
     </div>
+    <div class="card" id="gpack">
+      <h2 class="mt0">📤 Tickets para el gestor</h2>
+      <div class="mut">Junta todas las facturas de gasolina en un solo PDF: primero la lista con el total y luego cada ticket en su página.</div>
+      <label class="f" for="gper">Periodo</label><select id="gper"></select>
+      <div class="row" id="gcust" hidden>
+        <div><label class="f" for="gdes">Desde</label><input type="date" id="gdes"></div>
+        <div><label class="f" for="ghas">Hasta</label><input type="date" id="ghas"></div>
+      </div>
+      <div id="gsum" class="mut mt8" role="status"></div>
+      <button type="button" id="gpdf">📄 Crear PDF con todos los tickets</button>
+    </div>
     <h2>Facturas guardadas</h2>
     <div class="card" id="lg"></div>
   </section>

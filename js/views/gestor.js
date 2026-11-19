@@ -3,6 +3,7 @@ import { $, downloadBlob, loadScript, shareFiles, toast } from '../dom.js';
 import { quarterCsv, quarterData } from '../report.js';
 import { S } from '../store.js';
 import { eur, fd } from '../utils.js';
+import { fuelPdf } from './fuelPdf.js';
 
 const JSPDF = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
 const label = (q) => 'T' + q.slice(-1) + ' ' + q.slice(0, 4);
@@ -51,16 +52,23 @@ export async function sendQuarterToAccountant(q) {
     const name = 'Rutivo-' + q;
     const pdf = new File([await quarterPdf(q)], name + '.pdf', { type: 'application/pdf' });
     const csv = new File([quarterCsv(S, q)], name + '.csv', { type: 'text/csv' });
-    const message = 'Hola, te envío el resumen del ' + label(q) + (S.cfg.nom ? ' de ' + S.cfg.nom : '') + ' (PDF y Excel). Un saludo.';
-    const result = await shareFiles([pdf, csv], 'Resumen ' + label(q), message);
+    const files = [pdf, csv];
+    // Los tickets de gasolina del trimestre, juntos en otro PDF.
+    const y = q.slice(0, 4);
+    const m = (+q.slice(-1) - 1) * 3 + 1;
+    const pad = (n) => String(n).padStart(2, '0');
+    const fuel = await fuelPdf(y + '-' + pad(m) + '-01', y + '-' + pad(m + 2) + '-31');
+    if (fuel) files.push(new File([fuel.blob], 'Gasolina-' + q + '.pdf', { type: 'application/pdf' }));
+    const message = 'Hola, te envío el resumen del ' + label(q) + (S.cfg.nom ? ' de ' + S.cfg.nom : '') +
+      (fuel ? ' (PDF, Excel y las facturas de gasolina).' : ' (PDF y Excel).') + ' Un saludo.';
+    const result = await shareFiles(files, 'Resumen ' + label(q), message);
     if (result === 'unavailable') {
-      downloadBlob(pdf, pdf.name);
-      downloadBlob(csv, csv.name);
+      files.forEach((f) => downloadBlob(f, f.name));
       if (S.cfg.gestor) {
         location.href = 'mailto:' + encodeURIComponent(S.cfg.gestor) + '?subject=' + encodeURIComponent('Resumen ' + label(q)) +
-          '&body=' + encodeURIComponent(message + '\n\n(Adjunta los archivos ' + pdf.name + ' y ' + csv.name + ' que se acaban de descargar.)');
+          '&body=' + encodeURIComponent(message + '\n\n(Adjunta los archivos ' + files.map((f) => f.name).join(', ') + ' que se acaban de descargar.)');
       }
-      toast('Archivos descargados: ' + pdf.name + ' y ' + csv.name);
+      toast('Archivos descargados: ' + files.map((f) => f.name).join(', '));
     }
   } catch {
     toast('No se pudo preparar el resumen. Revisa la conexión e inténtalo otra vez.');

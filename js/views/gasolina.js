@@ -1,9 +1,11 @@
 // Pantalla "Gasolina": facturas de combustible con foto o PDF.
 import { canStorePhotoInCloud, deletePhoto, downloadPhoto, uploadPhoto } from '../cloud.js';
-import { $, loadScript, onClick, toast } from '../dom.js';
+import { $, downloadBlob, loadScript, onClick, shareFiles, toast } from '../dom.js';
+import { PERIODS, fuelBetween, packName, periodRange } from '../fuelPack.js';
 import { parseFuelReceipt } from '../fuelReceipt.js';
 import { S, getPhotoLocal, removePhotoLocal, save, savePhotoLocal } from '../store.js';
 import { cap, esc, eur, fd, sum, today, uid } from '../utils.js';
+import { fuelPdf } from './fuelPdf.js';
 
 const PDFJS_WORKER = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 const TESSERACT = 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js';
@@ -118,6 +120,65 @@ export function renderGasolina() {
         )
         .join('')
     : '<span class="mut">Aún no hay facturas de gasolina. Guarda la primera arriba con su foto.</span>';
+  renderPack();
+}
+
+// ---------- todos los tickets en un PDF ----------
+
+/** Fechas elegidas en la tarjeta "Tickets para el gestor". */
+function packRange() {
+  const kind = $('#gper').value;
+  if (kind === 'fechas') {
+    const a = $('#gdes').value || '0000-01-01';
+    const b = $('#ghas').value || '9999-12-31';
+    return { kind, from: a <= b ? a : b, to: a <= b ? b : a };
+  }
+  return { kind, ...periodRange(kind, today()) };
+}
+
+function renderPack() {
+  $('#gpack').hidden = !S.gas.length;
+  if (!S.gas.length) return;
+  const { from, to } = packRange();
+  const p = fuelBetween(S.gas, from, to);
+  $('#gsum').innerHTML = p.list.length
+    ? '<b>' + p.list.length + (p.list.length === 1 ? ' factura' : ' facturas') + ' · ' + eur(p.total) + '</b>' +
+      (p.liters ? ' · ' + String(p.liters).replace('.', ',') + ' L' : '') +
+      '<br>' + (p.withPhoto === p.list.length ? 'Todas con foto del ticket.' : p.withPhoto + ' con foto; las demás salen solo en la lista.')
+    : 'No hay facturas de gasolina en ese periodo.';
+  $('#gpdf').disabled = !p.list.length;
+}
+
+async function makePack() {
+  const button = $('#gpdf');
+  const text0 = button.textContent;
+  const { kind, from, to } = packRange();
+  button.disabled = true;
+  button.textContent = 'Preparando…';
+  try {
+    const res = await fuelPdf(from, to, (done, total) => {
+      if (total) button.textContent = 'Preparando tickets ' + done + ' de ' + total + '…';
+    });
+    if (!res) return toast('No hay facturas de gasolina en ese periodo.');
+    const file = new File([res.blob], packName(kind, today(), from, to), { type: 'application/pdf' });
+    const message = 'Hola, te envío las facturas de gasolina' + (from === '0000-01-01' ? '' : ' del ' + fd(from) + ' al ' + fd(to)) +
+      (S.cfg.nom ? ' de ' + S.cfg.nom : '') + ' (' + res.count + ' tickets en un PDF). Un saludo.';
+    const shared = await shareFiles([file], 'Facturas de gasolina', message);
+    if (shared === 'unavailable') {
+      downloadBlob(file, file.name);
+      if (S.cfg.gestor) {
+        location.href = 'mailto:' + encodeURIComponent(S.cfg.gestor) + '?subject=' + encodeURIComponent('Facturas de gasolina') +
+          '&body=' + encodeURIComponent(message + '\n\n(Adjunta el archivo ' + file.name + ' que se acaba de descargar.)');
+      }
+      toast('PDF descargado: ' + file.name);
+    }
+    if (res.missing) toast(res.missing + (res.missing === 1 ? ' ticket no tenía' : ' tickets no tenían') + ' la foto en este móvil; van solo en la lista.');
+  } catch {
+    toast('No se pudo crear el PDF. Revisa la conexión e inténtalo otra vez.');
+  } finally {
+    button.textContent = text0;
+    renderPack();
+  }
 }
 
 async function saveFuel(e) {
@@ -173,6 +234,15 @@ export function initGasolina(rerender) {
     else $('#ocr').textContent = '';
   };
   $('#phx').onclick = () => $('#ph').classList.remove('on');
+  $('#gper').innerHTML = [...PERIODS, ['fechas', 'Elegir fechas…']].map(([k, t]) => '<option value="' + k + '">' + t + '</option>').join('');
+  $('#gper').value = 'tri';
+  $('#gper').onchange = () => {
+    $('#gcust').hidden = $('#gper').value !== 'fechas';
+    renderPack();
+  };
+  $('#gdes').onchange = renderPack;
+  $('#ghas').onchange = renderPack;
+  $('#gpdf').onclick = makePack;
   onClick('[data-dg]', (el) => deleteFuel(el.dataset.dg));
   onClick('[data-ph]', (el) => showReceipt(el.dataset.ph));
 }

@@ -464,6 +464,7 @@ button.x {
 
 /* ---------- Utilidades (antes eran estilos en línea) ---------- */
 .mt0 { margin-top: 0; }
+[hidden] { display: none !important; }
 .mt8 { margin-top: 8px; }
 .mt10 { margin-top: 10px; }
 .mt12 { margin-top: 12px; }
