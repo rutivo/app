@@ -28,4 +28,8 @@ export const FIREBASE_CONFIG = {
 // Desactivado: la app es gratis. Ponlo a true para volver a exigir activación.
 export const TRIAL_ENABLED = false;
 
+// Dirección del intermediario de vuelos (Cloudflare Worker, ver worker/).
+// Con null, el panel del vuelo solo muestra la ruta y el enlace a Flightradar24.
+export const FLIGHT_API = null;
+
 export const FIREBASE_SDK = 'https://www.gstatic.com/firebasejs/10.14.1';

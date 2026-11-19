@@ -1,6 +1,6 @@
 // Próximos servicios y aviso dentro de la app 12 horas antes de cada transfer.
 import { $, bottomSheet, readFlag, writeFlag } from '../dom.js';
-import { openFlight } from '../flight.js';
+import { cachedStatus, checkFlights, etaLine, liveEnabled, openFlight } from '../flight.js';
 import { S } from '../store.js';
 import { serviceTime, timeUntil, upcoming, whenLabel } from '../trips.js';
 import { esc, eur } from '../utils.js';
@@ -44,7 +44,8 @@ export function renderUpcoming() {
       .map(
         (s) =>
           '<div class="next-item"><div><b>' + esc(whenLabel(s, now)) + '</b>' +
-          '<small>' + esc(s.o) + ' → ' + esc(s.d) + (s.pa ? ' · ' + esc(s.pa) : '') + '</small></div>' +
+          '<small>' + esc(s.o) + ' → ' + esc(s.d) + (s.pa ? ' · ' + esc(s.pa) : '') + '</small>' +
+          (s.vu && etaLine(cachedStatus(s.vu, s.f)) ? '<small class="fl-mini">' + esc(s.vu) + ' · ' + etaLine(cachedStatus(s.vu, s.f)) + '</small>' : '') + '</div>' +
           '<button class="small-btn sec" data-go="' + esc(s.id) + '">📍 Llevarme</button></div>',
       )
       .join('');
@@ -63,6 +64,7 @@ export function checkNotice() {
     '<div class="mut">' + esc(timeUntil(next, now)) + '</div>' +
     '<div class="mt10"><b>' + esc(next.o) + ' → ' + esc(next.d) + '</b></div>' +
     '<div class="mut">' + [next.pa && 'Pasajero: ' + esc(next.pa), next.vu && 'Vuelo ' + esc(next.vu), next.cl && esc(next.cl), eur(next.i)].filter(Boolean).join(' · ') + '</div>' +
+    (next.vu && etaLine(cachedStatus(next.vu, next.f)) ? '<div class="mt8"><b>' + etaLine(cachedStatus(next.vu, next.f)) + '</b></div>' : '') +
     (next.n ? '<div class="mut mt8">' + esc(next.n) + '</div>' : '') +
     '</div>' +
     '<button type="button" id="ntgo">📍 Llevarme a la recogida</button>' +
@@ -72,10 +74,36 @@ export function checkNotice() {
   );
   open.querySelector('#ntgo').onclick = () => { open.close(); chooseRoute(next); };
   const fl = open.querySelector('#ntfl');
-  if (fl) fl.onclick = () => { open.close(); openFlight(next.vu, esc(next.pa || '')); };
+  if (fl) fl.onclick = () => { open.close(); openFlight(next.vu, esc(next.pa || ''), next.f); };
+}
+
+/**
+ * Revisa los vuelos de los servicios de las próximas 24 h (y de las últimas 6)
+ * y avisa dentro de la app si alguno se retrasa, se adelanta o se cancela.
+ */
+async function watchFlights() {
+  if (!liveEnabled() || document.visibilityState === 'hidden') return;
+  const now = Date.now();
+  const list = upcoming(S.srv, now - 6 * 36e5, 30).filter((s) => s.vu);
+  if (!list.length) return;
+  const notices = await checkFlights(list);
+  renderUpcoming();
+  if (!notices.length) return;
+  bottomSheet(
+    '<div class="card alert-card"><div class="mut">✈️ Cambios en tus vuelos</div>' +
+    notices
+      .map((n) => '<div class="mt10"><b>' + esc(n.text) + '</b><div class="mut">' + esc(whenLabel(n.service, now)) + ' · ' + esc(n.service.o) + ' → ' + esc(n.service.d) + (n.service.pa ? ' · ' + esc(n.service.pa) : '') + '</div></div>')
+      .join('') +
+    '</div><button type="button" data-close>Entendido</button>',
+  );
 }
 
 export function initUpcoming() {
+  setTimeout(watchFlights, 2500);
+  setInterval(watchFlights, 5 * 6e4);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') watchFlights();
+  });
   // Los botones [data-go] de la tarjeta los atiende la pantalla de Transfer.
   setInterval(checkNotice, 60_000);
   document.addEventListener('visibilitychange', () => {
