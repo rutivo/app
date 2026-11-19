@@ -59,7 +59,7 @@ export default {
     if (hit) return json(await hit.json(), 200, { ...cors, 'x-cache': 'hit' });
 
     const res = await fetch(ADB + '/flights/number/' + n + '/' + d + '?withAircraftImage=false&withLocation=false', {
-      headers: { 'X-RapidAPI-Key': env.RAPIDAPI_KEY, 'X-RapidAPI-Host': 'aerodatabox.p.rapidapi.com' },
+      headers: { 'X-RapidAPI-Key': String(env.RAPIDAPI_KEY || '').trim(), 'X-RapidAPI-Host': 'aerodatabox.p.rapidapi.com' },
     });
     let body;
     if (res.status === 204 || res.status === 404) body = { found: false };
