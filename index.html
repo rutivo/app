@@ -169,29 +169,6 @@
   <!-- ============ FACTURAS ============ -->
   <section class="v" id="v-fa">
     <h1>Facturas</h1>
-    <details class="card" id="logoed"><summary><b>🎨 Mi logo</b></summary>
-      <div class="mut mt8">Así se ve en la app y en tus facturas. Puedes cambiarlo cuando quieras.</div>
-      <div id="lpv" class="logo-preview"></div>
-      <div class="row">
-        <div><label class="f" for="lt">Tipo de logo</label>
-          <select id="lt"><option value="icono">Icono</option><option value="letras">Iniciales</option><option value="imagen">Mi imagen</option><option value="texto">Solo texto</option></select>
-        </div>
-        <div><label class="f" for="lf">Forma</label>
-          <select id="lf"><option value="circulo">Círculo</option><option value="cuadrado">Cuadrado</option></select>
-        </div>
-      </div>
-      <div id="icobox"><label class="f">Elige tu icono</label><div id="icg" class="icon-grid"></div></div>
-      <div id="imgbox">
-        <label class="f" for="lim">Sube tu imagen o logo</label><input type="file" id="lim" accept="image/*">
-        <button type="button" class="sec mt8" id="limx">Quitar imagen</button>
-      </div>
-      <label class="f">Color</label><div id="cog" class="color-row"></div>
-      <label class="f" for="ln">Texto del logo (si lo dejas vacío, tu nombre)</label><input id="ln" placeholder="Ej.: Taxi Sol">
-      <label class="f" for="lsub">Segunda línea del logo (opcional)</label><input id="lsub" placeholder="Ej.: Servicio de transfers">
-      <label class="f" for="l3">Tercera línea del logo (opcional)</label><input id="l3" placeholder="Ej.: Málaga">
-      <button type="button" class="sec" id="lreset">Volver al logo por defecto</button>
-    </details>
-
     <details class="card" id="emisor"><summary><b>Mis datos de emisor</b></summary>
       <label class="f" for="en">Nombre o empresa</label><input id="en">
       <label class="f" for="enif">NIF / DNI</label><input id="enif">
@@ -238,6 +215,30 @@
 
     <h3 class="sect">Apariencia</h3>
     <div class="card list" id="tema"></div>
+
+    <h3 class="sect">Mi logo</h3>
+    <details class="card" id="logoed"><summary><b>🎨 Cambiar mi logo</b></summary>
+      <div class="mut mt8">Así se ve en la app y en tus facturas. Puedes cambiarlo cuando quieras.</div>
+      <div id="lpv" class="logo-preview"></div>
+      <div class="row">
+        <div><label class="f" for="lt">Tipo de logo</label>
+          <select id="lt"><option value="icono">Icono</option><option value="letras">Iniciales</option><option value="imagen">Mi imagen</option><option value="texto">Solo texto</option></select>
+        </div>
+        <div><label class="f" for="lf">Forma</label>
+          <select id="lf"><option value="circulo">Círculo</option><option value="cuadrado">Cuadrado</option></select>
+        </div>
+      </div>
+      <div id="icobox"><label class="f">Elige tu icono</label><div id="icg" class="icon-grid"></div></div>
+      <div id="imgbox">
+        <label class="f" for="lim">Sube tu imagen o logo</label><input type="file" id="lim" accept="image/*">
+        <button type="button" class="sec mt8" id="limx">Quitar imagen</button>
+      </div>
+      <label class="f">Color</label><div id="cog" class="color-row"></div>
+      <label class="f" for="ln">Texto del logo (si lo dejas vacío, tu nombre)</label><input id="ln" placeholder="Ej.: Taxi Sol">
+      <label class="f" for="lsub">Segunda línea del logo (opcional)</label><input id="lsub" placeholder="Ej.: Servicio de transfers">
+      <label class="f" for="l3">Tercera línea del logo (opcional)</label><input id="l3" placeholder="Ej.: Málaga">
+      <button type="button" class="sec" id="lreset">Volver al logo por defecto</button>
+    </details>
 
     <h3 class="sect">Copia de seguridad</h3>
     <div class="card list">
