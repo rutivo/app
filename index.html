@@ -110,7 +110,7 @@
     </div>
 
     <details class="card"><summary><b>Mensaje de bienvenida</b></summary>
-      <div class="mut mt8">Escríbelo a tu gusto. Puedes usar: {nombre} {pasajero} {chofer} {punto} {vuelo} {hora} {destino} {fecha} {recogida}. Si un dato falta, esa frase no se envía.</div>
+      <div class="mut mt8">Al tocar <b>💬 Bienvenida</b> en un servicio eliges entre varios mensajes preparados (cercano, formal, con cartel, corto, VIP) o este tuyo. Aquí escribes «El mío». Puedes usar: {nombre} (solo el nombre de pila) {chofer} (tu nombre) {punto} {vuelo} {hora} {destino} {fecha} {recogida} {ciudad}. Si un dato falta, esa frase no se envía.</div>
       <label class="f" for="wen">Mensaje en inglés (opcional)</label><textarea id="wen" rows="4"></textarea>
       <label class="f" for="wes">Mensaje en español (opcional)</label><textarea id="wes" rows="3"></textarea>
       <label class="f">Así le llegará al cliente (ejemplo)</label><div id="wpv" class="mut preview"></div>
@@ -188,7 +188,7 @@
       <label class="f" for="eul">Última factura emitida (nº)</label><input id="eul" type="number" min="0" inputmode="numeric">
       <label class="f" for="iva">IVA (%)</label><input id="iva" type="number" step="0.1" min="0" inputmode="decimal">
       <label class="f" for="egest">Email de tu gestor (opcional)</label><input id="egest" type="email" inputmode="email" autocapitalize="off">
-      <label class="f" for="echof">Tu nombre en el mensaje de bienvenida</label><input id="echof">
+      <label class="f" for="echof">Tu nombre en el mensaje de bienvenida (opcional)</label><input id="echof" placeholder="Si lo dejas vacío, se usa tu nombre de pila">
       <label class="f" for="epunto">Punto de encuentro habitual (opcional)</label><input id="epunto" placeholder="Ej.: llegadas, puerta 3">
     </details>
 

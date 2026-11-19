@@ -2,10 +2,11 @@
 import { parseAgencyService } from '../agency.js';
 import { $, bottomSheet, confirmTap, confirmTapTimed, onClick, saveFile, toast } from '../dom.js';
 import { openFlight } from '../flight.js';
+import { openWelcome } from './bienvenida.js';
 import { mapsUrl } from '../trips.js';
 import { S, save } from '../store.js';
 import { cap, esc, eur, fd, slug, today, uid } from '../utils.js';
-import { DEFAULT_WELCOME_EN, DEFAULT_WELCOME_ES, welcomeMessage, welcomeSendTime } from '../welcome.js';
+import { DEFAULT_WELCOME_EN, DEFAULT_WELCOME_ES, buildWelcome, welcomeSendTime } from '../welcome.js';
 
 let rerenderAll = () => {};
 let editingProviderId = null;
@@ -29,10 +30,9 @@ function serviceActions(s) {
   html += '<button class="small-btn sec" data-go="' + id + '">📍 Llevarme</button>';
   if (s.pa) html += '<button class="small-btn sec" data-ct="' + id + '">Cartel</button>';
   if (s.vu) html += '<button class="small-btn sec" data-fl="' + id + '">✈️ Vuelo</button>';
-  if (s.tl) {
+  if (s.tl || s.pa) {
     const when = welcomeSendTime(s.sv);
-    const href = 'https://wa.me/' + s.tl.replace(/\D/g, '') + '?text=' + encodeURIComponent(welcomeMessage(s, S.cfg));
-    html += '<a class="small-btn" target="_blank" rel="noopener noreferrer" href="' + esc(href) + '">Bienvenida' + (when ? ' (' + when + ')' : '') + '</a>';
+    html += '<button class="small-btn" data-wm="' + id + '">💬 Bienvenida' + (when ? ' (' + when + ')' : '') + '</button>';
   }
   return html + '</div>';
 }
@@ -246,7 +246,7 @@ function deleteProvider(button) {
 const SAMPLE_SERVICE = { pa: 'Heidi Sachmann', vu: 'D85071', sv: '14:00', d: 'Elviria', f: '2026-10-27', h: '15:30' };
 
 function renderWelcomePreview() {
-  $('#wpv').textContent = welcomeMessage(SAMPLE_SERVICE, S.cfg);
+  $('#wpv').textContent = buildWelcome(SAMPLE_SERVICE, S.cfg, { preset: 'mio', lang: 'ambos' });
 }
 
 function renderWelcome() {
@@ -411,6 +411,10 @@ export function initTransfer(rerender) {
   });
   onClick('[data-ep]', (el) => editProvider(el.dataset.ep));
   onClick('[data-dp]', (el) => deleteProvider(el));
+  onClick('[data-wm]', (el) => {
+    const s = byId(el.dataset.wm);
+    if (s) openWelcome(s);
+  });
   onClick('[data-ct]', (el) => {
     const s = S.srv.find((x) => x.id === el.dataset.ct);
     if (s) showSign(s);

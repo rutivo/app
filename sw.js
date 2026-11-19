@@ -1,7 +1,7 @@
 // Service worker: la app funciona sin conexión.
 // Estrategia "red primero": siempre intenta la versión nueva y, si no hay red,
 // usa la copia guardada. Sube CACHE al cambiar la lista de archivos.
-const CACHE = 'gestor-transfer-v24';
+const CACHE = 'gestor-transfer-v25';
 const FILES = [
   './',
   './index.html',
@@ -31,6 +31,7 @@ const FILES = [
   './js/theme.js',
   './js/trips.js',
   './js/utils.js',
+  './js/views/bienvenida.js',
   './js/views/caja.js',
   './js/views/cuenta.js',
   './js/views/facturas.js',
