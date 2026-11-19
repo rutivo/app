@@ -71,6 +71,9 @@
     </div>
 
     <details class="card" id="pdet"><summary><b id="pt">Proveedores</b></summary>
+      <label class="btn sec ag-file" for="pimg">📷 Leer datos de una foto</label>
+      <input type="file" id="pimg" accept="image/*,application/pdf" hidden>
+      <div id="pocr" class="mut mt8" role="status"></div>
       <form id="fp">
         <label class="f" for="pn">Nombre o empresa</label><input id="pn" required>
         <label class="f" for="pnif">NIF / CIF</label><input id="pnif">

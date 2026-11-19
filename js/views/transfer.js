@@ -1,5 +1,6 @@
 // Pantalla "Transfer": servicios, proveedores, mensaje de bienvenida y cartel.
 import { readFileText } from '../ocr.js';
+import { readProvider } from '../providerReader.js';
 import { readService } from '../serviceReader.js';
 import { $, bottomSheet, confirmTap, confirmTapTimed, onClick, saveFile, toast } from '../dom.js';
 import { openFlight } from '../flight.js';
@@ -78,6 +79,22 @@ function fillFromAgency() {
   $('#sc').focus();
   toast('Servicio leído. Elige el proveedor, revisa el importe y guarda.');
   return true;
+}
+
+/** Foto de los datos de un proveedor (membrete, factura, tarjeta): rellenar el formulario. */
+async function readProviderFile(file) {
+  const status = (s) => ($('#pocr').textContent = s);
+  try {
+    const text = await readFileText(file, status);
+    const p = readProvider(text);
+    if (!p) { status('No encuentro nombre, CIF ni dirección en la foto. Prueba con otra más nítida.'); return; }
+    const set = (id, v) => { if (v) $('#' + id).value = v; };
+    set('pn', p.nom); set('pnif', p.nif); set('pd', p.dir); set('pcp', p.cp); set('pl2', p.loc);
+    status('✓ Datos leídos de la foto. Revísalos y toca «Guardar proveedor».');
+    $('#pn').scrollIntoView({ block: 'center' });
+  } catch {
+    status('No se pudo leer la foto (¿sin internet la primera vez?). Prueba otra vez.');
+  }
 }
 
 /** Foto, captura, vídeo o PDF de un servicio (de cualquier app): leer el texto y rellenar. */
@@ -396,6 +413,11 @@ export function initTransfer(rerender) {
   };
   $('#fs').onsubmit = saveService;
   $('#fp').onsubmit = saveProvider;
+  $('#pimg').onchange = () => {
+    const f = $('#pimg').files[0];
+    $('#pimg').value = '';
+    if (f) readProviderFile(f);
+  };
   $('#dsa').onclick = () => deleteAllServices($('#dsa'));
 
   $('#wen').oninput = () => {
