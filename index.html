@@ -157,24 +157,16 @@
   <!-- ============ HUCHA ============ -->
   <section class="v" id="v-hu">
     <h1>Hucha</h1>
-    <div class="card" id="hres"></div>
-    <div class="card">
-      <button id="hq" class="mt0">Meter hoy</button>
-      <form id="fh">
-        <div class="row">
-          <div><label class="f" for="hdt">Día</label><input type="date" id="hdt"></div>
-          <div><label class="f" for="hi">Importe (€)</label><input id="hi" type="number" step="0.01" min="0" inputmode="decimal" required></div>
-        </div>
-        <button class="sec">Meter otra cantidad</button>
-      </form>
+    <div class="hchips" id="hchips"></div>
+    <div class="card hjar-card" id="hjar"></div>
+    <div class="card hstats">
+      <div class="hstreak" id="hstreak"></div>
+      <div class="hcal" id="hcal"></div>
     </div>
-    <h2>Este periodo</h2>
+    <div class="card"><div class="mut">Ahorrado cada mes</div><div class="hbars" id="hbars"></div></div>
+    <h2>Movimientos</h2>
     <div class="card" id="hl"></div>
-    <details class="card"><summary><b>Periodos anteriores</b></summary><div id="hh"></div></details>
-    <details class="card"><summary><b>Cambiar objetivo</b></summary>
-      <label class="f" for="hm">Ahorro por periodo (€)</label><input id="hm" type="number" step="1" min="0" inputmode="decimal">
-      <label class="f" for="hd">El periodo empieza el día (1 a 28)</label><input id="hd" type="number" min="1" max="28" inputmode="numeric">
-    </details>
+    <details class="card" id="hedit"><summary><b>✏️ Editar esta hucha</b></summary><div id="hform"></div></details>
   </section>
 
   <!-- ============ FACTURAS ============ -->

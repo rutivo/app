@@ -38,7 +38,7 @@ export const slug = (s) =>
 /** Suma una propiedad numérica de una lista. */
 export const sum = (list, get) => list.reduce((acc, x) => acc + get(x), 0);
 
-const MONTHS = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+export const MONTHS = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
 
 /** "AAAA-MM" → "Marzo 2026". */
 export const monthName = (m) => cap(MONTHS[+m.slice(5) - 1]) + ' ' + m.slice(0, 4);

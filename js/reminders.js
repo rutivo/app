@@ -78,7 +78,7 @@ export function scheduleReminders() {
     if (s.h) add('pk-' + day + '-' + s.id, at(s.h) - lead * 6e4, 'Recogida en ' + lead + ' min', (s.cl || 'Servicio') + ' · ' + s.o + ' a las ' + s.h);
     if (s.sv && s.tl) add('wc-' + day + '-' + s.id, at(s.sv) - 60 * 6e4, 'Mandar bienvenida', (s.pa || 'Pasajero') + ' · vuelo ' + (s.vu || '') + ' sale a las ' + s.sv);
   }
-  if (S.cfg.hm && !S.huc.some((x) => x.f === day)) add('hu-' + day, at('21:00'), 'Hucha', 'Recuerda meter hoy en la hucha');
+  if (S.huc.length && !S.huc.some((x) => x.f === day && x.i > 0)) add('hu-' + day, at('21:00'), 'Hucha', 'Recuerda meter hoy en la hucha');
   writeFired(fired);
 }
 
