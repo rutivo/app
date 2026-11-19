@@ -117,3 +117,36 @@ export function writeFlag(key, value) {
     /* sin almacenamiento */
   }
 }
+
+/**
+ * Panel que sube desde abajo. Se cierra tocando fuera o cualquier elemento
+ * con [data-close]. Devuelve el panel para rellenarlo o cerrarlo (`.close()`).
+ */
+export function bottomSheet(html, { onClose } = {}) {
+  const sheet = document.createElement('div');
+  sheet.className = 'bsheet';
+  sheet.innerHTML = '<div role="dialog" aria-modal="true">' + html + '</div>';
+  sheet.close = () => {
+    if (!sheet.isConnected) return;
+    sheet.remove();
+    if (onClose) onClose();
+  };
+  sheet.addEventListener('click', (e) => {
+    if (e.target === sheet || e.target.closest('[data-close]')) sheet.close();
+  });
+  document.body.appendChild(sheet);
+  return sheet;
+}
+
+/** Comparte varios archivos (WhatsApp, email…). Devuelve 'shared', 'cancelled' o 'unavailable'. */
+export async function shareFiles(files, title, text) {
+  try {
+    if (navigator.canShare && navigator.canShare({ files })) {
+      await navigator.share({ files, title, text });
+      return 'shared';
+    }
+  } catch (err) {
+    if (err && err.name === 'AbortError') return 'cancelled';
+  }
+  return 'unavailable';
+}

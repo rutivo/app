@@ -22,6 +22,7 @@
     <div id="brand"></div>
     <div id="wl"></div>
     <div id="tips"></div>
+    <div class="card" id="prox" hidden></div>
     <div class="road"></div>
     <div id="sync" class="mut">Tus datos se guardan en este dispositivo.</div>
     <h1>Caja diaria</h1>
@@ -30,7 +31,9 @@
     <div class="card" id="avc"></div>
 
     <h2>Trimestres</h2>
-    <div class="card"><select id="tq"></select><div id="tres" class="mt12"></div></div>
+    <div class="card"><select id="tq"></select><div id="tres" class="mt12"></div>
+      <button class="sec" id="tqsend" type="button">📤 Enviar este trimestre a mi gestor</button>
+    </div>
 
     <h2>Día a día</h2>
     <label class="f" for="dia">Día</label><input type="date" id="dia">
@@ -94,6 +97,10 @@
           </div>
         </div>
         <label class="f" for="sn">Notas (equipaje, espera, peaje...)</label><input id="sn">
+        <div class="row">
+          <div><label class="f" for="ski">Km al empezar (opcional)</label><input id="ski" type="number" min="0" step="1" inputmode="numeric"></div>
+          <div><label class="f" for="skf">Km al terminar (opcional)</label><input id="skf" type="number" min="0" step="1" inputmode="numeric"></div>
+        </div>
         <details open class="mt10"><summary><b>Pasajero y vuelo</b></summary>
           <label class="f" for="spa">Nombre del pasajero (cartel)</label><input id="spa">
           <div class="row">
@@ -115,6 +122,7 @@
     </details>
 
     <h2>Servicios</h2>
+    <div class="card" id="kms" hidden></div>
     <div class="card" id="ls"></div>
     <button class="sec danger" id="dsa">Borrar todos los servicios</button>
   </section>
@@ -134,7 +142,8 @@
           <div><label class="f" for="gp">Pago</label><select id="gp"><option value="tarjeta">Tarjeta</option><option value="efectivo">Efectivo</option></select></div>
         </div>
         <label class="f" for="gs">Gasolinera</label><input id="gs">
-        <label class="f" for="gh">Foto o PDF de la factura</label><input type="file" id="gh" accept="image/*,application/pdf">
+        <label class="f" for="gh">📷 Foto o PDF del ticket (rellena los datos solo)</label><input type="file" id="gh" accept="image/*,application/pdf">
+        <div id="ocr" class="mut mt8" role="status"></div>
         <button>Guardar factura de gasolina</button>
       </form>
     </div>
@@ -197,6 +206,7 @@
       <label class="f" for="eib">Número de cuenta (IBAN)</label><input id="eib">
       <label class="f" for="eul">Última factura emitida (nº)</label><input id="eul" type="number" min="0" inputmode="numeric">
       <label class="f" for="iva">IVA (%)</label><input id="iva" type="number" step="0.1" min="0" inputmode="decimal">
+      <label class="f" for="egest">Email de tu gestor (opcional)</label><input id="egest" type="email" inputmode="email" autocapitalize="off">
       <label class="f" for="echof">Tu nombre en el mensaje de bienvenida</label><input id="echof">
       <label class="f" for="epunto">Punto de encuentro habitual (opcional)</label><input id="epunto" placeholder="Ej.: llegadas, puerta 3">
     </details>
@@ -221,6 +231,9 @@
     <button class="back" id="cuback" type="button">‹ Volver</button>
     <h1>Cuenta</h1>
     <div id="acct"></div>
+
+    <h3 class="sect">Apariencia</h3>
+    <div class="card list" id="tema"></div>
 
     <h3 class="sect">Copia de seguridad</h3>
     <div class="card list">

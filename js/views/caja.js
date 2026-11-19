@@ -3,6 +3,8 @@ import { $, onClick } from '../dom.js';
 import { cashStats, baseOf } from '../money.js';
 import { S, save } from '../store.js';
 import { cap, esc, eur, monthName, quarterOf, r2, sum, today, uid } from '../utils.js';
+import { sendQuarterToAccountant } from './gestor.js';
+import { renderUpcoming } from './proximos.js';
 import { renderTips } from './tips.js';
 
 const statsGrid = (cells) =>
@@ -74,6 +76,7 @@ function renderQuarter() {
 
 export function renderCaja() {
   renderTips();
+  renderUpcoming();
   renderMonths();
   renderQuarter();
 
@@ -106,6 +109,7 @@ export function initCaja() {
   $('#dia').value = today();
   $('#dia').onchange = renderCaja;
   $('#tq').onchange = renderQuarter;
+  $('#tqsend').onclick = () => sendQuarterToAccountant($('#tq').value);
 
   $('#fm').onsubmit = (e) => {
     e.preventDefault();

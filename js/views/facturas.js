@@ -89,7 +89,7 @@ const shrinkLogo = (file) =>
 const ISSUER_FIELDS = {
   // id del campo → clave en cfg
   en: 'nom', enif: 'nif', ed: 'dir', ecp: 'cp', eloc: 'loc', eib: 'iban',
-  lic: 'lic', echof: 'chof', epunto: 'punto', ln: 'ln', ls: 'ls',
+  lic: 'lic', echof: 'chof', epunto: 'punto', ln: 'ln', ls: 'ls', egest: 'gestor',
 };
 
 function renderIssuer() {

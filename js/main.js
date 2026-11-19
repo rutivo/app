@@ -4,11 +4,13 @@ import { TRIAL_ENABLED } from './config.js';
 import { checkLicense } from './license.js';
 import { renderReminders, scheduleReminders } from './reminders.js';
 import { loadLocal, requestPersistentStorage } from './store.js';
+import { initTheme, renderThemeChoice } from './theme.js';
 import { initCaja, renderCaja } from './views/caja.js';
 import { initAccount, renderAccount } from './views/cuenta.js';
 import { initFacturas, renderBrand, renderFacturas, saveBackupFile } from './views/facturas.js';
 import { initGasolina, renderGasolina } from './views/gasolina.js';
 import { initHucha, renderHucha } from './views/hucha.js';
+import { initUpcoming } from './views/proximos.js';
 import { initTips } from './views/tips.js';
 import { initTransfer, renderTransfer } from './views/transfer.js';
 
@@ -21,6 +23,7 @@ function render() {
   renderFacturas();
   renderHucha();
   renderAccount();
+  renderThemeChoice();
   renderReminders();
   scheduleReminders();
 }
@@ -67,6 +70,7 @@ function drawFavicon() {
   }
 }
 
+initTheme();
 loadLocal();
 initTabs();
 drawFavicon();
@@ -76,6 +80,7 @@ initGasolina(render);
 initHucha();
 initFacturas(render);
 initTips(saveBackupFile);
+initUpcoming();
 render();
 requestPersistentStorage();
 

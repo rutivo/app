@@ -1,6 +1,8 @@
 // Pantalla "Transfer": servicios, proveedores, mensaje de bienvenida y cartel.
 import { parseAgencyService } from '../agency.js';
-import { $, confirmTap, confirmTapTimed, onClick, saveFile, toast } from '../dom.js';
+import { $, bottomSheet, confirmTap, confirmTapTimed, onClick, saveFile, toast } from '../dom.js';
+import { openFlight } from '../flight.js';
+import { kmOf, kmSummary, mapsUrl, perKm } from '../trips.js';
 import { S, save } from '../store.js';
 import { cap, esc, eur, fd, slug, today, uid } from '../utils.js';
 import { DEFAULT_WELCOME_EN, DEFAULT_WELCOME_ES, welcomeMessage, welcomeSendTime } from '../welcome.js';
@@ -20,15 +22,14 @@ function renderProviderSelect() {
   select.value = names.includes(current) ? current : '';
 }
 
-/** Botones de cartel, vuelo y bienvenida de un servicio. */
+/** Botones de cada servicio: llevarme, km, cartel, vuelo y bienvenida. */
 function serviceActions(s) {
-  if (!s.pa && !s.vu) return '';
+  const id = esc(s.id);
   let html = '<div>';
-  if (s.pa) html += '<button class="small-btn sec" data-ct="' + esc(s.id) + '">Cartel</button>';
-  if (s.vu) {
-    const flight = encodeURIComponent(s.vu.toLowerCase().replace(/\s/g, ''));
-    html += '<a class="small-btn" target="_blank" rel="noopener noreferrer" href="https://www.flightradar24.com/data/flights/' + flight + '">Ver vuelo</a>';
-  }
+  html += '<button class="small-btn sec" data-go="' + id + '">📍 Llevarme</button>';
+  html += '<button class="small-btn sec" data-km="' + id + '">📏 Km</button>';
+  if (s.pa) html += '<button class="small-btn sec" data-ct="' + id + '">Cartel</button>';
+  if (s.vu) html += '<button class="small-btn sec" data-fl="' + id + '">✈️ Vuelo</button>';
   if (s.tl) {
     const when = welcomeSendTime(s.sv);
     const href = 'https://wa.me/' + s.tl.replace(/\D/g, '') + '?text=' + encodeURIComponent(welcomeMessage(s, S.cfg));
@@ -37,15 +38,36 @@ function serviceActions(s) {
   return html + '</div>';
 }
 
+const fmtKm = (n) => n.toLocaleString('es-ES', { maximumFractionDigits: 1 });
+
+/** "📏 123 km · 1,91 €/km" si el servicio tiene los km. */
+function kmLine(s) {
+  const km = kmOf(s);
+  return km ? '<span class="kmline">📏 ' + fmtKm(km) + ' km · ' + eur(perKm(s)) + '/km</span>' : '';
+}
+
+function renderKmSummary() {
+  const month = today().slice(0, 7);
+  const k = kmSummary(S.srv.filter((s) => s.f.startsWith(month)));
+  const box = $('#kms');
+  box.hidden = !k.count;
+  if (!k.count) return;
+  box.innerHTML =
+    '<div class="mut">Kilómetros de servicios este mes</div>' +
+    '<div class="grid"><div><b>' + fmtKm(k.km) + ' km</b>' + k.count + ' servicios con km</div>' +
+    '<div><b>' + eur(k.perKm) + '/km</b>Lo que generas por km</div></div>';
+}
+
 function renderServices() {
   renderProviderSelect();
+  renderKmSummary();
   const list = [...S.srv].sort((a, b) => (b.f + b.h).localeCompare(a.f + a.h));
   $('#ls').innerHTML = list.length
     ? list
         .map(
           (s) =>
             '<div class="it"><div>' + esc(s.cl) +
-            '<small>' + fd(s.f) + ' ' + esc(s.h) + ' · ' + esc(s.o) + ' a ' + esc(s.d) + '</small>' +
+            '<small>' + fd(s.f) + ' ' + esc(s.h) + ' · ' + esc(s.o) + ' a ' + esc(s.d) + '</small>' + kmLine(s) +
             '<span class="tag' + (s.fid ? ' ok' : '') + '">' + (s.fid ? 'Facturado' : 'Sin facturar') + '</span> ' +
             '<span class="tag pay ' + (s.p === 'pendiente' ? 'pend' : 'paid') + '" role="button" data-pay="' + esc(s.id) + '">' +
             (s.p === 'pendiente' ? 'Pendiente de cobro' : 'Cobrado: ' + esc(s.p)) + ' ▾</span>' + serviceActions(s) +
@@ -86,6 +108,9 @@ function saveService(e) {
     i: +$('#si').value, p: $('#sp').value, n: v('sn'),
     pa: v('spa'), vu: v('svu'), sv: $('#ssv').value, tl: v('stl'),
   };
+  const km = (id) => ($('#' + id).value === '' ? undefined : +$('#' + id).value);
+  if (km('ski') !== undefined) s.ki = km('ski');
+  if (km('skf') !== undefined) s.kf = km('skf');
   // Un servicio ya cobrado también entra en la caja del día.
   if (s.p !== 'pendiente') {
     s.mid = uid();
@@ -93,7 +118,7 @@ function saveService(e) {
   }
   S.srv.push(s);
   save();
-  ['si', 'so', 'sd', 'sn', 'sh', 'spa', 'svu', 'ssv', 'stl', 'agt'].forEach((id) => ($('#' + id).value = ''));
+  ['si', 'so', 'sd', 'sn', 'sh', 'spa', 'svu', 'ssv', 'stl', 'agt', 'ski', 'skf'].forEach((id) => ($('#' + id).value = ''));
   rerenderAll();
 }
 
@@ -144,6 +169,51 @@ function choosePayment(s) {
     sheet.remove();
   };
   document.body.appendChild(sheet);
+}
+
+/** Panel para abrir Google Maps hacia la recogida o el destino. */
+export function chooseRoute(s) {
+  const link = (place, icon, label) =>
+    place ? '<a class="btn" target="_blank" rel="noopener noreferrer" href="' + esc(mapsUrl(place)) + '" data-close>' + icon + ' ' + label + '<small>' + esc(place) + '</small></a>' : '';
+  bottomSheet(
+    '<h3>📍 Llevarme</h3><div class="mut">Se abre Google Maps con la ruta en coche.</div>' +
+    link(s.o, '🧍', 'A la recogida') + link(s.d, '🏁', 'Al destino') +
+    '<button type="button" class="sec" data-close>Cancelar</button>',
+  );
+}
+
+/** Panel para apuntar los km de inicio y fin de un servicio. */
+function editKm(s) {
+  const sheet = bottomSheet(
+    '<h3>📏 Kilómetros del servicio</h3><div class="mut">' + esc(s.o) + ' → ' + esc(s.d) + ' · ' + eur(s.i) + '</div>' +
+    '<div class="row"><div><label class="f" for="kmi">Km al empezar</label><input id="kmi" type="number" min="0" step="1" inputmode="numeric" value="' + (s.ki ?? '') + '"></div>' +
+    '<div><label class="f" for="kmf">Km al terminar</label><input id="kmf" type="number" min="0" step="1" inputmode="numeric" value="' + (s.kf ?? '') + '"></div></div>' +
+    '<div id="kmr" class="mt10"></div>' +
+    '<button type="button" id="kmok">Guardar km</button><button type="button" class="sec" data-close>Cancelar</button>',
+  );
+  const read = () => ({ ki: sheet.querySelector('#kmi').value, kf: sheet.querySelector('#kmf').value });
+  const preview = () => {
+    const t = { ...read(), i: s.i };
+    const km = kmOf(t);
+    sheet.querySelector('#kmr').innerHTML = km
+      ? '<b>' + fmtKm(km) + ' km</b> · has generado <b>' + eur(perKm(t)) + ' por km</b>'
+      : '<span class="mut">Escribe los dos datos para ver lo que generas por km.</span>';
+  };
+  sheet.querySelectorAll('input').forEach((i) => (i.oninput = preview));
+  preview();
+  sheet.querySelector('#kmok').onclick = () => {
+    const { ki, kf } = read();
+    if (ki !== '' && kf !== '' && +kf <= +ki) {
+      toast('Los km al terminar deben ser mayores que al empezar.');
+      return;
+    }
+    if (ki === '') delete s.ki; else s.ki = +ki;
+    if (kf === '') delete s.kf; else s.kf = +kf;
+    save();
+    sheet.close();
+    rerenderAll();
+    toast('Km guardados ✓');
+  };
 }
 
 function deleteAllServices(button) {
@@ -388,6 +458,13 @@ export function initTransfer(rerender) {
   };
 
   onClick('[data-ds]', (el) => deleteService(el.dataset.ds));
+  const byId = (id) => S.srv.find((x) => x.id === id);
+  onClick('[data-go]', (el) => { const s = byId(el.dataset.go); if (s) chooseRoute(s); });
+  onClick('[data-km]', (el) => { const s = byId(el.dataset.km); if (s) editKm(s); });
+  onClick('[data-fl]', (el) => {
+    const s = byId(el.dataset.fl);
+    if (s) openFlight(s.vu, esc(s.pa || '') + (s.pa ? ' · ' : '') + fd(s.f) + ' ' + esc(s.h));
+  });
   onClick('[data-pay]', (el) => {
     const s = S.srv.find((x) => x.id === el.dataset.pay);
     if (s) choosePayment(s);

@@ -1,10 +1,13 @@
 // Pantalla "Gasolina": facturas de combustible con foto o PDF.
 import { canStorePhotoInCloud, deletePhoto, downloadPhoto, uploadPhoto } from '../cloud.js';
-import { $, onClick, toast } from '../dom.js';
+import { $, loadScript, onClick, toast } from '../dom.js';
+import { parseFuelReceipt } from '../fuelReceipt.js';
 import { S, getPhotoLocal, removePhotoLocal, save, savePhotoLocal } from '../store.js';
 import { cap, esc, eur, fd, sum, today, uid } from '../utils.js';
 
 const PDFJS_WORKER = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+const TESSERACT = 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js';
+const TESSERACT_LANG = 'https://cdn.jsdelivr.net/npm/@tesseract.js-data/spa/4.0.0_best_int';
 let rerenderAll = () => {};
 
 /** Reduce una imagen a 1000 px de lado mayor, en JPEG. */
@@ -51,6 +54,50 @@ async function storeReceipt(id, file) {
   return true;
 }
 
+/** Imagen a resolución suficiente para leer el texto (máx. 1600 px). */
+const imageForOcr = (file) =>
+  new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onerror = reject;
+    img.onload = () => {
+      const k = Math.min(1, 1600 / Math.max(img.width, img.height));
+      const c = document.createElement('canvas');
+      c.width = Math.round(img.width * k);
+      c.height = Math.round(img.height * k);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(url);
+      resolve(c);
+    };
+    img.src = url;
+  });
+
+let ocrRun = 0;
+
+/** Lee el ticket con OCR (Tesseract, dentro del móvil) y rellena el formulario. */
+async function readReceipt(file) {
+  const run = ++ocrRun;
+  const status = (t) => { if (run === ocrRun) $('#ocr').textContent = t; };
+  status('🔎 Leyendo el ticket… (la primera vez tarda un poco más)');
+  try {
+    await loadScript(TESSERACT);
+    const source = file.type === 'application/pdf' ? await pdfToImage(file) : await imageForOcr(file);
+    const worker = await window.Tesseract.createWorker('spa', 1, { langPath: TESSERACT_LANG });
+    const { data } = await worker.recognize(source);
+    await worker.terminate();
+    if (run !== ocrRun) return;
+    const r = parseFuelReceipt(data.text);
+    const found = [];
+    if (r.amount) { $('#gi').value = r.amount; found.push(eur(r.amount)); }
+    if (r.liters) { $('#gl').value = r.liters; found.push(String(r.liters).replace('.', ',') + ' L'); }
+    if (r.station && !$('#gs').value) { $('#gs').value = r.station; found.push(r.station); }
+    if (r.date) { $('#gf').value = r.date; found.push(fd(r.date)); }
+    status(found.length ? '✓ Leído: ' + found.join(' · ') + '. Revísalo antes de guardar.' : 'No he podido leer los datos. Escríbelos a mano.');
+  } catch {
+    status('No se pudo leer el ticket (¿sin conexión?). Escribe los datos a mano.');
+  }
+}
+
 export function renderGasolina() {
   const list = [...S.gas].sort((a, b) => b.f.localeCompare(a.f));
   const month = list.filter((g) => g.f.startsWith(today().slice(0, 7)));
@@ -93,6 +140,7 @@ async function saveFuel(e) {
   S.gas.push(g);
   save();
   e.target.reset();
+  $('#ocr').textContent = '';
   $('#gf').value = today();
   rerenderAll();
 }
@@ -119,6 +167,11 @@ export function initGasolina(rerender) {
   if (window.pdfjsLib) window.pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS_WORKER;
   $('#gf').value = today();
   $('#fg').onsubmit = saveFuel;
+  $('#gh').onchange = () => {
+    const file = $('#gh').files[0];
+    if (file) readReceipt(file);
+    else $('#ocr').textContent = '';
+  };
   $('#phx').onclick = () => $('#ph').classList.remove('on');
   onClick('[data-dg]', (el) => deleteFuel(el.dataset.dg));
   onClick('[data-ph]', (el) => showReceipt(el.dataset.ph));
