@@ -15,7 +15,9 @@ import { esc } from './utils.js';
 
 const ROUTE_API = 'https://api.adsbdb.com/v0/callsign/';
 const LEAFLET = 'vendor/leaflet-1.9.4';
-const TILES = 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
+// Mapas sin clave: OpenStreetMap y, si falla, Esri.
+const TILES = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+const TILES_BACKUP = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}';
 const FRESH_MS = 4 * 6e4; // no repetir la misma consulta en menos de 4 minutos
 const POS_MS = 30e3; // el avión se mueve en el mapa cada 30 s
 const LAST_KEY = 'vuelos'; // último estado visto de cada vuelo (para detectar cambios)
@@ -145,7 +147,13 @@ async function flightMap(box, f) {
   const map = L.map(box, { zoomControl: false, attributionControl: true, zoomAnimation: false, fadeAnimation: false, markerZoomAnimation: false });
   let removed = false;
   map.attributionControl.setPrefix(false);
-  L.tileLayer(TILES, { subdomains: 'abcd', maxZoom: 12, attribution: '© OpenStreetMap · © CARTO' }).addTo(map);
+  const osm = L.tileLayer(TILES, { maxZoom: 12, attribution: '© OpenStreetMap' }).addTo(map);
+  let errors = 0;
+  osm.on('tileerror', () => {
+    if (++errors !== 3 || removed) return; // varias teselas fallan: cambiar al mapa de reserva
+    map.removeLayer(osm);
+    L.tileLayer(TILES_BACKUP, { maxZoom: 12, attribution: '© Esri · © OpenStreetMap' }).addTo(map);
+  });
   const pt = (a) => (a && typeof a.lat === 'number' ? [a.lat, a.lon] : null);
   const from = pt(f.from);
   const to = pt(f.to);
