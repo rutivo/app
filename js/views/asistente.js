@@ -1,13 +1,14 @@
 // Asistente de voz de Rutivo, al estilo Siri: pantalla completa, bola que escucha,
 // lo que dices en grande y la respuesta hablada. Todo se calcula en el móvil.
-import { ask } from '../asistente.js';
+import { ask, weatherText } from '../asistente.js';
 import { readFlag, writeFlag } from '../dom.js';
 import { cachedStatus, etaLine } from '../flight.js';
 import { S, save } from '../store.js';
 import { esc, uid } from '../utils.js';
+import { driverName } from '../welcome.js';
 
 const VOICE_KEY = 'asisVoz';
-const SUGGEST = ['¿Cuánto llevo hoy?', '¿Qué tengo mañana?', '¿Quién me debe?', 'Apunta 50 € en efectivo', '¿Cuánto gané este mes?', '¿Qué puedo decirte?'];
+const SUGGEST = ['¿Cuánto llevo hoy?', '¿Qué tengo mañana?', '¿Qué tiempo hace?', '¿Quién me debe?', 'Apunta 50 € en efectivo', '¿Cuánto gané este mes?', '¿Qué puedo decirte?'];
 const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 const isIOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 const history = []; // {from:'yo'|'rutivo', html, undo?}
@@ -80,7 +81,7 @@ function paint() {
   if (!ui) return;
   ui.chat.innerHTML = history.length
     ? history.map((m, i) => '<div class="siri-msg ' + m.from + '">' + m.html + (m.undo ? '<button type="button" class="small-btn sec" data-asundo="' + i + '">↩️ Deshacer</button>' : '') + '</div>').join('')
-    : '<div class="siri-hello">¿En qué te ayudo?</div>';
+    : '<div class="siri-hello">' + (driverName(S.cfg) ? 'Hola, ' + esc(driverName(S.cfg)) + '.<br>' : '') + '¿En qué te ayudo?</div>';
   ui.chat.scrollTop = ui.chat.scrollHeight;
 }
 
@@ -110,6 +111,12 @@ function handle(text) {
     const ok = i >= 0 && undoAt(i);
     history.push({ from: 'rutivo', html: ok ? '↩️ Hecho, he quitado lo último que apunté.' : 'No hay nada que deshacer.' });
     speech = ok ? 'Hecho, lo he quitado.' : 'No hay nada que deshacer.';
+  } else if (r.kind === 'weather') {
+    const entry = { from: 'rutivo', html: rich(r.text) };
+    history.push(entry);
+    paint();
+    weather(entry, r);
+    return;
   } else {
     const entry = { from: 'rutivo', html: rich(r.text) };
     if (r.kind === 'action') {
@@ -125,6 +132,44 @@ function handle(text) {
   }
   paint();
   speak(speech);
+}
+
+// ---------- el tiempo ----------
+
+const GEO_KEY = 'meteoGeo';
+
+/** Coordenadas de tu ciudad (la de tus datos de emisor; si no hay, Málaga). Se guardan. */
+async function cityCoords() {
+  const city = (S.cfg.loc || '').trim() || 'Málaga';
+  try {
+    const saved = JSON.parse(readFlag(GEO_KEY) || 'null');
+    if (saved && saved.q === city) return saved;
+  } catch {
+    /* buscar otra vez */
+  }
+  const r = await fetch('https://geocoding-api.open-meteo.com/v1/search?count=1&language=es&country=ES&name=' + encodeURIComponent(city));
+  const d = await r.json();
+  const p = d.results && d.results[0];
+  const geo = p ? { q: city, name: p.name, lat: p.latitude, lon: p.longitude } : { q: city, name: 'Málaga', lat: 36.72, lon: -4.42 };
+  writeFlag(GEO_KEY, JSON.stringify(geo));
+  return geo;
+}
+
+async function weather(entry, r) {
+  try {
+    const g = await cityCoords();
+    const res = await fetch('https://api.open-meteo.com/v1/forecast?latitude=' + g.lat + '&longitude=' + g.lon +
+      '&current=temperature_2m,weather_code,wind_speed_10m&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=auto&forecast_days=2');
+    if (!res.ok) throw new Error('meteo');
+    const w = weatherText(await res.json(), r.when, g.name, r.rain);
+    entry.html = rich(w.text);
+    paint();
+    speak(w.speech);
+  } catch {
+    entry.html = 'No he podido mirar el tiempo ahora. ¿Tienes internet?';
+    paint();
+    speak('No he podido mirar el tiempo ahora.');
+  }
 }
 
 // ---------- oído ----------

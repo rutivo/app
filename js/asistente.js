@@ -182,7 +182,7 @@ function answer(t, state, now, helpers) {
 
   // --- Ayuda ---
   if (/ayuda|que (puedo|se puede) (preguntar|decir)|que sabes|como funcionas/.test(t)) {
-    return reply('Puedes preguntarme o pedirme cosas como:\n• ¿Cuánto llevo hoy?\n• ¿Cuánto gané el mes pasado?\n• ¿Cuánto me debe Charly?\n• ¿Qué tengo mañana?\n• ¿Cuándo llevé a Richard?\n• ¿Cuánto gasto en gasolina?\n• ¿Cuánto IVA pago este trimestre?\n• ¿Cuántos kilómetros llevo este mes?\n• ¿Cómo va mi hucha?\n• Apunta 45 euros en efectivo\n• Gasto de 6 euros de lavado',
+    return reply('Puedes preguntarme o pedirme cosas como:\n• Hola, ¿qué tal?\n• ¿Qué tiempo hace? / ¿Va a llover mañana?\n• ¿Cuánto llevo hoy?\n• ¿Cuánto gané el mes pasado?\n• ¿Cuánto me debe Charly?\n• ¿Qué tengo mañana?\n• ¿Cuándo llevé a Richard?\n• ¿Cuánto gasto en gasolina?\n• ¿Cuánto IVA pago este trimestre?\n• ¿Cuántos kilómetros llevo este mes?\n• ¿Cómo va mi hucha?\n• Apunta 45 euros en efectivo\n• Gasto de 6 euros de lavado',
       'Puedes preguntarme cuánto llevas, quién te debe, qué servicios tienes, o pedirme que apunte una carrera o un gasto.');
   }
 
@@ -326,31 +326,102 @@ export function stripFillers(t) {
     .trim();
 }
 
-const GREET = /^(hola|buenas|buenos dias|buenas tardes|buenas noches|que tal|que pasa|hey|saludos|holi)( (que tal|como estas|como va))?$/;
+const GREET = /^(hola|buenas|buenos dias|buenas tardes|buenas noches|que pasa|hey|saludos|holi|que hay)( (que tal|como estas|como va|como vas))?$/;
 
 function hourWord(now) {
   const h = now.getHours();
   return h < 12 ? 'Buenos días' : h < 20 ? 'Buenas tardes' : 'Buenas noches';
 }
 
-function smallTalk(t, state, now, helpers) {
+/** Elige una frase de varias, para no sonar siempre igual. */
+const pick = (list, now) => list[(now.getMinutes() * 7 + now.getSeconds()) % list.length];
+
+/** Lo que llevas hoy y tu próximo servicio, en una frase corta. */
+function todayLine(state, now) {
+  const today = iso(now);
+  const net = r2(sum(state.mov.filter((x) => x.f === today), (x) => (x.t === 'in' ? x.i : -x.i)));
+  const next = state.srv.filter((s) => serviceTime(s) >= now.getTime()).sort((a, b) => serviceTime(a) - serviceTime(b))[0];
+  const nextTxt = next ? (next.f === today ? 'hoy a las ' : next.f === addDays(today, 1) ? 'mañana a las ' : 'el ' + fd(next.f) + ' a las ') + next.h + (next.d ? ' hacia ' + next.d : '') : '';
+  return {
+    text: 'Hoy llevas **' + eur(net) + '** limpios' + (nextTxt ? ' y tu próximo servicio es ' + nextTxt : '') + '.',
+    speech: 'Hoy llevas ' + spoken(net) + ' limpios' + (nextTxt ? ', y tu próximo servicio es ' + nextTxt : '') + '.',
+    net,
+  };
+}
+
+const POSITIVE = /^(bien|muy bien|genial|estupendo|de lujo|fenomenal|todo bien|perfecto|de puta madre|guay|tirando|aqui (andamos|estamos)|bien y tu|bien gracias)( |$)/;
+const NEGATIVE = /(^mal|^fatal|^regular|cansad|reventad|agotad|hart[oa]|aburrid|flojo|floja|poco trabajo|no hay trabajo|estresad|hecho polvo|muert[oa])/;
+const WEATHER = /(que tiempo|el tiempo|tiempo hace|tiempo va a hacer|tiempo hara|clima|temperatura|grados|llover|lloviendo|lluvia|llueve|paraguas|hace calor|hace frio|hace sol|hace viento|va a hacer (sol|calor|frio|viento))/;
+
+function smallTalk(t, state, now, helpers, ctx = {}) {
   const name = driverName(state.cfg || {});
+  const hi = name ? ', ' + name : '';
+  const greetWord = /^buenos dias/.test(t) ? 'Buenos días' : /^buenas tardes/.test(t) ? 'Buenas tardes' : /^buenas noches/.test(t) ? 'Buenas noches' : '¡Hola';
+  // El tiempo
+  if (WEATHER.test(t)) return { kind: 'weather', when: has(t, 'manana') ? 'manana' : 'hoy', rain: /llov|lluvia|llueve|paraguas/.test(t), text: '🌦️ Miro el tiempo…', speech: '' };
+  // Saludo: corto y cercano, y pregunta qué tal
   if (GREET.test(t)) {
-    const today = iso(now);
-    const net = r2(sum(state.mov.filter((x) => x.f === today), (x) => (x.t === 'in' ? x.i : -x.i)));
-    const next = state.srv.filter((s) => serviceTime(s) >= now.getTime()).sort((a, b) => serviceTime(a) - serviceTime(b))[0];
-    const nextTxt = next ? (next.f === today ? 'hoy a las ' : fd(next.f) + ' a las ') + next.h + (next.d ? ' hacia ' + next.d : '') : '';
-    return reply('👋 ' + hourWord(now) + (name ? ', **' + name + '**' : '') + '. Hoy llevas **' + eur(net) + '** limpios' + (nextTxt ? '. Tu próximo servicio es ' + nextTxt : '') + '. ¿En qué te ayudo?',
-      hourWord(now) + (name ? ', ' + name : '') + '. Hoy llevas ' + spoken(net) + ' limpios' + (nextTxt ? '. Tu próximo servicio es ' + nextTxt : '') + '. ¿En qué te ayudo?');
+    if (/^buenas noches/.test(t) && now.getHours() >= 21) {
+      const d = todayLine(state, now);
+      return { ...reply('🌙 Buenas noches' + hi + '. ' + d.text + ' ¡A descansar, que te lo has ganado!', 'Buenas noches' + hi + '. ' + d.speech + ' A descansar, que te lo has ganado.') };
+    }
+    const q = pick(['¿Qué tal estás?', '¿Cómo estás?', '¿Qué tal va el día?', '¿Cómo va todo?'], now);
+    const g = greetWord === '¡Hola' ? '¡Hola' + hi + '!' : greetWord + hi + '.';
+    return { ...reply('👋 ' + g + ' ' + q, g.replace('¡', '') + ' ' + q), ctx: { mood: true } };
   }
-  if (/^(muchas )?gracias|^genial|^perfecto|^de lujo|^muy bien$|^ok$/.test(t)) return reply('¡De nada! 😊 Aquí estoy para lo que necesites.', '¡De nada!');
-  if (/^(adios|hasta luego|chao|nos vemos|hasta manana)/.test(t)) return reply('¡Hasta luego' + (name ? ', ' + name : '') + '! Buen servicio 🚕', 'Hasta luego. Buen servicio');
-  if (/(quien eres|como te llamas|que eres)/.test(t)) return reply('Soy **Rutivo**, tu asistente. Conozco tu caja, tus servicios, tu gasolina, tus facturas y tus huchas. Pregúntame o pídeme que apunte algo.', 'Soy Rutivo, tu asistente. Pregúntame lo que quieras de tu trabajo, o pídeme que apunte algo.');
-  if (/^(como estas|que tal estas|como vas)/.test(t)) return reply('¡Muy bien, con ganas de trabajar! 💪 ¿Qué necesitas?', 'Muy bien, con ganas de trabajar. ¿Qué necesitas?');
+  // Te pregunta qué tal: contesta y te lo pregunta a ti
+  if (/^(y )?(como estas|que tal estas|como vas|que tal tu|y tu|como te va)( |$)/.test(t) && !ctx.mood) {
+    return { ...reply('¡Muy bien, gracias! 😊 ¿Y tú, qué tal' + hi + '?', 'Muy bien, gracias. ¿Y tú, qué tal?'), ctx: { mood: true } };
+  }
+  if (/^(y tu|y tu que tal|y a ti)( |$)/.test(t)) return reply('¡Yo genial, gracias por preguntar! 😊 Aquí estoy para lo que necesites.', 'Yo genial, gracias por preguntar. Aquí estoy para lo que necesites.');
+  // Cómo estás tú (respuesta a la pregunta del saludo)
+  if (NEGATIVE.test(t) && (ctx.mood || /^(estoy|ando|vaya|que dia|menudo dia|hoy)/.test(t) || NEGATIVE.test(t.split(' ')[0]))) {
+    const d = todayLine(state, now);
+    const ok = d.net > 0 ? ' Por lo menos hoy ya llevas **' + eur(d.net) + '** limpios.' : '';
+    return reply('Vaya, lo siento' + hi + '. ¡Ánimo! 💪' + ok + ' Descansa cuando puedas. ¿Te ayudo con algo?',
+      'Vaya, lo siento. Ánimo.' + (d.net > 0 ? ' Por lo menos hoy ya llevas ' + spoken(d.net) + ' limpios.' : '') + ' Descansa cuando puedas.');
+  }
+  if (ctx.mood && POSITIVE.test(t)) {
+    const d = todayLine(state, now);
+    return reply('¡Me alegro mucho! 😊 ' + d.text + ' ¿En qué te ayudo?', 'Me alegro mucho. ' + d.speech + ' ¿En qué te ayudo?');
+  }
+  if (/^(muchas )?gracias|^genial$|^perfecto$|^de lujo$|^muy bien$|^ok$|^vale$|^estupendo$/.test(t)) return reply(pick(['¡De nada! 😊', '¡A mandar!', '¡Para eso estoy! 😊'], now), '¡De nada!');
+  if (/^(adios|hasta luego|chao|nos vemos|hasta manana|me voy)/.test(t)) return reply('¡Hasta luego' + hi + '! Buen servicio 🚕', 'Hasta luego' + hi + '. Buen servicio.');
+  if (/(quien eres|como te llamas|que eres)/.test(t)) return reply('Soy **Rutivo**, tu asistente. Me sé tu caja, tus servicios, tu gasolina, tus facturas y tus huchas. Pregúntame o pídeme que apunte algo.', 'Soy Rutivo, tu asistente. Pregúntame lo que quieras de tu trabajo, o pídeme que apunte algo.');
   if (/que hora es/.test(t)) { const h = now.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }); return reply('🕒 Son las **' + h + '**.', 'Son las ' + h); }
   if (/que dia es|a que estamos|que fecha/.test(t)) { const d = now.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' }); return reply('📅 Hoy es **' + d + '**.', 'Hoy es ' + d); }
   if (/chiste/.test(t)) return reply('🚕 —Taxista, ¿cuánto me cobra por llevarme al aeropuerto?\n—50 euros.\n—¿Y la maleta?\n—La maleta va gratis.\n—Pues lleve la maleta, que yo voy andando. 😄', 'Un señor le pregunta al taxista cuánto le cobra por ir al aeropuerto. Cincuenta euros. ¿Y la maleta? La maleta va gratis. Pues lleve la maleta, que yo voy andando.');
+  if (/(eres (la|el) (mejor|leche|hostia|crack)|te quiero|que lista|que listo)/.test(t)) return reply('¡Jaja, gracias! 😄 Tú sí que eres un crack. ¿Seguimos?', 'Jaja, gracias. Tú sí que eres un crack.');
   return null;
+}
+
+// ---------- el tiempo (Open-Meteo, gratis) ----------
+
+const WMO = [[[0], '☀️', 'despejado'], [[1, 2], '🌤️', 'poco nuboso'], [[3], '☁️', 'nublado'], [[45, 48], '🌫️', 'con niebla'], [[51, 53, 55, 56, 57], '🌦️', 'con llovizna'],
+  [[61, 63, 65, 66, 67], '🌧️', 'con lluvia'], [[71, 73, 75, 77, 85, 86], '❄️', 'con nieve'], [[80, 81, 82], '🌦️', 'con chubascos'], [[95, 96, 99], '⛈️', 'con tormenta']];
+const sky = (code) => WMO.find(([c]) => c.includes(code)) || [[], '🌡️', ''];
+
+/** Texto del tiempo a partir de la respuesta de Open-Meteo. */
+export function weatherText(d, when, city, rain = false) {
+  const i = when === 'manana' ? 1 : 0;
+  const dly = d.daily || {};
+  const min = Math.round(dly.temperature_2m_min[i]);
+  const max = Math.round(dly.temperature_2m_max[i]);
+  const p = dly.precipitation_probability_max ? dly.precipitation_probability_max[i] : null;
+  const [, em, word] = sky(dly.weather_code[i]);
+  const rainTxt = p === null ? '' : p >= 60 ? 'Va a llover (' + p + ' %) ☂️' : p >= 30 ? 'Puede que llueva (' + p + ' %)' : 'No va a llover';
+  if (i === 0 && d.current) {
+    const [, emNow, wordNow] = sky(d.current.weather_code);
+    const now = Math.round(d.current.temperature_2m);
+    const wind = Math.round(d.current.wind_speed_10m);
+    const text = emNow + ' En **' + city + '** ahora hace **' + now + ' °C**, ' + wordNow + (wind >= 25 ? ', con viento (' + wind + ' km/h)' : '') + '.\nHoy entre ' + min + ' y ' + max + ' °C. ' + rainTxt + '.';
+    const speech = (rain ? rainTxt.replace(/ \(.*\)| ☂️/g, '') + '. ' : '') + 'En ' + city + ' ahora hace ' + now + ' grados, ' + wordNow + '. Hoy entre ' + min + ' y ' + max + ' grados.';
+    return { text, speech };
+  }
+  return {
+    text: em + ' Mañana en **' + city + '**: entre **' + min + ' y ' + max + ' °C**, ' + word + '. ' + rainTxt + '.',
+    speech: 'Mañana en ' + city + ', entre ' + min + ' y ' + max + ' grados, ' + word + '. ' + rainTxt.replace(/ \(.*\)| ☂️/g, '') + '.',
+  };
 }
 
 const FOLLOW = /^(y )?(hoy|ayer|anteayer|manana|esta semana|la semana pasada|este mes|el mes pasado|este ano|el ano pasado|este trimestre|el trimestre pasado|(en |el mes de )?(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre))$/;
@@ -366,11 +437,11 @@ export function ask(input, state, now = new Date(), helpers = {}, ctx = {}) {
   if (!t) return { ...reply('Te escucho. Pregúntame, por ejemplo: «¿Cuánto llevo hoy?»'), ctx };
   let hello = '';
   // "Hola, apunta 50 euros": saludar y seguir con la orden
-  const g = t.match(/^(hola|buenas|buenos dias|buenas tardes|buenas noches)\s+(.{6,})$/);
+  const g = GREET.test(t) ? null : t.match(/^(buenos dias|buenas tardes|buenas noches|hola|buenas)\s+(.{6,})$/);
   if (g) { hello = '¡Hola! '; t = stripFillers(g[2]); }
   if (UNDO.test(t)) return { kind: 'undo', text: '', speech: '', ctx };
-  const chat = smallTalk(t, state, now, helpers);
-  if (chat) return { ...chat, ctx };
+  const chat = smallTalk(t, state, now, helpers, ctx);
+  if (chat) return { ...chat, ctx: chat.ctx || {} };
   // Completar algo que quedó a medias o seguir con la última pregunta
   if (ctx.pending && amountOf(t) !== null && !QUESTION.test(t)) t = ctx.pending + ' ' + t;
   else if (ctx.last && FOLLOW.test(t)) t = ctx.last.replace(/\b(hoy|ayer|anteayer|esta semana|la semana pasada|este mes|el mes pasado|este ano|el ano pasado|este trimestre|el trimestre pasado|(en )?(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre))\b/g, '').trim() + ' ' + t.replace(/^y /, '');

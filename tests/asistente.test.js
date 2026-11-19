@@ -97,16 +97,36 @@ test('órdenes: apuntar carreras, gastos y hucha', () => {
 });
 
 test('si no entiende, lo dice y da ejemplos', () => {
-  assert.match(ask('qué tiempo hace', state, NOW).text, /No te he entendido/);
+  assert.match(ask('dame la receta de la paella', state, NOW).text, /No te he entendido/);
 });
 
-test('conversación: saludo, gracias, hora y chiste', () => {
+test('conversación: saluda por tu nombre, pregunta qué tal y reacciona', () => {
   const s = { ...state, cfg: { ...state.cfg, nom: 'Alejandro García' } };
   const h = ask('Hola', s, NOW);
-  assert.match(h.text, /Buenas tardes, \*\*Alejandro\*\*\. Hoy llevas \*\*159,50\s€\*\* limpios\. Tu próximo servicio es 20\/11\/2026 a las 08:30 hacia Aeropuerto/);
-  assert.match(ask('oye rutivo muchas gracias', s, NOW).text, /De nada/);
+  assert.match(h.text, /^👋 ¡Hola, Alejandro! (¿Qué tal estás\?|¿Cómo estás\?|¿Qué tal va el día\?|¿Cómo va todo\?)$/);
+  assert.equal(h.ctx.mood, true);
+  const good = ask('bien, ¿y tú?', s, NOW, {}, h.ctx);
+  assert.match(good.text, /Me alegro mucho! 😊 Hoy llevas \*\*159,50\s€\*\* limpios y tu próximo servicio es mañana a las 08:30 hacia Aeropuerto\./);
+  const bad = ask('estoy reventado', s, NOW);
+  assert.match(bad.text, /Ánimo! 💪 Por lo menos hoy ya llevas \*\*159,50\s€\*\*/);
+  assert.match(ask('buenos días', s, NOW).text, /^👋 Buenos días, Alejandro\./);
+  assert.match(ask('¿cómo estás?', s, NOW).text, /Muy bien, gracias! 😊 ¿Y tú, qué tal, Alejandro\?/);
+  assert.match(ask('buenas noches', s, new Date('2026-11-19T22:30:00')).text, /Buenas noches, Alejandro\. Hoy llevas/);
+  assert.match(ask('oye rutivo muchas gracias', s, NOW).text, /De nada|A mandar|Para eso estoy/);
   assert.match(ask('¿Qué hora es?', s, NOW).text, /Son las \*\*17:00\*\*/);
   assert.match(ask('cuéntame un chiste', s, NOW).text, /maleta/);
+});
+
+test('el tiempo: pregunta y texto con datos de Open-Meteo', async () => {
+  const { weatherText } = await import('../js/asistente.js');
+  assert.deepEqual([ask('¿qué tiempo hace?', state, NOW).kind, ask('va a llover mañana', state, NOW).when], ['weather', 'manana']);
+  const d = { current: { temperature_2m: 19.4, weather_code: 0, wind_speed_10m: 12 },
+    daily: { weather_code: [1, 61], temperature_2m_min: [13.6, 12.2], temperature_2m_max: [21.2, 18.7], precipitation_probability_max: [5, 80] } };
+  const hoy = weatherText(d, 'hoy', 'Málaga');
+  assert.equal(hoy.text, '☀️ En **Málaga** ahora hace **19 °C**, despejado.\nHoy entre 14 y 21 °C. No va a llover.');
+  const man = weatherText(d, 'manana', 'Málaga', true);
+  assert.equal(man.text, '🌧️ Mañana en **Málaga**: entre **12 y 19 °C**, con lluvia. Va a llover (80 %) ☂️.');
+  assert.equal(man.speech, 'Mañana en Málaga, entre 12 y 19 grados, con lluvia. Va a llover.');
 });
 
 test('muchas formas de pedir que apunte', () => {
