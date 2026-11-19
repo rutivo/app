@@ -5,6 +5,7 @@ import { hoursOf } from './jornada.js';
 import { quarterData } from './report.js';
 import { serviceTime } from './trips.js';
 import { MONTHS, eur, fd, quarterOf, r2, sum } from './utils.js';
+import { driverName } from './welcome.js';
 
 // ---------- texto ----------
 
@@ -140,27 +141,39 @@ const reply = (text, speech, extra = {}) => ({ kind: 'answer', text, speech: spe
  *  {kind:'answer', text, speech} o
  *  {kind:'action', action:{list, item}, text, speech} (la vista lo guarda y permite deshacer).
  */
-export function ask(input, state, now = new Date(), helpers = {}) {
-  const t = normalize(input);
-  const day = iso(now);
-  if (!t) return reply('Dime algo, por ejemplo: «¿Cuánto llevo hoy?»');
+// Verbos de "apuntar", con o sin pronombre: apúntame, ingrésame, ponme, mételo…
+const WRITE_VERB = /^(apunta|apuntar|anota|anotar|anade|anadir|pon|poner|mete|meter|registra|registrar|suma|sumar|guarda|guardar|ingresa|ingrese|ingresar|ingres|cobra|carga|cargar|agrega|agregar|incluye|incluir)(me|lo|la|le|melo|mela|selo)?( |$)/;
+const WRITE_PHRASE = /^(me han pagado|me pagaron|me ha pagado|he cobrado|cobre|cobrado|he hecho (una carrera|un servicio|un viaje)( de)?|he gastado|gaste|he pagado|pague|he echado|eche|he puesto|he repostado|reposte)( |$)/;
+const QUESTION = /^(cuanto|cuantos|cuantas|cuando|que|quien|quienes|como|cual|cuales|donde|dime|sabes)( |$)/;
 
+/** ¿Es una orden de apuntar dinero? */
+export function isWrite(t) {
+  if (QUESTION.test(t)) return false;
+  if (WRITE_VERB.test(t) || WRITE_PHRASE.test(t)) return true;
+  if (/^(un |una )?(gasto|ingreso|carrera|cobro|servicio|viaje) (de )?\d/.test(t)) return true;
+  // Solo importe y forma de pago: "50 euros en efectivo", "30 con tarjeta"
+  return /^\d+(\.\d+)? ?(euros?|pavos)?( (en|con|por) (efectivo|tarjeta|metalico|bizum|datafono))?$/.test(t);
+}
+
+function answer(t, state, now, helpers) {
+  const day = iso(now);
   // --- Órdenes: apuntar ---
-  const wantsWrite = /^(apunta|anota|añade|anade|pon|mete|registra|suma|guarda)\b/.test(t) || /^(he cobrado|cobre|cobrado|he gastado|gaste|he pagado|pague)\b/.test(t) ||
-    /^(un |una )?(gasto|ingreso|carrera|cobro|servicio) (de )?\d/.test(t);
   const amount = amountOf(t);
-  if (wantsWrite && amount) {
-    const pay = has(t, 'tarjeta', 'datafono', 'visa') ? 'tarjeta' : 'efectivo';
+  if (isWrite(t) && !amount) return reply('¿De cuánto? Dime el importe, por ejemplo «50 euros en efectivo».', '¿De cuánto?', { pending: t });
+  if (isWrite(t) && amount) {
+    const pay = has(t, 'tarjeta', 'datafono', 'visa', 'bizum') ? 'tarjeta' : 'efectivo';
     if (has(t, 'hucha', 'huchas')) {
       const hs = huchasOf(state.cfg);
       const h = hs.find((x) => has(t, clean(x.n).split(' ').pop())) || hs[0];
       return { kind: 'action', action: { list: 'huc', item: { f: day, i: r2(amount), h: h.id } },
         text: '🐷 Metidos **' + eur(amount) + '** en «' + h.n + '».', speech: 'Metidos ' + spoken(amount) + ' en ' + h.n };
     }
-    const expense = /gasto|gaste|gastado|pagado|pague|peaje|lavado|parking|taller|comida|aparcamiento/.test(t);
-    const fuel = /gasolina|gasoil|diesel|combustible|repost/.test(t);
-    const concept = (t.match(/(?:de|por|en|concepto)\s+([a-z ]+)$/) || [])[1];
-    const what = fuel ? 'Gasolina' : concept && !/^(efectivo|tarjeta|euros?)$/.test(concept.trim()) ? concept.replace(/\b(en|con)\s+(efectivo|tarjeta)\b/, '').trim() : expense ? 'Gasto' : 'Carrera';
+    const fuel = /gasolina|gasoil|diesel|combustible|repost|echado|eche/.test(t);
+    const expense = !/^(me han pagado|me pagaron|me ha pagado)/.test(t) && /gasto|gaste|gastado|pagado|pague|peaje|lavado|parking|taller|comida|aparcamiento|multa|seguro|recambio/.test(t);
+    let concept = ((t.match(/(?:de|por|en|concepto|para)\s+([a-z ]+)$/) || [])[1] || '')
+      .replace(/\b(en|con|por)?\s*(efectivo|tarjeta|metalico|bizum|datafono|euros?|pavos)\b/g, '').replace(/\s+/g, ' ').trim();
+    if (/^(un|una|el|la|lo)?\s*(gasto|carrera|cobro|ingreso|servicio|viaje)?$/.test(concept)) concept = '';
+    const what = fuel ? 'Gasolina' : concept || (expense ? 'Gasto' : 'Carrera');
     const c = what.charAt(0).toUpperCase() + what.slice(1);
     return { kind: 'action', action: { list: 'mov', item: { f: day, t: expense || fuel ? 'out' : 'in', p: pay, i: r2(amount), c } },
       text: (expense || fuel ? '🧾 Gasto apuntado: **' : '💶 Apuntado: **') + eur(amount) + '** · ' + pay + ' · ' + c,
@@ -298,3 +311,74 @@ export function ask(input, state, now = new Date(), helpers = {}) {
   return reply('No te he entendido bien 🤔 Prueba con: «¿Cuánto llevo hoy?», «¿Qué tengo mañana?», «¿Cuánto me debe Charly?» o «Apunta 45 euros en efectivo».',
     'No te he entendido. Prueba a preguntarme cuánto llevas hoy, o qué tienes mañana.');
 }
+
+// ---------- conversación ----------
+
+/** Quita muletillas: "oye Rutivo, por favor, dime cuánto llevo" → "cuanto llevo". */
+export function stripFillers(t) {
+  return t
+    .replace(/\b(oye|eh|hey|ey|rutivo|por favor|porfa|porfavor|anda|venga|vale)\b/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/^(me (puedes|podrias)|puedes|podrias|quiero que (me )?|quiero|necesito que (me )?|necesito|me dices|dime|me dirias)\s+/, '')
+    .replace(/^que me\s+/, '')
+    .replace(/^(me )?(apuntas|anotas|pones|metes|ingresas|sumas|guardas)\b/, (m) => m.replace(/^me /, '').replace(/as$/, 'a').replace(/es$/, 'e'))
+    .trim();
+}
+
+const GREET = /^(hola|buenas|buenos dias|buenas tardes|buenas noches|que tal|que pasa|hey|saludos|holi)( (que tal|como estas|como va))?$/;
+
+function hourWord(now) {
+  const h = now.getHours();
+  return h < 12 ? 'Buenos días' : h < 20 ? 'Buenas tardes' : 'Buenas noches';
+}
+
+function smallTalk(t, state, now, helpers) {
+  const name = driverName(state.cfg || {});
+  if (GREET.test(t)) {
+    const today = iso(now);
+    const net = r2(sum(state.mov.filter((x) => x.f === today), (x) => (x.t === 'in' ? x.i : -x.i)));
+    const next = state.srv.filter((s) => serviceTime(s) >= now.getTime()).sort((a, b) => serviceTime(a) - serviceTime(b))[0];
+    const nextTxt = next ? (next.f === today ? 'hoy a las ' : fd(next.f) + ' a las ') + next.h + (next.d ? ' hacia ' + next.d : '') : '';
+    return reply('👋 ' + hourWord(now) + (name ? ', **' + name + '**' : '') + '. Hoy llevas **' + eur(net) + '** limpios' + (nextTxt ? '. Tu próximo servicio es ' + nextTxt : '') + '. ¿En qué te ayudo?',
+      hourWord(now) + (name ? ', ' + name : '') + '. Hoy llevas ' + spoken(net) + ' limpios' + (nextTxt ? '. Tu próximo servicio es ' + nextTxt : '') + '. ¿En qué te ayudo?');
+  }
+  if (/^(muchas )?gracias|^genial|^perfecto|^de lujo|^muy bien$|^ok$/.test(t)) return reply('¡De nada! 😊 Aquí estoy para lo que necesites.', '¡De nada!');
+  if (/^(adios|hasta luego|chao|nos vemos|hasta manana)/.test(t)) return reply('¡Hasta luego' + (name ? ', ' + name : '') + '! Buen servicio 🚕', 'Hasta luego. Buen servicio');
+  if (/(quien eres|como te llamas|que eres)/.test(t)) return reply('Soy **Rutivo**, tu asistente. Conozco tu caja, tus servicios, tu gasolina, tus facturas y tus huchas. Pregúntame o pídeme que apunte algo.', 'Soy Rutivo, tu asistente. Pregúntame lo que quieras de tu trabajo, o pídeme que apunte algo.');
+  if (/^(como estas|que tal estas|como vas)/.test(t)) return reply('¡Muy bien, con ganas de trabajar! 💪 ¿Qué necesitas?', 'Muy bien, con ganas de trabajar. ¿Qué necesitas?');
+  if (/que hora es/.test(t)) { const h = now.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }); return reply('🕒 Son las **' + h + '**.', 'Son las ' + h); }
+  if (/que dia es|a que estamos|que fecha/.test(t)) { const d = now.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' }); return reply('📅 Hoy es **' + d + '**.', 'Hoy es ' + d); }
+  if (/chiste/.test(t)) return reply('🚕 —Taxista, ¿cuánto me cobra por llevarme al aeropuerto?\n—50 euros.\n—¿Y la maleta?\n—La maleta va gratis.\n—Pues lleve la maleta, que yo voy andando. 😄', 'Un señor le pregunta al taxista cuánto le cobra por ir al aeropuerto. Cincuenta euros. ¿Y la maleta? La maleta va gratis. Pues lleve la maleta, que yo voy andando.');
+  return null;
+}
+
+const FOLLOW = /^(y )?(hoy|ayer|anteayer|manana|esta semana|la semana pasada|este mes|el mes pasado|este ano|el ano pasado|este trimestre|el trimestre pasado|(en |el mes de )?(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre))$/;
+const UNDO = /^(deshaz|deshazlo|deshacer|borra(lo)?|quita(lo)?|anula(lo)?|elimina(lo)?|cancela(lo)?)( (lo )?(ultimo|eso|lo que (he dicho|has apuntado)))?$|^me he equivocado/;
+
+/**
+ * Responde a lo que dice el usuario. `ctx` guarda el hilo de la conversación
+ * (para «¿y ayer?» o completar «apunta una carrera» → «de 30»). Devuelve:
+ *  {kind:'answer', text, speech, ctx} · {kind:'action', action, text, speech, ctx} · {kind:'undo', ctx}
+ */
+export function ask(input, state, now = new Date(), helpers = {}, ctx = {}) {
+  let t = stripFillers(normalize(input));
+  if (!t) return { ...reply('Te escucho. Pregúntame, por ejemplo: «¿Cuánto llevo hoy?»'), ctx };
+  let hello = '';
+  // "Hola, apunta 50 euros": saludar y seguir con la orden
+  const g = t.match(/^(hola|buenas|buenos dias|buenas tardes|buenas noches)\s+(.{6,})$/);
+  if (g) { hello = '¡Hola! '; t = stripFillers(g[2]); }
+  if (UNDO.test(t)) return { kind: 'undo', text: '', speech: '', ctx };
+  const chat = smallTalk(t, state, now, helpers);
+  if (chat) return { ...chat, ctx };
+  // Completar algo que quedó a medias o seguir con la última pregunta
+  if (ctx.pending && amountOf(t) !== null && !QUESTION.test(t)) t = ctx.pending + ' ' + t;
+  else if (ctx.last && FOLLOW.test(t)) t = ctx.last.replace(/\b(hoy|ayer|anteayer|esta semana|la semana pasada|este mes|el mes pasado|este ano|el ano pasado|este trimestre|el trimestre pasado|(en )?(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre))\b/g, '').trim() + ' ' + t.replace(/^y /, '');
+  const r = answer(t, state, now, helpers);
+  if (hello) { r.text = hello + r.text; r.speech = 'Hola. ' + r.speech; }
+  const next = {};
+  if (r.pending) next.pending = r.pending;
+  else if (r.kind === 'answer' && !/No te he entendido/.test(r.text)) next.last = t;
+  return { ...r, ctx: next };
+}
+

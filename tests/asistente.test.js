@@ -99,3 +99,39 @@ test('órdenes: apuntar carreras, gastos y hucha', () => {
 test('si no entiende, lo dice y da ejemplos', () => {
   assert.match(ask('qué tiempo hace', state, NOW).text, /No te he entendido/);
 });
+
+test('conversación: saludo, gracias, hora y chiste', () => {
+  const s = { ...state, cfg: { ...state.cfg, nom: 'Alejandro García' } };
+  const h = ask('Hola', s, NOW);
+  assert.match(h.text, /Buenas tardes, \*\*Alejandro\*\*\. Hoy llevas \*\*159,50\s€\*\* limpios\. Tu próximo servicio es 20\/11\/2026 a las 08:30 hacia Aeropuerto/);
+  assert.match(ask('oye rutivo muchas gracias', s, NOW).text, /De nada/);
+  assert.match(ask('¿Qué hora es?', s, NOW).text, /Son las \*\*17:00\*\*/);
+  assert.match(ask('cuéntame un chiste', s, NOW).text, /maleta/);
+});
+
+test('muchas formas de pedir que apunte', () => {
+  const item = (q) => ask(q, state, NOW).action?.item;
+  assert.deepEqual(item('que me ingrese 50 € en efectivo'), { f: '2026-11-19', t: 'in', p: 'efectivo', i: 50, c: 'Carrera' });
+  assert.deepEqual(item('Ingrésame cincuenta euros'), { f: '2026-11-19', t: 'in', p: 'efectivo', i: 50, c: 'Carrera' });
+  assert.deepEqual(item('ponme 30 con tarjeta'), { f: '2026-11-19', t: 'in', p: 'tarjeta', i: 30, c: 'Carrera' });
+  assert.deepEqual(item('me puedes apuntar 20 euros por favor'), { f: '2026-11-19', t: 'in', p: 'efectivo', i: 20, c: 'Carrera' });
+  assert.deepEqual(item('me han pagado 95 por bizum'), { f: '2026-11-19', t: 'in', p: 'tarjeta', i: 95, c: 'Carrera' });
+  assert.deepEqual(item('50 euros en efectivo'), { f: '2026-11-19', t: 'in', p: 'efectivo', i: 50, c: 'Carrera' });
+  assert.deepEqual(item('he echado 40 de gasoil'), { f: '2026-11-19', t: 'out', p: 'efectivo', i: 40, c: 'Gasolina' });
+  assert.deepEqual(item('hola apunta 12 euros de peaje con tarjeta'), { f: '2026-11-19', t: 'out', p: 'tarjeta', i: 12, c: 'Peaje' });
+  assert.equal(ask('cuanto he cobrado hoy', state, NOW).kind, 'answer');
+});
+
+test('hilo de la conversación: «¿y ayer?» y completar el importe', () => {
+  const a = ask('¿Cuánto llevo hoy?', state, NOW);
+  const b = ask('¿y ayer?', state, NOW, {}, a.ctx);
+  assert.match(b.text, /Ayer: \*\*80,00\s€ limpios/);
+  const c = ask('y el mes pasado', state, NOW, {}, b.ctx);
+  assert.match(c.text, /El mes pasado: \*\*250,00\s€/);
+  const d = ask('apunta una carrera', state, NOW);
+  assert.match(d.text, /¿De cuánto\?/);
+  const e = ask('de 35 con tarjeta', state, NOW, {}, d.ctx);
+  assert.deepEqual(e.action.item, { f: '2026-11-19', t: 'in', p: 'tarjeta', i: 35, c: 'Carrera' });
+  assert.equal(ask('borra lo último', state, NOW).kind, 'undo');
+  assert.equal(ask('me he equivocado', state, NOW).kind, 'undo');
+});
