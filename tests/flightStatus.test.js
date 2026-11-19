@@ -39,3 +39,26 @@ test('aviso de adelanto y de cancelación', () => {
   assert.equal(changeNotice(flight({}), flight({}, 'Canceled'), 'FR1').kind, 'cancel');
   assert.equal(changeNotice(flight({}, 'Canceled'), flight({}, 'Canceled'), 'FR1'), null);
 });
+
+test('el seguimiento empieza a la hora de despegue y acaba al aterrizar', async () => {
+  const { shouldTrack, isAirborne } = await import('../js/flightStatus.js');
+  const f = { found: true, status: 'Expected', dep: { sched: '2026-11-19T11:20:00Z', revised: '2026-11-19T11:50:00Z' }, arr: { sched: '2026-11-19T14:15:00Z' } };
+  assert.equal(shouldTrack(null, 0), true);
+  assert.equal(shouldTrack(f, Date.parse('2026-11-19T11:30:00Z')), false); // retrasado: aún no despega
+  assert.equal(shouldTrack(f, Date.parse('2026-11-19T11:50:00Z')), true);
+  assert.equal(isAirborne(f), false);
+  const flying = { ...f, status: 'EnRoute', dep: { ...f.dep, runway: '2026-11-19T11:55:00Z' } };
+  assert.equal(isAirborne(flying), true);
+  const landed = { ...flying, status: 'Arrived', arr: { ...f.arr, runway: '2026-11-19T14:20:00Z' } };
+  assert.equal(isAirborne(landed), false);
+  assert.equal(shouldTrack(landed, Date.parse('2026-11-19T15:00:00Z')), false);
+  assert.equal(shouldTrack({ found: false }, 0), false);
+  // En el aire: cada 15 min, y cada 5 en la última media hora
+  const t0 = Date.parse('2026-11-19T12:30:00Z');
+  const seen = { ...flying, at: t0 };
+  assert.equal(shouldTrack(seen, t0 + 10 * 6e4), false);
+  assert.equal(shouldTrack(seen, t0 + 15 * 6e4), true);
+  const near = { ...flying, at: Date.parse('2026-11-19T14:00:00Z') };
+  assert.equal(shouldTrack(near, Date.parse('2026-11-19T14:05:00Z')), true);
+  assert.equal(shouldTrack({ found: false, at: t0 }, t0 + 7 * 36e5), true);
+});

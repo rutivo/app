@@ -56,3 +56,35 @@ export function changeNotice(prev, cur, number) {
     ? { kind: 'delay', text: '⚠️ El vuelo ' + number + ' se ha retrasado ' + diff + ' min. Llega a las ' + hhmm(now) + (total ? ' (' + delayLabel(total) + ' sobre su hora)' : '') + '.' }
     : { kind: 'early', text: '⏩ El vuelo ' + number + ' se ha adelantado ' + -diff + ' min. Llega a las ' + hhmm(now) + '.' };
 }
+
+/** Hora de despegue más fiable que haya (real > revisada > prevista > programada), o null. */
+export function departureTime(f) {
+  const d = f && f.dep;
+  if (!d) return null;
+  const t = d.runway || d.revised || d.predicted || d.sched;
+  return t ? Date.parse(t) : null;
+}
+
+/** El avión está en el aire. */
+export const isAirborne = (f) =>
+  !!f && f.found !== false && !isCanceled(f) && !hasLanded(f) &&
+  (/^(Departed|EnRoute|Approaching)$/.test(f.status || '') || !!(f.dep && f.dep.runway) || !!f.pos);
+
+/**
+ * ¿Merece la pena consultar el vuelo ahora? Para no gastar consultas:
+ * - sin datos todavía → sí, una vez (para saber su horario);
+ * - aterrizado o cancelado → no; sin encontrar → otra vez pasadas 6 h;
+ * - antes de la hora de despegue → no; desde esa hora, sí, pero espaciado:
+ *   en el aire cada 15 min (5 en la última media hora), en tierra cada 10.
+ */
+export function shouldTrack(f, now) {
+  if (!f) return true;
+  if (f.found === false) return !!f.at && now - f.at > 6 * 36e5; // no encontrado: reintentar cada 6 h
+  if (isCanceled(f) || hasLanded(f)) return false;
+  const t = departureTime(f);
+  if (t !== null && now < t) return false;
+  // Ya en hora: en el aire cada 15 min (cada 5 en la última media hora); en tierra con retraso, cada 10.
+  const eta = arrivalTime(f);
+  const gap = isAirborne(f) ? (eta !== null && eta - now < 30 * 6e4 ? 5 : 15) : 10;
+  return !f.at || now - f.at >= gap * 6e4 - 5000;
+}

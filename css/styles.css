@@ -789,3 +789,9 @@ details[open] > summary.row-btn .chev { transform: rotate(90deg); }
 .fl-from { margin-top: 4px; }
 .fl-eta { font-size: 28px; font-weight: 800; margin-top: 10px; }
 .next-item small.fl-mini { display: block; color: var(--ink); font-weight: 700; }
+
+/* Mapa del vuelo en directo */
+.flmap2 { margin-top: 12px; height: 240px; border-radius: 12px; overflow: hidden; border: 1px solid var(--line); background: #dfe7f0; }
+.fl-plane { background: none; border: 0; }
+.fl-plane > div { width: 34px; height: 34px; filter: drop-shadow(0 2px 3px rgba(0, 0, 0, .35)); transition: transform .6s; }
+.fl-wait { font-size: 14px; padding: 10px 12px; border-radius: 10px; background: color-mix(in srgb, var(--acc, #1d5fe0) 12%, transparent); }
