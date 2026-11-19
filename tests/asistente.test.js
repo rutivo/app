@@ -155,3 +155,27 @@ test('hilo de la conversación: «¿y ayer?» y completar el importe', () => {
   assert.equal(ask('borra lo último', state, NOW).kind, 'undo');
   assert.equal(ask('me he equivocado', state, NOW).kind, 'undo');
 });
+
+test('lo que dijiste tal cual: muletillas, plurales y «como ingreso»', () => {
+  const item = (q) => ask(q, state, NOW).action?.item;
+  assert.deepEqual(item('Digo apúntame 12 € en tarjetas como ingreso'), { f: '2026-11-19', t: 'in', p: 'tarjeta', i: 12, c: 'Carrera' });
+  assert.deepEqual(item('a púntame 20 euros en efectivo'), { f: '2026-11-19', t: 'in', p: 'efectivo', i: 20, c: 'Carrera' });
+  assert.deepEqual(item('a ver, ingrésame 15 con 50 en mano'), { f: '2026-11-19', t: 'in', p: 'efectivo', i: 15.5, c: 'Carrera' });
+  assert.deepEqual(item('pues 30 euros con el datáfono'), { f: '2026-11-19', t: 'in', p: 'tarjeta', i: 30, c: 'Carrera' });
+  assert.deepEqual(item('mete 5 de propina'), { f: '2026-11-19', t: 'in', p: 'efectivo', i: 5, c: 'Propina' });
+  assert.deepEqual(item('pagué 7 euros de parking con tarjeta'), { f: '2026-11-19', t: 'out', p: 'tarjeta', i: 7, c: 'Parking' });
+  assert.deepEqual(item('apunta 120 euros del taller como gasto'), { f: '2026-11-19', t: 'out', p: 'efectivo', i: 120, c: 'Taller' });
+  assert.deepEqual(item('he pagado 9 y medio de desayuno'), { f: '2026-11-19', t: 'out', p: 'efectivo', i: 9.5, c: 'Comida' });
+  assert.deepEqual(item('repostado 60 euros'), { f: '2026-11-19', t: 'out', p: 'efectivo', i: 60, c: 'Gasolina' });
+  assert.deepEqual(item('12 euros como ingreso'), { f: '2026-11-19', t: 'in', p: 'efectivo', i: 12, c: 'Carrera' });
+  const h = ask('para poder apuntar las carreras', state, NOW);
+  assert.match(h.text, /¿De cuánto\?/);
+  assert.deepEqual(ask('35 en efectivo', state, NOW, {}, h.ctx).action.item, { f: '2026-11-19', t: 'in', p: 'efectivo', i: 35, c: 'Carrera' });
+});
+
+test('preguntas nuevas: resumen, cuántas carreras, qué he apuntado, cómo voy', () => {
+  assert.match(ask('dame el resumen del día', state, NOW).text, /Resumen hoy\*\*\n💶 Limpio: \*\*159,50\s€\*\*\n⬆️ Ingresos: 165,50\s€ \(2 cobros\) · efectivo 120,00\s€ · tarjeta 45,50\s€/);
+  assert.match(ask('cuántas carreras llevo hoy', state, NOW).text, /Hoy: \*\*2 cobros\*\* por 165,50\s€/);
+  assert.match(ask('qué he apuntado hoy', state, NOW).text, /−6,00\s€ · Lavado/);
+  assert.match(ask('cómo voy', state, NOW).text, /Hoy: \*\*159,50\s€ limpios/);
+});

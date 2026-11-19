@@ -19,7 +19,22 @@ export function normalize(text) {
     .replace(/[¿?¡!.,;:"«»()]/g, (c, i, s) => (c === ',' && /\d/.test(s[i - 1] || '') && /\d/.test(s[i + 1] || '') ? '.' : ' '))
     .replace(/\s+/g, ' ')
     .trim();
-  return wordsToNumbers(t);
+  t = wordsToNumbers(t);
+  return fixDictation(t);
+}
+
+/** Errores típicos del dictado y formas de decir importes. */
+function fixDictation(t) {
+  return t
+    .replace(/\ba (puntame|punta|puntalo|puntar|notame|nota|notar)\b/g, 'a$1')
+    .replace(/\b(apunta|anota|ingresa|pon|mete|suma|guarda|registra) (me|melo|lo)\b/g, '$1$2')
+    .replace(/\b(tarjetas|targeta|targetas)\b/g, 'tarjeta')
+    .replace(/\b(efectivos|en mano|en metalico|cash|en billetes)\b/g, 'efectivo')
+    .replace(/\b(\d+) (?:euros? )?con (\d{1,2})\b/g, (m, e, c) => e + '.' + c.padEnd(2, '0') + ' euros')
+    .replace(/\b(\d+) (?:euros? )?y medio\b/g, '$1.50 euros')
+    .replace(/\beuros euros\b/g, 'euros')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 const UNITS = { cero: 0, un: 1, uno: 1, una: 1, dos: 2, tres: 3, cuatro: 4, cinco: 5, seis: 6, siete: 7, ocho: 8, nueve: 9, diez: 10,
@@ -144,37 +159,50 @@ const reply = (text, speech, extra = {}) => ({ kind: 'answer', text, speech: spe
 // Verbos de "apuntar", con o sin pronombre: apúntame, ingrésame, ponme, mételo…
 const WRITE_VERB = /^(apunta|apuntar|anota|anotar|anade|anadir|pon|poner|mete|meter|registra|registrar|suma|sumar|guarda|guardar|ingresa|ingrese|ingresar|ingres|cobra|carga|cargar|agrega|agregar|incluye|incluir)(me|lo|la|le|melo|mela|selo)?( |$)/;
 const WRITE_PHRASE = /^(me han pagado|me pagaron|me ha pagado|he cobrado|cobre|cobrado|he hecho (una carrera|un servicio|un viaje)( de)?|he gastado|gaste|he pagado|pague|he echado|eche|he puesto|he repostado|reposte)( |$)/;
-const QUESTION = /^(cuanto|cuantos|cuantas|cuando|que|quien|quienes|como|cual|cuales|donde|dime|sabes)( |$)/;
+const QUESTION = /^(cuanto|cuantos|cuantas|cuando|que|quien|quienes|como|cual|cuales|donde|dime|sabes|resumen|dame)( |$)/;
 
 /** ¿Es una orden de apuntar dinero? */
+const WRITE_ANY = /\b(apunt|anot|ingres|registr|anad|agreg)[a-z]*\b|\b(ponme|pon|meteme|mete|sumame|guardame|cobra|cobrado|cobre|pagado|pague|gaste|gastado|echado|eche|reposte|repostado)\b|\bcomo (ingreso|gasto)\b/;
+
 export function isWrite(t) {
   if (QUESTION.test(t)) return false;
   if (WRITE_VERB.test(t) || WRITE_PHRASE.test(t)) return true;
+  if (WRITE_ANY.test(t) && amountOf(t) !== null) return true; // "para apuntar 12 euros…", "12 euros como ingreso"
   if (/^(un |una )?(gasto|ingreso|carrera|cobro|servicio|viaje) (de )?\d/.test(t)) return true;
   // Solo importe y forma de pago: "50 euros en efectivo", "30 con tarjeta"
-  return /^\d+(\.\d+)? ?(euros?|pavos)?( (en|con|por) (efectivo|tarjeta|metalico|bizum|datafono))?$/.test(t);
+  return /^\d+(\.\d+)? ?(euros?|pavos)?( (en|con|por) (el |la )?(efectivo|tarjeta|metalico|bizum|datafono|visa|transferencia|tpv))?$/.test(t);
 }
+
+const EXPENSES = [
+  [/gasolina|gasoil|diesel|combustible|reposta|repostado|reposte|echado|eche/, 'Gasolina'], [/peaje|autopista|ap ?7/, 'Peaje'],
+  [/parking|aparcamiento|aparcar/, 'Parking'], [/lavado|lavar|lavadero/, 'Lavado'], [/\bitv\b/, 'ITV'],
+  [/taller|mecanico|revision|aceite|neumatico|rueda|frenos|bateria/, 'Taller'], [/comida|almuerzo|desayuno|cena|cafe|bocadillo|menu/, 'Comida'],
+  [/seguro/, 'Seguro'], [/multa/, 'Multa'], [/movil|telefono|tarifa de datos/, 'Teléfono'], [/autonomos|cuota|licencia|emisora/, 'Cuotas'],
+  [/recambio|pieza|accesorio/, 'Recambios'], [/limpieza|ambientador/, 'Limpieza'],
+];
+const INCOMES = [[/propina/, 'Propina'], [/transfer/, 'Transfer'], [/aeropuerto/, 'Carrera aeropuerto'], [/servicio/, 'Servicio']];
 
 function answer(t, state, now, helpers) {
   const day = iso(now);
   // --- Órdenes: apuntar ---
   const amount = amountOf(t);
-  if (isWrite(t) && !amount) return reply('¿De cuánto? Dime el importe, por ejemplo «50 euros en efectivo».', '¿De cuánto?', { pending: t });
+  if ((isWrite(t) || (!QUESTION.test(t) && WRITE_ANY.test(t))) && !amount) {
+    return reply('Claro. ¿De cuánto? Dímelo así: «30 euros en efectivo» o «12 con tarjeta».', 'Claro. ¿De cuánto?', { pending: 'apunta' + (/(gasto|gaste|pague|pagado|gasolina|peaje|parking)/.test(t) ? ' gasto' : '') });
+  }
   if (isWrite(t) && amount) {
-    const pay = has(t, 'tarjeta', 'datafono', 'visa', 'bizum') ? 'tarjeta' : 'efectivo';
+    const pay = /(tarjeta|datafono|visa|mastercard|bizum|transferencia|tpv|contactless|con el movil)/.test(t) ? 'tarjeta' : 'efectivo';
     if (has(t, 'hucha', 'huchas')) {
       const hs = huchasOf(state.cfg);
       const h = hs.find((x) => has(t, clean(x.n).split(' ').pop())) || hs[0];
       return { kind: 'action', action: { list: 'huc', item: { f: day, i: r2(amount), h: h.id } },
         text: '🐷 Metidos **' + eur(amount) + '** en «' + h.n + '».', speech: 'Metidos ' + spoken(amount) + ' en ' + h.n };
     }
-    const fuel = /gasolina|gasoil|diesel|combustible|repost|echado|eche/.test(t);
-    const expense = !/^(me han pagado|me pagaron|me ha pagado)/.test(t) && /gasto|gaste|gastado|pagado|pague|peaje|lavado|parking|taller|comida|aparcamiento|multa|seguro|recambio/.test(t);
-    let concept = ((t.match(/(?:de|por|en|concepto|para)\s+([a-z ]+)$/) || [])[1] || '')
-      .replace(/\b(en|con|por)?\s*(efectivo|tarjeta|metalico|bizum|datafono|euros?|pavos)\b/g, '').replace(/\s+/g, ' ').trim();
-    if (/^(un|una|el|la|lo)?\s*(gasto|carrera|cobro|ingreso|servicio|viaje)?$/.test(concept)) concept = '';
-    const what = fuel ? 'Gasolina' : concept || (expense ? 'Gasto' : 'Carrera');
-    const c = what.charAt(0).toUpperCase() + what.slice(1);
+    const cat = EXPENSES.find(([re]) => re.test(t));
+    const forcedIn = /como (ingreso|cobro|carrera)|me (han|ha) pagado|me pagaron|propina|he cobrado|cobre/.test(t);
+    const expense = !forcedIn && (!!cat || /gasto|gaste|gastado|pagado|pague|como gasto/.test(t));
+    const fuel = false;
+    const income = INCOMES.find(([re]) => re.test(t));
+    const c = expense ? (cat ? cat[1] : 'Gasto') : income ? income[1] : 'Carrera';
     return { kind: 'action', action: { list: 'mov', item: { f: day, t: expense || fuel ? 'out' : 'in', p: pay, i: r2(amount), c } },
       text: (expense || fuel ? '🧾 Gasto apuntado: **' : '💶 Apuntado: **') + eur(amount) + '** · ' + pay + ' · ' + c,
       speech: (expense || fuel ? 'Gasto apuntado: ' : 'Apuntado: ') + spoken(amount) + (pay === 'tarjeta' ? ' con tarjeta' : ' en efectivo') };
@@ -182,7 +210,7 @@ function answer(t, state, now, helpers) {
 
   // --- Ayuda ---
   if (/ayuda|que (puedo|se puede) (preguntar|decir)|que sabes|como funcionas/.test(t)) {
-    return reply('Puedes preguntarme o pedirme cosas como:\n• Hola, ¿qué tal?\n• ¿Qué tiempo hace? / ¿Va a llover mañana?\n• ¿Cuánto llevo hoy?\n• ¿Cuánto gané el mes pasado?\n• ¿Cuánto me debe Charly?\n• ¿Qué tengo mañana?\n• ¿Cuándo llevé a Richard?\n• ¿Cuánto gasto en gasolina?\n• ¿Cuánto IVA pago este trimestre?\n• ¿Cuántos kilómetros llevo este mes?\n• ¿Cómo va mi hucha?\n• Apunta 45 euros en efectivo\n• Gasto de 6 euros de lavado',
+    return reply('Puedes preguntarme o pedirme cosas como:\n• Hola, ¿qué tal?\n• ¿Qué tiempo hace? / ¿Va a llover mañana?\n• ¿Cuánto llevo hoy?\n• ¿Cuánto gané el mes pasado?\n• ¿Cuánto me debe Charly?\n• ¿Qué tengo mañana?\n• ¿Cuándo llevé a Richard?\n• ¿Cuánto gasto en gasolina?\n• ¿Cuánto IVA pago este trimestre?\n• ¿Cuántos kilómetros llevo este mes?\n• ¿Cómo va mi hucha?\n• Dame el resumen del día\n• ¿Cuántas carreras llevo?\n• ¿Qué he apuntado hoy?\n• Apúntame 12 € en tarjeta\n• Ingrésame 15 con 50 en efectivo\n• Pagué 7 euros de parking\n• He echado 50 de gasoil\n• Mete 5 de propina\n• Borra lo último',
       'Puedes preguntarme cuánto llevas, quién te debe, qué servicios tienes, o pedirme que apunte una carrera o un gasto.');
   }
 
@@ -282,10 +310,43 @@ function answer(t, state, now, helpers) {
     return reply('🧾 Gastos ' + p.label + ': **' + eur(total) + '**' + (top ? '\n' + top : ''), 'Has gastado ' + spoken(total) + ' ' + p.label);
   }
 
+  // --- Resumen del día (o del periodo) ---
+  if (/(resumen|balance|como (ha ido|va) (el dia|hoy|la jornada)|como me ha ido)/.test(t)) {
+    const p = periodOf(t, day, 'hoy');
+    const list = state.mov.filter((x) => inRange(x.f, p));
+    const m = money(state, p);
+    const cash = r2(sum(list.filter((x) => x.t === 'in' && x.p === 'efectivo'), (x) => x.i));
+    const card = r2(m.inc - cash);
+    const jor = (state.jor || []).filter((j) => inRange(j.f, p));
+    const km = r2(sum(jor, (j) => (j.kf > j.ki ? j.kf - j.ki : 0)));
+    const h = r2(sum(jor, (j) => hoursOf(j) || 0));
+    const label = p.label.charAt(0).toUpperCase() + p.label.slice(1);
+    return reply('📋 **Resumen ' + p.label + '**\n💶 Limpio: **' + eur(m.net) + '**\n⬆️ Ingresos: ' + eur(m.inc) + ' (' + m.count + (m.count === 1 ? ' cobro' : ' cobros') + ') · efectivo ' + eur(cash) + ' · tarjeta ' + eur(card) +
+      '\n⬇️ Gastos: ' + eur(m.out) + (km ? '\n🛣️ ' + Math.round(km) + ' km' : '') + (h ? ' · ⏱️ ' + String(Math.round(h * 10) / 10).replace('.', ',') + ' h' + (m.net > 0 ? ' · ' + eur(m.net / h) + '/h' : '') : ''),
+      label + ' llevas ' + spoken(m.net) + ' limpios, con ' + m.count + (m.count === 1 ? ' cobro' : ' cobros') + '. ' + spoken(cash) + ' en efectivo y ' + spoken(card) + ' con tarjeta. Gastos, ' + spoken(m.out) + '.');
+  }
+
+  // --- Cuántas carreras ---
+  if (/(cuantas carreras|cuantos servicios|cuantos cobros|cuantos viajes|cuantas he hecho|cuantos he hecho)/.test(t)) {
+    const p = periodOf(t, day, 'hoy');
+    const m = money(state, p);
+    return reply('🚕 ' + p.label.charAt(0).toUpperCase() + p.label.slice(1) + ': **' + m.count + (m.count === 1 ? ' cobro' : ' cobros') + '** por ' + eur(m.inc) + (m.count ? ' (media ' + eur(m.inc / m.count) + ')' : '') + '.',
+      p.label + ' llevas ' + m.count + (m.count === 1 ? ' cobro' : ' cobros') + ', por ' + spoken(m.inc));
+  }
+
+  // --- Qué he apuntado ---
+  if (/(que (he|has|hemos) apuntado|que llevo apuntado|ultimos movimientos|ultimo movimiento|lo ultimo que|que he metido|que hay apuntado|movimientos de hoy)/.test(t)) {
+    const p = periodOf(t, day, 'hoy');
+    const list = state.mov.filter((x) => inRange(x.f, p)).slice(-8).reverse();
+    if (!list.length) return reply('No hay nada apuntado ' + p.label + '.');
+    return reply('📝 Apuntado ' + p.label + ':\n' + list.map((x) => (x.t === 'in' ? '⬆️ +' : '⬇️ −') + eur(x.i) + ' · ' + (x.c || '') + ' · ' + x.p).join('\n'),
+      'Lo último es ' + (list[0].t === 'in' ? 'un ingreso de ' : 'un gasto de ') + spoken(list[0].i) + (list[0].c ? ', ' + list[0].c : '') + '.');
+  }
+
   // --- Ganancias (lo más habitual) ---
-  if (/(cuanto|llevo|gane|ganado|ganar|hecho|hice|facturad|ingres|neto|beneficio|caja|dinero|sacado|saque|cobrado|recaud)/.test(t)) {
+  if (/(cuanto|llevo|gane|ganado|ganar|hecho|hice|facturad|ingres|neto|beneficio|caja|dinero|sacado|saque|cobrado|recaud|como voy|que tal voy|como vamos)/.test(t)) {
     const who = findName(t, [...new Set(state.srv.map((s) => s.cl).filter(Boolean))]);
-    const p = periodOf(t, day, /(llevo|hoy)/.test(t) ? 'hoy' : 'mes');
+    const p = periodOf(t, day, /(llevo|hoy|como voy|que tal voy|como vamos)/.test(t) ? 'hoy' : 'mes');
     if (who && /(factur|con |de |a )/.test(t)) {
       const list = state.srv.filter((s) => s.cl === who && inRange(s.f, p));
       const total = r2(sum(list, (s) => s.i));
@@ -316,6 +377,11 @@ function answer(t, state, now, helpers) {
 
 /** Quita muletillas: "oye Rutivo, por favor, dime cuánto llevo" → "cuanto llevo". */
 export function stripFillers(t) {
+  let prev;
+  do {
+    prev = t;
+    t = t.replace(/^(digo|te digo|he dicho|te he dicho|a ver|mira|pues|bueno|entonces|escucha|oye|eh|ey|venga|vale|ok|vamos|y)\s+/, '');
+  } while (t !== prev);
   return t
     .replace(/\b(oye|eh|hey|ey|rutivo|por favor|porfa|porfavor|anda|venga|vale)\b/g, ' ')
     .replace(/\s+/g, ' ')

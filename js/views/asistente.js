@@ -98,12 +98,29 @@ function undoAt(i) {
   return true;
 }
 
-function handle(text) {
-  const q = String(text || '').trim();
-  if (!q) return;
+/**
+ * De varias transcripciones posibles (el móvil a veces duda: «bulla»/«falla»),
+ * se queda con la primera que tiene sentido.
+ */
+function best(options) {
+  const list = [...new Set(options.map((o) => String(o || '').trim()).filter(Boolean))];
+  // Una orden completa vale más que una a medias, y esta más que algo que no se entiende.
+  const score = (r) => (r.kind === 'action' || r.kind === 'undo' || r.kind === 'weather' ? 3 : /No te he entendido/.test(r.text || '') ? 0 : r.pending ? 1 : 2);
+  let top = null;
+  for (const q of list) {
+    const r = ask(q, S, new Date(), { eta }, ctx);
+    if (!top || score(r) > score(top.r)) top = { q, r };
+  }
+  return top;
+}
+
+function handle(text, alternatives = []) {
+  const pick = best([text, ...alternatives]);
+  if (!pick) return;
+  const q = pick.q;
   history.push({ from: 'yo', html: esc(q) });
   setState('thinking');
-  const r = ask(q, S, new Date(), { eta }, ctx);
+  const r = pick.r;
   ctx = r.ctx || {};
   let speech;
   if (r.kind === 'undo') {
@@ -205,32 +222,43 @@ function listen() {
   try { speechSynthesis.cancel(); } catch { /* */ }
   if (!Recognition) return showKeyboard(micHelp());
   if (rec) { stopListening(); setState('idle'); return; }
-  let final = '';
   let heard = false;
   let failed = '';
+  let finals = []; // [[alternativa1, alternativa2…], …] por cada trozo de frase
+  let interim = '';
+  let silence = null;
   const r = new Recognition();
   rec = r;
   r.lang = 'es-ES';
   r.interimResults = true;
-  r.continuous = false;
-  r.maxAlternatives = 1;
-  r.onstart = () => setState('listening');
+  r.continuous = true; // no cortar en las pausas: se cierra tras un silencio
+  r.maxAlternatives = 4;
+  const quiet = (ms) => { clearTimeout(silence); silence = setTimeout(() => { if (rec === r) try { r.stop(); } catch { /* */ } }, ms); };
+  r.onstart = () => { setState('listening'); quiet(7000); };
   r.onresult = (e) => {
     heard = true;
-    let interim = '';
+    interim = '';
     for (let i = e.resultIndex; i < e.results.length; i++) {
-      if (e.results[i].isFinal) final += e.results[i][0].transcript;
-      else interim += e.results[i][0].transcript;
+      const res = e.results[i];
+      if (res.isFinal) finals[i] = Array.from({ length: res.length }, (_, k) => res[k].transcript);
+      else interim += res[0].transcript;
     }
-    if (ui) ui.live.textContent = final || interim;
+    const said = finals.filter(Boolean).map((alts) => alts[0]).join(' ');
+    if (ui) ui.live.textContent = (said + ' ' + interim).trim();
+    quiet(1400); // 1,4 s sin hablar = has terminado
   };
   r.onerror = (e) => { failed = e.error || 'error'; };
   r.onend = () => {
+    clearTimeout(silence);
     if (rec === r) rec = null;
     if (!ui) return;
-    const text = (final || ui.live.textContent || '').trim();
+    const parts = finals.filter(Boolean);
+    const main = (parts.map((alts) => alts[0]).join(' ') + ' ' + interim).trim() || ui.live.textContent.trim();
+    // Variantes: cambiar cada trozo por sus otras posibilidades
+    const alts = [];
+    parts.forEach((options, i) => options.slice(1).forEach((o) => alts.push(parts.map((x, j) => (j === i ? o : x[0])).join(' '))));
     ui.live.textContent = '';
-    if (text) return handle(text);
+    if (main) return handle(main, alts);
     if (failed === 'aborted') return setState('idle');
     if (failed && failed !== 'no-speech') return showKeyboard(micHelp(failed));
     setState('idle', heard ? LABELS.idle : micHelp('no-speech'));
@@ -243,7 +271,7 @@ function listen() {
     showKeyboard(micHelp('error'));
   }
   // Por si el sistema no cierra solo
-  setTimeout(() => { if (rec === r) try { r.stop(); } catch { /* */ } }, 12000);
+  setTimeout(() => { if (rec === r) try { r.stop(); } catch { /* */ } }, 20000);
 }
 
 // ---------- abrir / cerrar ----------
