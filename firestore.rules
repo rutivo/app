@@ -1,10 +1,39 @@
 rules_version = '2';
 
-// Cada usuario solo puede leer y escribir sus propios datos.
+// Reglas de seguridad de Rutivo (Firestore).
+// - Cada usuario solo puede leer y escribir SUS datos (users/{su uid}/...).
+// - Solo se aceptan los documentos que usa la app, con su forma y tamaño.
+// - Todo lo demás está cerrado.
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /users/{uid}/{document=**} {
-      allow read, write: if request.auth != null && request.auth.uid == uid;
+
+    function isOwner(uid) {
+      return request.auth != null && request.auth.uid == uid;
+    }
+
+    // Datos de la app troceados: "meta", "cfg", "mov-2026-11", "fac-2026", "prv-all"…
+    match /users/{uid}/data/{part} {
+      allow read, delete: if isOwner(uid);
+      allow create, update: if isOwner(uid)
+        && part.matches('^(meta|cfg|(mov|srv|gas|huc|jor|prv|fac)-[0-9a-z-]{3,7})$')
+        && request.resource.data.keys().hasOnly(['j', 'ts'])
+        && (!('j' in request.resource.data) || (request.resource.data.j is string && request.resource.data.j.size() < 1000000))
+        && (!('ts' in request.resource.data) || request.resource.data.ts is number);
+    }
+
+    // Fotos de los tickets de gasolina (imagen en texto, menos de 1 MB).
+    match /users/{uid}/fotos/{id} {
+      allow read, delete: if isOwner(uid);
+      allow create, update: if isOwner(uid)
+        && id.matches('^[A-Za-z0-9_-]{1,40}$')
+        && request.resource.data.keys().hasOnly(['d'])
+        && request.resource.data.d is string
+        && request.resource.data.d.size() < 1000000;
+    }
+
+    // Cualquier otra ruta: prohibida.
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }

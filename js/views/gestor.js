@@ -5,7 +5,7 @@ import { S } from '../store.js';
 import { eur, fd } from '../utils.js';
 import { fuelPdf } from './fuelPdf.js';
 
-const JSPDF = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+const JSPDF = 'vendor/jspdf-2.5.1.umd.min.js';
 const label = (q) => 'T' + q.slice(-1) + ' ' + q.slice(0, 4);
 
 /** PDF de una página con el resumen del trimestre y las facturas. */

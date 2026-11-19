@@ -14,7 +14,7 @@ import { serviceTime } from './trips.js';
 import { esc } from './utils.js';
 
 const ROUTE_API = 'https://api.adsbdb.com/v0/callsign/';
-const LEAFLET = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/';
+const LEAFLET = 'vendor/leaflet-1.9.4';
 const TILES = 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
 const FRESH_MS = 4 * 6e4; // no repetir la misma consulta en menos de 4 minutos
 const POS_MS = 30e3; // el avión se mueve en el mapa cada 30 s
@@ -117,11 +117,11 @@ function loadLeaflet() {
   if (!document.querySelector('link[data-leaflet]')) {
     const l = document.createElement('link');
     l.rel = 'stylesheet';
-    l.href = LEAFLET + 'leaflet.min.css';
+    l.href = LEAFLET + '.css';
     l.dataset.leaflet = '1';
     document.head.appendChild(l);
   }
-  return loadScript(LEAFLET + 'leaflet.min.js');
+  return loadScript(LEAFLET + '.js');
 }
 
 const PLANE_SVG =
@@ -136,7 +136,9 @@ async function flightMap(box, f) {
   }
   const L = window.L;
   if (!L || !box.isConnected) return null;
-  const map = L.map(box, { zoomControl: false, attributionControl: true });
+  // Sin animaciones: el panel se puede cerrar en cualquier momento sin dejar nada a medias.
+  const map = L.map(box, { zoomControl: false, attributionControl: true, zoomAnimation: false, fadeAnimation: false, markerZoomAnimation: false });
+  let removed = false;
   map.attributionControl.setPrefix(false);
   L.tileLayer(TILES, { subdomains: 'abcd', maxZoom: 12, attribution: '© OpenStreetMap · © CARTO' }).addTo(map);
   const pt = (a) => (a && typeof a.lat === 'number' ? [a.lat, a.lon] : null);
@@ -163,8 +165,11 @@ async function flightMap(box, f) {
   };
   if (from || to) map.fitBounds(L.latLngBounds([from, to].filter(Boolean)), { padding: [28, 28], maxZoom: 9 });
   update(f.pos);
-  setTimeout(() => map.invalidateSize(), 250);
-  return { update, remove: () => map.remove() };
+  setTimeout(() => { if (!removed) map.invalidateSize(); }, 250);
+  return {
+    update: (pos) => { if (!removed) update(pos); },
+    remove: () => { removed = true; map.remove(); },
+  };
 }
 
 function posLine(pos) {
@@ -242,6 +247,7 @@ export function openFlight(code, extra = '', date = '', time = '') {
       mapBusy = true;
       map = await flightMap(sheet.querySelector('#flmap'), f);
       mapBusy = false;
+      if (map && !sheet.isConnected) { map.remove(); map = null; return; } // se cerró mientras cargaba
       if (!map) { mapWrap.hidden = true; return; }
       posInfo.textContent = posLine(f.pos);
       if (hex) {

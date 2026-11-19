@@ -2,6 +2,10 @@
 <html lang="es">
 <head>
   <meta charset="utf-8">
+  <!-- Seguridad: solo se ejecuta código de la propia app, de Firebase (Google) y del lector de tickets.
+       Si añades un servicio externo nuevo, hay que añadir su dirección aquí. -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://www.gstatic.com https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https://*.basemaps.cartocdn.com; connect-src 'self' data: blob: https://*.googleapis.com https://www.gstatic.com https://cdn.jsdelivr.net https://rutivo-vuelos.pokeboostmlg.workers.dev https://api.adsbdb.com; frame-src https://rutivo-a8890.firebaseapp.com; object-src 'none'; base-uri 'self'; form-action 'self'; manifest-src 'self'">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Rutivo</title>
   <meta name="apple-mobile-web-app-title" content="Rutivo">
@@ -296,7 +300,7 @@
   <button data-v="hu">Hucha</button>
 </nav>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="vendor/pdf-3.11.174.min.js"></script>
 <script type="module" src="js/main.js"></script>
 </body>
 </html>

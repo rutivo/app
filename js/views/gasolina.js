@@ -7,7 +7,7 @@ import { S, getPhotoLocal, removePhotoLocal, save, savePhotoLocal } from '../sto
 import { cap, esc, eur, fd, sum, today, uid } from '../utils.js';
 import { fuelPdf } from './fuelPdf.js';
 
-const PDFJS_WORKER = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+const PDFJS_WORKER = 'vendor/pdf.worker-3.11.174.min.js';
 const TESSERACT = 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js';
 const TESSERACT_LANG = 'https://cdn.jsdelivr.net/npm/@tesseract.js-data/spa/4.0.0_best_int';
 let rerenderAll = () => {};

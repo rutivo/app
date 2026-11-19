@@ -11,6 +11,16 @@ import { $, confirmTapTimed, toast } from '../dom.js';
 import { hasLocalData } from '../store.js';
 import { esc } from '../utils.js';
 
+/** Contraseña de una cuenta nueva: mínimo 8, con letras y números, y que no sea el email. Devuelve el problema o ''. */
+export function passwordProblem(pw, email = '') {
+  if (pw.length < 8) return 'La contraseña debe tener al menos 8 caracteres.';
+  if (!/[a-zA-ZñÑ]/.test(pw) || !/\d/.test(pw)) return 'La contraseña debe tener letras y números.';
+  const user = email.split('@')[0].toLowerCase();
+  if (user.length >= 4 && pw.toLowerCase().includes(user)) return 'La contraseña no puede contener tu email.';
+  if (/^(12345678|password|contraseña|qwerty)/i.test(pw)) return 'Esa contraseña es demasiado fácil. Elige otra.';
+  return '';
+}
+
 let rerenderAll = () => {};
 let fb = null; // módulo backend/firebase.js, cargado solo si hace falta
 let currentUser = null;
@@ -41,7 +51,7 @@ function showWall({ offline = false } = {}) {
     '</div>' +
     '<label class="f" for="aem">Email</label><input id="aem" type="email" autocomplete="email" inputmode="email" autocapitalize="off" required>' +
     '<label class="f" for="apw">Contraseña</label><input id="apw" type="password" autocomplete="current-password" minlength="6" required>' +
-    '<div id="apw2box"><label class="f" for="apw2">Repite la contraseña</label><input id="apw2" type="password" autocomplete="new-password" minlength="6"></div>' +
+    '<div id="apw2box"><div class="mut">Mínimo 8 caracteres, con letras y números.</div><label class="f" for="apw2">Repite la contraseña</label><input id="apw2" type="password" autocomplete="new-password" minlength="6"></div>' +
     '<div id="aerr" class="out mt8" role="alert"></div>' +
     '<button id="ago">Entrar</button>' +
     '<button type="button" class="sec" id="arst">He olvidado mi contraseña</button>' +
@@ -68,7 +78,11 @@ function showWall({ offline = false } = {}) {
     const pw = wall.querySelector('#apw').value;
     if (!email) return error('Escribe tu email.');
     if (pw.length < 6) return error('La contraseña debe tener al menos 6 caracteres.');
-    if (mode() === 'register' && pw !== wall.querySelector('#apw2').value) return error('Las contraseñas no coinciden.');
+    if (mode() === 'register') {
+      const weak = passwordProblem(pw, email);
+      if (weak) return error(weak);
+      if (pw !== wall.querySelector('#apw2').value) return error('Las contraseñas no coinciden.');
+    }
     const button = wall.querySelector('#ago');
     button.disabled = true;
     error('');
