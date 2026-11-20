@@ -54,6 +54,49 @@ export function createVad({ chunkMs, silenceMs = 1100, maxMs = 15000, waitMs = 7
   };
 }
 
+// ---------- un solo micro para toda la app ----------
+// En iPhone, cada vez que se pide el micro de nuevo puede volver a salir
+// «rutivo.github.io quiere acceder al micrófono». Por eso se pide UNA vez y lo
+// comparten «Oye Rutivo», manos libres y el asistente. Si nadie lo usa durante
+// unos minutos, se apaga (para no dejar el micro abierto sin necesidad).
+const IDLE_MS = 3 * 60 * 1000;
+let shared = null;
+let users = 0;
+let idleTimer = null;
+let pending = null;
+
+const live = (s) => !!s && s.getAudioTracks().some((t) => t.readyState === 'live');
+
+/** El micro compartido (lo pide solo si no hay uno funcionando). `fresh`: pedir uno nuevo. */
+export async function acquireStream(fresh = false) {
+  clearTimeout(idleTimer);
+  users++;
+  try {
+    if (fresh && shared) { shared.getTracks().forEach((t) => t.stop()); shared = null; }
+    if (live(shared)) return shared;
+    if (!pending) {
+      pending = navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 },
+      }).finally(() => { pending = null; });
+    }
+    shared = await pending;
+    return shared;
+  } catch (err) {
+    users--;
+    throw err;
+  }
+}
+
+/** Deja de usar el micro compartido; si nadie lo usa en un rato, se apaga. */
+export function releaseStream() {
+  users = Math.max(0, users - 1);
+  if (users) return;
+  clearTimeout(idleTimer);
+  idleTimer = setTimeout(() => {
+    if (!users && shared) { shared.getTracks().forEach((t) => t.stop()); shared = null; }
+  }, IDLE_MS);
+}
+
 /** El micro está abierto pero no llega sonido (en iPhone, tras hablar el asistente). */
 export class DeafMicError extends Error {
   constructor() {
@@ -82,12 +125,13 @@ export function createMic({ deafMs = 1500, maxMs = 15000 } = {}) {
     if (ctx.state !== 'running') ctx.resume().catch(() => {});
   }
 
+  let needFresh = false; // tras quedarse mudo: pedir un micro nuevo
+
   async function open() {
     ensureCtx();
     if (stream) return;
-    stream = await navigator.mediaDevices.getUserMedia({
-      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 },
-    });
+    stream = await acquireStream(needFresh);
+    needFresh = false;
     if (!ctx || ctx.state === 'closed') ensureCtx();
     source = ctx.createMediaStreamSource(stream);
     proc = ctx.createScriptProcessor(4096, 1, 1);
@@ -110,7 +154,7 @@ export function createMic({ deafMs = 1500, maxMs = 15000 } = {}) {
   /** Cierra el micro sin tocar la frase que se esté grabando. */
   function teardown() {
     try { proc && proc.disconnect(); source && source.disconnect(); } catch { /* */ }
-    if (stream) stream.getTracks().forEach((t) => t.stop());
+    if (stream) releaseStream(); // el micro sigue abierto para los demás (y para no volver a preguntar)
     if (ctx) ctx.close().catch(() => {});
     stream = ctx = source = proc = null;
   }
@@ -166,6 +210,7 @@ export function createMic({ deafMs = 1500, maxMs = 15000 } = {}) {
           s.busy = true;
           s.retried = true;
           teardown();
+          needFresh = true;
           try {
             await wake();
           } catch (err) {
