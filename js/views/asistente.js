@@ -4,6 +4,10 @@ import { ask, trimChatter, weatherText } from '../asistente.js';
 import { readFlag, writeFlag } from '../dom.js';
 import { cachedStatus, etaLine } from '../flight.js';
 import { createMic } from '../microfono.js';
+import { leavePlanOf, scheduleReminders } from '../reminders.js';
+import { leaveBody, leaveLine } from '../salida.js';
+import { serviceTime } from '../trips.js';
+import { openWorth, quickWorth } from './compensa.js';
 import { earSupported, prepareEar, transcribe } from '../oido.js';
 import { S, save } from '../store.js';
 import { esc, uid } from '../utils.js';
@@ -124,7 +128,7 @@ function undoAt(i) {
 function best(options, conf = 0) {
   const list = [...new Set(options.map((o) => String(o || '').trim()).filter(Boolean))];
   // Una orden completa vale más que una a medias, y esta más que algo que no se entiende.
-  const score = (r) => (r.kind === 'action' || r.kind === 'confirm' || r.kind === 'undo' || r.kind === 'weather' ? 3 : /No te he entendido/.test(r.text || '') ? 0 : r.pending ? 1 : 2);
+  const score = (r) => (r.kind === 'action' || r.kind === 'confirm' || r.kind === 'undo' || r.kind === 'weather' || r.kind === 'worth' || r.kind === 'leave' ? 3 : /No te he entendido/.test(r.text || '') ? 0 : r.pending ? 1 : 2);
   let top = null;
   for (const q of list) {
     const r = ask(q, S, new Date(), { eta, confidence: conf }, ctx);
@@ -152,6 +156,18 @@ function handle(text, alternatives = [], conf = 0) {
   } else if (r.kind === 'confirm') {
     history.push({ from: 'rutivo', html: rich(r.text) + '<div class="siri-yn"><button type="button" data-asyes>✅ Sí, apúntalo</button><button type="button" class="sec" data-asno>❌ No</button></div>' });
     speech = r.speech;
+  } else if (r.kind === 'worth') {
+    const entry = { from: 'rutivo', html: rich(r.text) };
+    history.push(entry);
+    paint();
+    worthAnswer(entry, r);
+    return;
+  } else if (r.kind === 'leave') {
+    const entry = { from: 'rutivo', html: '🚗 Lo miro…' };
+    history.push(entry);
+    paint();
+    leaveAnswer(entry);
+    return;
   } else if (r.kind === 'weather') {
     const entry = { from: 'rutivo', html: rich(r.text) };
     history.push(entry);
@@ -173,6 +189,40 @@ function handle(text, alternatives = [], conf = 0) {
   }
   paint();
   speak(speech);
+}
+
+// ---------- ¿me compensa? y ¿a qué hora salgo? ----------
+
+async function worthAnswer(entry, r) {
+  try {
+    const { text } = await quickWorth(r);
+    entry.html = '💶 ' + esc(text) + '<div class="siri-yn"><button type="button" data-asworth>Ver el detalle</button></div>';
+    entry.worth = r;
+    paint();
+    speak(text);
+  } catch (err) {
+    const msg = err.message && err.message.startsWith('No ') ? err.message + '. Dímelo con el pueblo o la dirección.' : 'No puedo calcular la ruta ahora (¿sin conexión?).';
+    entry.html = esc(msg);
+    paint();
+    speak(msg);
+  }
+}
+
+async function leaveAnswer(entry) {
+  await scheduleReminders();
+  const now = Date.now();
+  const next = S.srv.filter((s) => serviceTime(s) > now - 2 * 36e5 && serviceTime(s) < now + 24 * 36e5)
+    .map((s) => ({ s, p: leavePlanOf(s.id) })).filter((x) => x.p && x.p.leave > now - 30 * 6e4)
+    .sort((a, b) => a.p.leave - b.p.leave)[0];
+  let text;
+  if (!next) text = 'No tienes recogidas en las próximas horas.';
+  else {
+    const line = leaveLine(next.p, now).replace(/^🚗 /, '');
+    text = line + '. ' + leaveBody(next.s, next.p).replace(/ · \d+ min de camino$/, '') + '.' + (next.p.guess ? ' (No sé dónde estás: cuento ' + next.p.travel + ' min de camino.)' : '');
+  }
+  entry.html = '🚗 ' + esc(text);
+  paint();
+  speak(text.replace(/\(.*?\)/g, '').replace(/·/g, ','));
 }
 
 // ---------- el tiempo ----------
@@ -446,6 +496,7 @@ export function openAssistant() {
     if (el.matches('[data-skb]')) { if (ui.form.hidden) showKeyboard(); else ui.form.hidden = true; return; }
     if (el.matches('[data-asq]')) { unlockVoice(); convo = false; return handle(el.dataset.asq); }
     if (el.matches('[data-asundo]')) { undoAt(+el.dataset.asundo); paint(); }
+    if (el.matches('[data-asworth]')) { const w = [...history].reverse().find((m) => m.worth); if (w) openWorth({ price: w.worth.price, from: w.worth.from, to: w.worth.to }); }
   });
   const send = () => {
     clearTimeout(autoSend);

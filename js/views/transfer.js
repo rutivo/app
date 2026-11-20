@@ -9,6 +9,7 @@ import { mapsUrl } from '../trips.js';
 import { S, save } from '../store.js';
 import { cap, esc, eur, fd, slug, today, uid } from '../utils.js';
 import { DEFAULT_WELCOME_EN, DEFAULT_WELCOME_ES, buildWelcome, welcomeSendTime } from '../welcome.js';
+import { openWorth } from './compensa.js';
 
 let rerenderAll = () => {};
 let editingProviderId = null;
@@ -412,6 +413,7 @@ export function initTransfer(rerender) {
     if (f) readServiceFile(f);
   };
   $('#fs').onsubmit = saveService;
+  $('#cmp').onclick = () => openWorth({ price: +$('#si').value || '', from: $('#so').value.trim(), to: $('#sd').value.trim() });
   $('#fp').onsubmit = saveProvider;
   $('#pimg').onchange = () => {
     const f = $('#pimg').files[0];

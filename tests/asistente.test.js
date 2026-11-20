@@ -224,3 +224,7 @@ test('trimChatter quita la charla de fondo antes de la orden', () => {
   assert.equal(trimChatter('vale pues mira apúntame 20 euros'), 'vale pues mira apúntame 20 euros');
   assert.equal(trimChatter('cuánto he ganado hoy'), 'cuánto he ganado hoy');
 });
+
+test('variantes de «tarjeta» que oye Whisper con ruido', () => {
+  for (const w of ['derjeta', 'terjeta', 'darjeta']) assert.match(normalize('15 euros en ' + w), /tarjeta/);
+});

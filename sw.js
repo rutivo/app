@@ -1,7 +1,7 @@
 // Service worker: la app funciona sin conexión.
 // Estrategia "red primero": siempre intenta la versión nueva y, si no hay red,
 // usa la copia guardada. Sube CACHE al cambiar la lista de archivos.
-const CACHE = 'gestor-transfer-v40';
+const CACHE = 'gestor-transfer-v41';
 const FILES = [
   './',
   './index.html',
@@ -15,6 +15,7 @@ const FILES = [
   './js/backend/claude.js',
   './js/backend/firebase.js',
   './js/cloud.js',
+  './js/compensa.js',
   './js/config.js',
   './js/dom.js',
   './js/flight.js',
@@ -31,9 +32,12 @@ const FILES = [
   './js/oido.js',
   './js/oidoWorker.js',
   './js/providerReader.js',
+  './js/push.js',
   './js/reminders.js',
   './js/serviceReader.js',
   './js/report.js',
+  './js/ruta.js',
+  './js/salida.js',
   './js/store.js',
   './js/theme.js',
   './js/trips.js',
@@ -41,6 +45,7 @@ const FILES = [
   './js/views/asistente.js',
   './js/views/bienvenida.js',
   './js/views/caja.js',
+  './js/views/compensa.js',
   './js/views/cuenta.js',
   './js/views/facturas.js',
   './js/views/fuelPdf.js',
@@ -88,5 +93,38 @@ self.addEventListener('fetch', (e) => {
           return e.request.mode === 'navigate' ? caches.match('./index.html') : Response.error();
         }),
       ),
+  );
+});
+
+// ---------- Notificaciones con la app cerrada (Web Push) ----------
+self.addEventListener('push', (e) => {
+  let d = {};
+  try {
+    d = e.data ? e.data.json() : {};
+  } catch {
+    d = { title: 'Rutivo', body: e.data ? e.data.text() : '' };
+  }
+  const title = String(d.title || 'Rutivo').slice(0, 90);
+  e.waitUntil(
+    self.registration.showNotification(title, {
+      body: String(d.body || '').slice(0, 240),
+      tag: String(d.tag || 'rutivo'),
+      renotify: true,
+      requireInteraction: /Sal ya|cancelado|desviado/.test(title),
+      icon: 'icon-192.png',
+      badge: 'icon-192.png',
+      vibrate: [300, 120, 300, 120, 300],
+      data: { url: './' },
+    }),
+  );
+});
+
+self.addEventListener('notificationclick', (e) => {
+  e.notification.close();
+  e.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
+      const open = list.find((c) => c.url.startsWith(self.registration.scope));
+      return open ? open.focus() : self.clients.openWindow('./');
+    }),
   );
 });

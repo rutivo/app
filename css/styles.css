@@ -896,3 +896,14 @@ span.siri-kb { background: none; }
 .siri-retry { display: none; width: auto; margin: 6px auto 0; padding: 6px 12px; font-size: 13px; border-radius: 999px; background: rgba(255, 255, 255, .1); color: #fff; border: 0; }
 .siri.dict .siri-retry { display: block; }
 .siri[data-state="listening"] .siri-orb { transform: scale(calc(1 + var(--lvl, 0) * .35)); transition: transform .08s; }
+
+/* «Sal ya» y «¿Me compensa?» */
+.next-item small.sal-mini, .sal-mini { display: block; color: var(--acc); font-weight: 600; }
+.cp-verdict { font-size: 1.25rem; font-weight: 800; }
+.cp-verdict.ok { color: var(--in); }
+.cp-verdict.warn { color: #c98a00; }
+.cp-verdict.bad { color: var(--out); }
+.cp-big { font-size: 1.6rem; font-weight: 800; margin: 4px 0; }
+.cp-big small { font-size: .8rem; font-weight: 600; color: var(--mut); }
+.cp-list { border-top: 1px solid var(--line); }
+.cp-row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid var(--line); }

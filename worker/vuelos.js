@@ -9,6 +9,8 @@
 // el mapa: sale de redes ADS-B gratuitas (adsb.lol y, si falla, airplanes.live),
 // así que no gasta consultas de AeroDataBox.
 
+import { validSubscription } from './push.js';
+
 const ALLOWED_ORIGINS = ['https://rutivo.github.io'];
 const CACHE_SECONDS = 300;
 const POS_SECONDS = 30;
@@ -20,7 +22,7 @@ const json = (body, status, headers) =>
   new Response(JSON.stringify(body), { status, headers: { ...SECURITY, ...headers, 'content-type': 'application/json; charset=utf-8' } });
 
 // Límite por persona (IP) y hora de consultas que salen fuera de la caché.
-const LIMITS = { flight: 40, pos: 400 };
+const LIMITS = { flight: 40, pos: 400, avisos: 120 };
 /** true si esta IP aún puede hacer otra consulta de tipo `kind` esta hora. */
 async function allowed(cache, request, kind, ctx) {
   const ip = request.headers.get('CF-Connecting-IP') || 'x';
@@ -155,21 +157,73 @@ export async function captureHex(cache, f, n, day, now = Date.now()) {
   return hex;
 }
 
+/**
+ * Vuelo resumido (con caché de 5 min). Lo usan la app y los avisos.
+ * `fresh`: no mirar la caché (la ruta /flight ya la ha mirado).
+ */
+export async function flightFor(env, n, d, fresh = false) {
+  const cache = caches.default;
+  const cacheKey = new Request('https://cache.rutivo/flight/' + n + '/' + d);
+  if (!fresh) {
+    const hit = await cache.match(cacheKey);
+    if (hit) return hit.json();
+  }
+  const res = await fetch(ADB + '/flights/number/' + n + '/' + d + '?withAircraftImage=false&withLocation=true', {
+    headers: { 'X-RapidAPI-Key': String(env.RAPIDAPI_KEY || '').trim(), 'X-RapidAPI-Host': 'aerodatabox.p.rapidapi.com' },
+  });
+  let body;
+  if (res.status === 204 || res.status === 404) body = { found: false };
+  else if (!res.ok) return null;
+  else body = simplify(await res.json(), d);
+  if (body.found && !body.hex) {
+    try {
+      body.hex = await captureHex(cache, body, n, d);
+    } catch {
+      /* sin código: la app enseña la posición aproximada */
+    }
+  }
+  await cache.put(cacheKey, new Response(JSON.stringify(body), { headers: { 'cache-control': 'max-age=' + CACHE_SECONDS } }));
+  return body;
+}
+
+export { Avisos } from './avisos.js';
+
+/** Huella del móvil (de su dirección de avisos): cada uno tiene su despertador. */
+async function deviceId(endpoint) {
+  const h = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(endpoint));
+  return [...new Uint8Array(h)].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
 export default {
   async fetch(request, env, ctx) {
     const origin = request.headers.get('Origin') || '';
     const cors = {
       'Access-Control-Allow-Origin': ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0],
-      'Access-Control-Allow-Methods': 'GET, OPTIONS',
+      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'content-type',
       Vary: 'Origin',
     };
     if (request.method === 'OPTIONS') return new Response(null, { headers: { ...SECURITY, ...cors } });
-    if (request.method !== 'GET') return json({ error: 'method' }, 405, cors);
     // Solo la app de Rutivo (otras webs no pueden gastar las consultas desde el navegador).
     if (!ALLOWED_ORIGINS.includes(origin)) return json({ error: 'forbidden' }, 403, cors);
-
     const url = new URL(request.url);
     const cache = caches.default;
+
+    if (url.pathname === '/avisos') {
+      if (request.method !== 'POST') return json({ error: 'method' }, 405, cors);
+      if (!env.AVISOS || !env.VAPID_PRIVATE) return json({ error: 'off' }, 503, cors);
+      const text = await request.text();
+      if (text.length > 20000) return json({ error: 'too_big' }, 413, cors);
+      let data;
+      try { data = JSON.parse(text); } catch { return json({ error: 'bad_request' }, 400, cors); }
+      if (!validSubscription(data.sub || {})) return json({ error: 'bad_subscription' }, 400, cors);
+      if (!(await allowed(cache, request, 'avisos', ctx))) return json({ error: 'too_many' }, 429, cors);
+      const sub = { endpoint: data.sub.endpoint, keys: { p256dh: data.sub.keys.p256dh, auth: data.sub.keys.auth } };
+      const stub = env.AVISOS.get(env.AVISOS.idFromName(await deviceId(sub.endpoint)));
+      const r = await stub.fetch('https://avisos/', { method: 'POST', body: JSON.stringify({ sub, alarms: data.alarms, tz: data.tz, test: !!data.test, off: !!data.off }) });
+      return json(await r.json(), 200, cors);
+    }
+    if (request.method !== 'GET') return json({ error: 'method' }, 405, cors);
     if (url.pathname === '/pos') {
       const hex = (url.searchParams.get('hex') || '').toLowerCase();
       if (!/^[0-9a-f]{6}$/.test(hex)) return json({ error: 'bad_request' }, 400, cors);
@@ -191,23 +245,8 @@ export default {
     const hit = await cache.match(cacheKey);
     if (hit) return json(await hit.json(), 200, { ...cors, 'x-cache': 'hit' });
     if (!(await allowed(cache, request, 'flight', ctx))) return json({ error: 'too_many' }, 429, cors);
-
-    const res = await fetch(ADB + '/flights/number/' + n + '/' + d + '?withAircraftImage=false&withLocation=true', {
-      headers: { 'X-RapidAPI-Key': String(env.RAPIDAPI_KEY || '').trim(), 'X-RapidAPI-Host': 'aerodatabox.p.rapidapi.com' },
-    });
-    let body;
-    if (res.status === 204 || res.status === 404) body = { found: false };
-    else if (!res.ok) return json({ error: 'upstream' }, 502, cors);
-    else body = simplify(await res.json(), d);
-    if (body.found && !body.hex) {
-      try {
-        body.hex = await captureHex(cache, body, n, d);
-      } catch {
-        /* sin código: la app enseña la posición aproximada */
-      }
-    }
-
-    ctx.waitUntil(cache.put(cacheKey, new Response(JSON.stringify(body), { headers: { 'cache-control': 'max-age=' + CACHE_SECONDS } })));
+    const body = await flightFor(env, n, d, true);
+    if (!body) return json({ error: 'upstream' }, 502, cors);
     return json(body, 200, { ...cors, 'x-cache': 'miss' });
   },
 };

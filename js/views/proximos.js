@@ -1,6 +1,8 @@
 // Próximos servicios y aviso dentro de la app 12 horas antes de cada transfer.
 import { $, bottomSheet, readFlag, writeFlag } from '../dom.js';
 import { cachedStatus, checkFlights, etaLine, liveEnabled, openFlight } from '../flight.js';
+import { leavePlanOf, scheduleReminders } from '../reminders.js';
+import { leaveLine } from '../salida.js';
 import { S } from '../store.js';
 import { serviceTime, timeUntil, upcoming, whenLabel } from '../trips.js';
 import { esc, eur } from '../utils.js';
@@ -45,7 +47,8 @@ export function renderUpcoming() {
         (s) =>
           '<div class="next-item"><div><b>' + esc(whenLabel(s, now)) + '</b>' +
           '<small>' + esc(s.o) + ' → ' + esc(s.d) + (s.pa ? ' · ' + esc(s.pa) : '') + '</small>' +
-          (s.vu && etaLine(cachedStatus(s.vu, s.f)) ? '<small class="fl-mini">' + esc(s.vu) + ' · ' + etaLine(cachedStatus(s.vu, s.f)) + '</small>' : '') + '</div>' +
+          (s.vu && etaLine(cachedStatus(s.vu, s.f)) ? '<small class="fl-mini">' + esc(s.vu) + ' · ' + etaLine(cachedStatus(s.vu, s.f)) + '</small>' : '') +
+          (leaveLine(leavePlanOf(s.id), now) ? '<small class="sal-mini">' + esc(leaveLine(leavePlanOf(s.id), now)) + '</small>' : '') + '</div>' +
           '<button class="small-btn sec" data-go="' + esc(s.id) + '">📍 Llevarme</button></div>',
       )
       .join('');
@@ -65,6 +68,7 @@ export function checkNotice() {
     '<div class="mt10"><b>' + esc(next.o) + ' → ' + esc(next.d) + '</b></div>' +
     '<div class="mut">' + [next.pa && 'Pasajero: ' + esc(next.pa), next.vu && 'Vuelo ' + esc(next.vu), next.cl && esc(next.cl), eur(next.i)].filter(Boolean).join(' · ') + '</div>' +
     (next.vu && etaLine(cachedStatus(next.vu, next.f)) ? '<div class="mt8"><b>' + etaLine(cachedStatus(next.vu, next.f)) + '</b></div>' : '') +
+    (leaveLine(leavePlanOf(next.id), now) ? '<div class="mt8 sal-mini"><b>' + esc(leaveLine(leavePlanOf(next.id), now)) + '</b></div>' : '') +
     (next.n ? '<div class="mut mt8">' + esc(next.n) + '</div>' : '') +
     '</div>' +
     '<button type="button" id="ntgo">📍 Llevarme a la recogida</button>' +
@@ -87,6 +91,7 @@ async function watchFlights() {
   const list = upcoming(S.srv, now - 6 * 36e5, 30).filter((s) => s.vu);
   if (!list.length) return;
   const notices = await checkFlights(list);
+  await scheduleReminders(); // la hora de salida se mueve con el vuelo
   renderUpcoming();
   if (!notices.length) return;
   bottomSheet(
@@ -106,6 +111,10 @@ export function initUpcoming() {
   });
   // Los botones [data-go] de la tarjeta los atiende la pantalla de Transfer.
   setInterval(checkNotice, 60_000);
+  // «Sal ya»: recalcular con tu posición y refrescar la tarjeta cada minuto
+  setInterval(() => { if (document.visibilityState === 'visible') scheduleReminders().then(renderUpcoming); }, 5 * 6e4);
+  setInterval(() => { if (document.visibilityState === 'visible') renderUpcoming(); }, 6e4);
+  window.addEventListener('rutivo:salida', renderUpcoming);
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') checkNotice();
   });

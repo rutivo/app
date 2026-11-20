@@ -33,3 +33,6 @@ export const TRIAL_ENABLED = false;
 export const FLIGHT_API = 'https://rutivo-vuelos.pokeboostmlg.workers.dev';
 
 export const FIREBASE_SDK = 'https://www.gstatic.com/firebasejs/10.14.1';
+
+// Clave PÚBLICA de las notificaciones (Web Push). La privada está solo en Cloudflare.
+export const PUSH_PUBLIC_KEY = 'BNm82hdTr_BgkIe4--gxDuMuDa6IcKIb8LN5TCeKnTHhPiM2gHVCocZO9C1eVej948Ug02380ieiSiCEMsvJJuY';

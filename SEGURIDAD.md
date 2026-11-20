@@ -35,3 +35,17 @@ Qué protege la app, cómo, y qué hay que revisar en cada servicio.
 - Servicio externo nuevo → añadir su dirección a la CSP de `index.html`.
 - Librería nueva → meterla en `vendor/` con versión fija y actualizar `SHA256SUMS`.
 - Texto del usuario en HTML → siempre con `esc()`.
+
+## Avisos con la app cerrada
+
+- La clave privada de las notificaciones (VAPID) está solo en Cloudflare como
+  secreto; en la app va únicamente la pública.
+- El servidor solo acepta peticiones de rutivo.github.io, limita por IP, revisa
+  y recorta todo lo que llega (máx. 40 avisos, textos cortos, fechas cercanas)
+  y solo envía a servicios de notificaciones reales (Apple, Google, Mozilla,
+  Microsoft): no se puede usar para mandar peticiones a otras webs.
+- Cada aviso guarda solo el texto que se va a mostrar y, en los «Sal ya», el
+  número de vuelo. Se borran al enviarse; al desactivar los avisos se borra todo.
+- «¿Me compensa?» y «Sal ya» consultan rutas en OpenStreetMap (Nominatim) y OSRM
+  sin clave. Tu posición solo se usa en el móvil para calcular el camino; a esos
+  servicios solo les llegan coordenadas sueltas, sin tu nombre ni tus datos.

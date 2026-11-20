@@ -35,7 +35,7 @@ const KNOWN = ['pasado', 'pasada', 'semana', 'cuando', 'cuanto', 'cuantos', 'cua
 const VSET = new Set([...VOCAB, ...KNOWN]);
 // Confusiones típicas que la distancia no arregla bien
 const SOUNDS = { heroes: 'euros', eros: 'euros', uros: 'euros', ueros: 'euros', euroz: 'euros', efectiva: 'efectivo', electivo: 'efectivo',
-  afectivo: 'efectivo', defectivo: 'efectivo', targeta: 'tarjeta', tarjetas: 'tarjeta', apuntamos: 'apunta', apuntan: 'apunta', apuntes: 'apunta',
+  afectivo: 'efectivo', defectivo: 'efectivo', targeta: 'tarjeta', derjeta: 'tarjeta', terjeta: 'tarjeta', darjeta: 'tarjeta', tarjeda: 'tarjeta', tarjet: 'tarjeta', tarjetas: 'tarjeta', apuntamos: 'apunta', apuntan: 'apunta', apuntes: 'apunta',
   apunte: 'apunta', apuntadme: 'apuntame', ingreso: 'ingreso', propinas: 'propina', peajes: 'peaje', gasolinera: 'gasolina' };
 
 function dist(a, b) {
@@ -61,6 +61,25 @@ export function fuzzyFix(t) {
     }
     return best && bd <= (w.length >= 8 ? 2 : 1) ? best : w;
   }).join(' ');
+}
+
+/** «¿A qué hora salgo?», «¿cuándo tengo que salir?» */
+const LEAVE = /\b(a que hora|cuando)\b.*\b(salgo|salir|sali|me voy|tengo que irme|me pongo en marcha)\b|\bsal ya\b/;
+
+/**
+ * «¿Me compensa un servicio de 60 euros del aeropuerto a Marbella?» →
+ * {kind:'worth', price, from, to}. null si no es esa pregunta.
+ */
+export function worthIntent(t) {
+  if (!/\b(compensa|compensaria|merece la pena|vale la pena|sale a cuenta|sale rentable|es rentable)\b/.test(t)) return null;
+  const price = amountOf(t);
+  const rest = t.replace(/\b\d+(\.\d+)?\s*(euros?)?\b/g, ' ').replace(/\s+/g, ' ').trim();
+  const to = ((rest.match(/\b(?:hasta|a|para)\s+(?:el |la |los |las )?([a-z0-9 ]{3,}?)(?:\s+(?:por|de|con|y)\b.*)?$/) || [])[1] || '').trim();
+  const from = ((rest.match(/\b(?:desde|del|de la)\s+(?:el |la )?([a-z0-9 ]+?)\s+(?:hasta|a|para)\b/) || [])[1] || '').trim();
+  if (!price || !to) {
+    return { kind: 'answer', text: 'Dime el precio y adónde es. Por ejemplo: «¿Me compensa 60 euros del aeropuerto a Marbella?»', speech: 'Dime el precio y adónde es. Por ejemplo: me compensa sesenta euros del aeropuerto a Marbella.' };
+  }
+  return { kind: 'worth', price, from: from === 'aeropuerto' ? 'Aeropuerto de Málaga' : from, to, text: '💶 Lo calculo…', speech: '' };
 }
 
 /**
@@ -571,6 +590,9 @@ export function ask(input, state, now = new Date(), helpers = {}, ctx = {}) {
     if (/^(no|nada|cancela|dejalo|olvidalo|para|mal|incorrecto)( |$)/.test(t)) return { ...reply('Vale, no lo apunto. Dímelo otra vez cuando quieras.', 'Vale, no lo apunto.'), ctx: {} };
   }
   if (UNDO.test(t)) return { kind: 'undo', text: '', speech: '', ctx };
+  const w = worthIntent(t);
+  if (w) return { ...w, ctx: {} };
+  if (LEAVE.test(t)) return { kind: 'leave', text: '', speech: '', ctx: {} };
   const chat = smallTalk(t, state, now, helpers, ctx);
   if (chat) return { ...chat, ctx: chat.ctx || {} };
   // Completar algo que quedó a medias o seguir con la última pregunta
