@@ -1045,3 +1045,22 @@ body:has(input:focus, textarea:focus, select:focus) .asis-fab { opacity: 0; poin
 .siri-wake { display: block; margin: 4px auto 0; background: rgba(255,255,255,.07) !important; border: 1px solid rgba(255,255,255,.12); color: #c9d6ee; border-radius: 999px; padding: 7px 14px; font-size: 13px; font-weight: 700; width: auto; box-shadow: none !important; }
 .siri-wake.on { color: #b9a8ff; border-color: rgba(150, 120, 255, .5); }
 .siri-sug button { box-shadow: none !important; }
+
+/* Manos libres («Oye Rutivo»): globo pequeño encima del icono, sin abrir pantallas */
+.hf {
+  position: fixed; z-index: 25; right: max(14px, calc((100vw - 536px) / 2 + 2px)); bottom: calc(152px + env(safe-area-inset-bottom, 0px));
+  max-width: min(330px, calc(100vw - 28px)); display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  padding: 12px 40px 12px 14px; border-radius: 18px; color: #fff; font-weight: 700; font-size: 15px;
+  background: rgba(20, 26, 52, .92); border: 1px solid rgba(150, 120, 255, .45);
+  backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); box-shadow: 0 14px 34px rgba(0, 0, 0, .4);
+  animation: hfIn .25s ease;
+}
+.hf[hidden] { display: none; }
+.hf::before { content: ''; position: absolute; left: 0; top: 10px; bottom: 10px; width: 4px; border-radius: 0 4px 4px 0; background: var(--grad); }
+.hf[data-state="listening"] { box-shadow: 0 0 0 calc(var(--lvl, 0) * 10px) rgba(122, 92, 255, .35), 0 14px 34px rgba(0, 0, 0, .4); }
+.hf[data-state="done"] { border-color: rgba(76, 199, 144, .55); }
+.hf[data-state="error"] { border-color: rgba(255, 122, 98, .6); }
+.hf-text { flex: 1 1 200px; line-height: 1.35; }
+.hf-undo { width: auto; margin: 0; padding: 7px 12px; font-size: 13px; border-radius: 999px; background: rgba(255, 255, 255, .12) !important; box-shadow: none !important; color: #fff; }
+.hf-x { position: absolute; top: 6px; right: 6px; width: 28px; height: 28px; margin: 0; padding: 0; border-radius: 50%; background: rgba(255, 255, 255, .1) !important; color: #fff; font-size: 13px; box-shadow: none !important; }
+@keyframes hfIn { from { opacity: 0; transform: translateY(8px) scale(.97); } }

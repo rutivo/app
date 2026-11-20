@@ -6,6 +6,7 @@ import { readFlag, writeFlag } from '../dom.js';
 import { cachedStatus, etaLine } from '../flight.js';
 import { initWake, pauseWake, resumeWake, wakeEnabled } from '../despertar.js';
 import { createMic } from '../microfono.js';
+import { cancelHandsFree, handsFree, initHandsFree } from './manosLibres.js';
 import { leavePlanOf, scheduleReminders } from '../reminders.js';
 import { leaveBody, leaveLine } from '../salida.js';
 import { serviceTime } from '../trips.js';
@@ -576,10 +577,12 @@ export function initAssistant(rerender) {
   b.className = 'asis-fab';
   b.setAttribute('aria-label', 'Hablar con Rutivo');
   b.innerHTML = '<i></i>';
-  b.onclick = () => openAssistant();
+  b.onclick = () => { cancelHandsFree(); openAssistant(); };
   document.body.appendChild(b);
   // «Oye Rutivo»: el icono enseña si está escuchando (anillo) o si necesita un toque
-  initWake((rest) => openAssistant(rest), (state) => {
+  // Manos libres: «Oye Rutivo» habla contigo sin abrir esta pantalla
+  initHandsFree(rerender, (text) => openAssistant(text));
+  initWake((rest) => handsFree(rest), (state) => {
     b.dataset.wake = state;
     b.title = state === 'listening' ? 'Di «Oye Rutivo»' : state === 'tap' ? 'Toca para hablar (y activar «Oye Rutivo»)' : 'Hablar con Rutivo';
   });

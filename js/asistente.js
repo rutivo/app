@@ -263,40 +263,83 @@ const INCOMES = [[/propina/, 'Propina'], [/transfer/, 'Transfer'], [/aeropuerto/
 const CONCEPT_FIX = { cadera: 'carrera', caderas: 'carreras', caldera: 'carrera', calderas: 'carreras', carera: 'carrera', carreta: 'carrera', carrea: 'carrera', carrena: 'carrera',
   casolina: 'gasolina', gasolinas: 'gasolina', parkin: 'parking', parquin: 'parking', peage: 'peaje', propinas: 'propina', lavao: 'lavado' };
 
-const PAY_WORDS = /^(?:en |con |por |el |la )*(efectivo|tarjeta|metálico|metalico|bizum|datáfono|datafono|visa|transferencia|tpv|mano|cash|billetes)\b\s*/i;
+// Palabras de conceptos que Rutivo conoce de serie; además aprende las tuyas (las de tus apuntes)
+const BASE_WORDS = ['carrera', 'carreras', 'primera', 'segunda', 'tercera', 'ultima', 'gasolina', 'gasoil', 'peaje', 'parking', 'lavado', 'propina',
+  'transfer', 'aeropuerto', 'hotel', 'servicio', 'taller', 'comida', 'cafe', 'desayuno', 'seguro', 'multa', 'recambios', 'limpieza', 'estacion',
+  'puerto', 'centro', 'marbella', 'malaga', 'torremolinos', 'benalmadena', 'fuengirola', 'nerja', 'estepona', 'mijas', 'ronda', 'antequera'];
+
+// Lo que NO es concepto (se quita de la frase): órdenes, importe, tipo, forma de pago, relleno
+const NOT_CONCEPT = [
+  /\b(quiero|quisiera|necesito|puedes|podrias|me puedes) (que )?(me )?/g,
+  /\b(apuntame|apunta|apuntalo|apuntar|apuntes|apuntas|anotame|anota|anotar|ingresame|ingresa|ingresar|ponme|pon|meteme|mete|sumame|suma|registra|guarda|guardame)\b/g,
+  /\b(he pagado|pague|pagado|he gastado|gaste|gastado|he echado|eche|echado|he cobrado|cobre|cobrado|me han pagado|me pagaron|me ha pagado)\b/g,
+  /\b(como|de|un|una|en|por|para)?\s*(ingreso|gasto|cobro|pago)s?\b/g,
+  /\b(en|con|por|y)?\s*(el |la )?(efectivo|tarjeta|metalico|bizum|datafono|visa|mastercard|transferencia|tpv|contactless|cash)\b/g,
+  /\b(o+y+e+|hey|oye|hoy el)?\s*(rutivo|rutibo|ruto|rutio)\b/g,
+  /\b(por favor|gracias|vale|venga|oye|hola|porfa)\b/g,
+  /\b(en )?concepto( de)?\b/g,
+];
+const EDGE = /^(de|del|por|para|en|con|como|la|el|los|las|lo|al|a|y|e|que|me|un|una|mi|su)\s+|\s+(de|del|por|para|en|con|como|la|el|los|las|y|a|que)$/;
+
+const wordsKnown = (state) => {
+  const set = new Map(BASE_WORDS.map((w) => [w, w]));
+  for (const m of (state && state.mov) || []) for (const w of normalize(m.c || '').split(' ')) if (w.length >= 4 && !/\d/.test(w)) set.set(w, w);
+  return set;
+};
+
+/** Corrige palabras mal oídas hacia las que Rutivo ya conoce (las tuyas y las de serie). */
+function learnFix(words, state) {
+  const known = wordsKnown(state);
+  return words.map((w) => {
+    if (CONCEPT_FIX[w]) return CONCEPT_FIX[w];
+    if (w.length < 4 || /\d/.test(w) || known.has(w)) return w;
+    let best = null;
+    let bd = w.length >= 7 ? 3 : 2;
+    for (const k of known.keys()) {
+      const d = dist(w, k);
+      if (d < bd) { best = k; bd = d; }
+    }
+    return best && bd <= (w.length >= 7 ? 2 : 1) ? best : w;
+  });
+}
 
 /**
- * El concepto tal como lo dices: lo que va detrás de «por», «para» o
- * «concepto» («…por carrera 1» → «Carrera 1», «concepto propina de Richard»
- * → «Propina de Richard»). Sin importes, forma de pago ni «gasto/ingreso».
- * Devuelve '' si no dijiste concepto.
+ * El concepto tal como lo dices: todo lo que no es la orden, el importe, el
+ * tipo (ingreso/gasto) ni la forma de pago. «…15 euros de primera carrera,
+ * efectivo» → «Primera carrera»; «…como gasto de peaje» → «Peaje».
+ * Corrige palabras mal oídas con tu propio vocabulario y respeta tus tildes y
+ * mayúsculas. Devuelve '' si no dijiste concepto.
  */
-export function conceptOf(original) {
-  const s = String(original || '').replace(/[«»"“”¿?¡!]/g, ' ').replace(/,?\s*\b(por favor|gracias)\b/gi, ' ').replace(/\s+/g, ' ').trim().replace(/[.,;:]+$/, '');
-  const marks = [...s.matchAll(/\b(?:en concepto de|por concepto de|concepto(?: de)?|por|para)\s+/gi)];
-  for (let k = marks.length - 1; k >= 0; k--) {
-    let rest = s.slice(marks[k].index + marks[k][0].length);
-    // quitar lo que no es concepto: forma de pago, importe, «gasto/ingreso»
-    for (let i = 0; i < 4; i++) {
-      rest = rest
-        .replace(PAY_WORDS, '')
-        .replace(/^(?:un |una )?(gasto|ingreso|cobro|pago)s?\b( (de|por|en|con))?\s*/i, '')
-        .replace(/^(?:el|la|los|las|un|una|mi|la de|el de)\s+/i, '')
-        .trim();
-    }
-    rest = rest
-      .replace(/\s+(?:en|con|por|y)\s+(?:el |la )?(efectivo|tarjeta|metálico|metalico|bizum|datáfono|datafono|visa|transferencia|tpv)\b.*$/i, '')
-      .replace(/\s+(?:de|por)?\s*\d+([.,]\d+)?\s*(?:€|euros?)\b.*$/i, '')
-      .replace(/\s+(?:como|para)\s+(gasto|ingreso).*$/i, '')
-      .replace(/[.,;:]+$/, '')
-      .trim();
-    // Palabras que el oído confunde a menudo («cadera 1» → «carrera 1»)
-    rest = rest.replace(/^(\S+)/, (w) => CONCEPT_FIX[w.toLowerCase()] || w);
-    if (rest && !/^(gasto|ingreso|cobro|pago|euros?|€)$/i.test(rest) && !/^\d+([.,]\d+)?\s*(€|euros?)?$/i.test(rest)) {
-      return (rest.charAt(0).toUpperCase() + rest.slice(1)).slice(0, 50);
-    }
+export function conceptOf(original, state = null) {
+  let t = normalize(original);
+  // El importe (solo ese número: «carrera 1» o «AP-7» se quedan)
+  t = /\b\d+(\.\d+)?\s*(euros?|pavos|eur)\b/.test(t) ? t.replace(/\b\d+(\.\d+)?\s*(euros?|pavos|eur)\b/, ' ') : t.replace(/\b\d+(\.\d+)?\b/, ' ');
+  for (const re of NOT_CONCEPT) t = t.replace(re, ' ');
+  t = t.replace(/\s+/g, ' ').trim();
+  for (let i = 0; i < 6; i++) t = t.replace(EDGE, '').trim();
+  // Muletillas al principio o al final («digo», «pues», «mira»…) no son concepto
+  const FILL = /^(me|te|se|de|del|a|al|y|e|o|que|ver|digo|dime|pues|mira|bueno|eh|este|esta|ahora|ya|hoy|otra|otro|vez|lo|la|el|un|una|en|por|para|con|como|si|no)$/;
+  let ws = t.split(' ').filter(Boolean);
+  while (ws.length && FILL.test(ws[0])) ws.shift();
+  while (ws.length && FILL.test(ws[ws.length - 1])) ws.pop();
+  t = ws.join(' ');
+  if (!t || t.split(' ').length > 7) return '';
+  const words = learnFix(t.split(' '), state);
+  if (words.length === 1 && /^(gasoil|diesel|combustible|gasolina|gasofa|repostado|repostar|reposte|repostaje)$/.test(words[0])) return 'Gasolina';
+  // Si dices un concepto que ya usaste (aunque se oiga un poco distinto), se escribe igual que siempre
+  if (state && state.mov) {
+    const key = (x) => normalize(x).replace(/[^a-z0-9]/g, '');
+    const said = key(words.join(' '));
+    const used = [...new Set(state.mov.map((m) => m.c).filter(Boolean))];
+    const digits = (x) => (x.match(/\d+/g) || []).join(',');
+    const prev = used.find((c) => key(c) === said) ||
+      (said.length >= 6 && used.find((c) => key(c).length >= 6 && digits(key(c)) === digits(said) && dist(key(c), said) <= 1));
+    if (prev) return prev;
   }
-  return '';
+  // Recuperar tildes y mayúsculas de lo que dijiste («café», «Richard»)
+  const orig = String(original || '').split(/[\s,.;:¿?¡!]+/).filter(Boolean);
+  const pretty = words.map((w) => orig.find((o) => normalize(o) === w) || w).join(' ');
+  return (pretty.charAt(0).toUpperCase() + pretty.slice(1)).slice(0, 50);
 }
 
 function answer(t, state, now, helpers) {
@@ -319,16 +362,27 @@ function answer(t, state, now, helpers) {
     const expense = !forcedIn && (!!cat || /gasto|gaste|gastado|pagado|pague|como gasto/.test(t));
     const fuel = false;
     const income = INCOMES.find(([re]) => re.test(t));
-    const said = conceptOf(helpers.original);
+    const said = conceptOf(helpers.original || t, state);
     const c = said || (expense ? (cat ? cat[1] : 'Gasto') : income ? income[1] : 'Carrera');
     return { kind: 'action', action: { list: 'mov', item: { f: day, t: expense || fuel ? 'out' : 'in', p: pay, i: r2(amount), c } },
       text: (expense || fuel ? '🧾 Gasto apuntado: **' : '💶 Apuntado: **') + eur(amount) + '** · ' + pay + ' · ' + c,
       speech: (expense || fuel ? 'Gasto apuntado: ' : 'Apuntado: ') + spoken(amount) + (pay === 'tarjeta' ? ' con tarjeta' : ' en efectivo') + (said ? ', por ' + said : '') };
   }
 
+  // --- Vocabulario aprendido ---
+  if (/(que|cuales) (palabras|conceptos)|vocabulario|que has aprendido|que sabes apuntar/.test(t)) {
+    const count = new Map();
+    for (const m of state.mov || []) if (m.c) count.set(m.c, (count.get(m.c) || 0) + 1);
+    const top = [...count].sort((a, b) => b[1] - a[1]).slice(0, 15).map(([c]) => c);
+    return top.length
+      ? reply('📚 Conceptos que he aprendido de ti (los que más usas): ' + top.join(' · ') + '.\nCada concepto nuevo que apuntas lo aprendo; si lo oigo un poco mal, lo corrijo hacia el tuyo.',
+        'Los que más usas: ' + top.slice(0, 6).join(', ') + '. Cada concepto nuevo que apuntas lo aprendo.')
+      : reply('📚 Aún no he aprendido conceptos tuyos. Cada vez que apuntes algo («…de primera carrera», «…de peaje») lo aprenderé.', 'Aún no he aprendido conceptos tuyos. Cada vez que apuntes algo, lo aprenderé.');
+  }
+
   // --- Ayuda ---
   if (/ayuda|que (puedo|se puede) (preguntar|decir)|que sabes|como funcionas/.test(t)) {
-    return reply('Puedes preguntarme o pedirme cosas como:\n• Hola, ¿qué tal?\n• ¿Qué tiempo hace? / ¿Va a llover mañana?\n• ¿Cuánto llevo hoy?\n• ¿Cuánto gané el mes pasado?\n• ¿Cuánto me debe Charly?\n• ¿Qué tengo mañana?\n• ¿Cuándo llevé a Richard?\n• ¿Cuánto gasto en gasolina?\n• ¿Cuánto IVA pago este trimestre?\n• ¿Cuántos kilómetros llevo este mes?\n• ¿Cómo va mi hucha?\n• Dame el resumen del día\n• ¿Cuántas carreras llevo?\n• ¿Qué he apuntado hoy?\n• Apúntame 12 € en tarjeta\n• Ingrésame 15 con 50 en efectivo\n• Pagué 7 euros de parking\n• He echado 50 de gasoil\n• Mete 5 de propina\n• Borra lo último',
+    return reply('🚗 **Conduciendo (manos libres):** di «Oye Rutivo» → te digo «¿Qué deseas?» → «Apúntame [importe] de [ingreso o gasto] de [concepto], [efectivo o tarjeta]».\nEjemplos: «Apúntame 15 euros de ingreso de primera carrera, efectivo» · «Apúntame 5 euros de gasto de peaje, tarjeta». También de un tirón: «Oye Rutivo, apúntame…». «Borra lo último» lo deshace.\n\nPuedes preguntarme o pedirme cosas como:\n• Hola, ¿qué tal?\n• ¿Qué tiempo hace? / ¿Va a llover mañana?\n• ¿Cuánto llevo hoy?\n• ¿Cuánto gané el mes pasado?\n• ¿Cuánto me debe Charly?\n• ¿Qué tengo mañana?\n• ¿Cuándo llevé a Richard?\n• ¿Cuánto gasto en gasolina?\n• ¿Cuánto IVA pago este trimestre?\n• ¿Cuántos kilómetros llevo este mes?\n• ¿Cómo va mi hucha?\n• Dame el resumen del día\n• ¿Cuántas carreras llevo?\n• ¿Qué he apuntado hoy?\n• Apúntame 12 € en tarjeta\n• Ingrésame 15 con 50 en efectivo\n• Pagué 7 euros de parking\n• He echado 50 de gasoil\n• Mete 5 de propina\n• Borra lo último',
       'Puedes preguntarme cuánto llevas, quién te debe, qué servicios tienes, o pedirme que apunte una carrera o un gasto.');
   }
 

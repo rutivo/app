@@ -165,7 +165,7 @@ test('lo que dijiste tal cual: muletillas, plurales y «como ingreso»', () => {
   assert.deepEqual(item('mete 5 de propina'), { f: '2026-11-19', t: 'in', p: 'efectivo', i: 5, c: 'Propina' });
   assert.deepEqual(item('pagué 7 euros de parking con tarjeta'), { f: '2026-11-19', t: 'out', p: 'tarjeta', i: 7, c: 'Parking' });
   assert.deepEqual(item('apunta 120 euros del taller como gasto'), { f: '2026-11-19', t: 'out', p: 'efectivo', i: 120, c: 'Taller' });
-  assert.deepEqual(item('he pagado 9 y medio de desayuno'), { f: '2026-11-19', t: 'out', p: 'efectivo', i: 9.5, c: 'Comida' });
+  assert.deepEqual(item('he pagado 9 y medio de desayuno'), { f: '2026-11-19', t: 'out', p: 'efectivo', i: 9.5, c: 'Desayuno' });
   assert.deepEqual(item('repostado 60 euros'), { f: '2026-11-19', t: 'out', p: 'efectivo', i: 60, c: 'Gasolina' });
   assert.deepEqual(item('12 euros como ingreso'), { f: '2026-11-19', t: 'in', p: 'efectivo', i: 12, c: 'Carrera' });
   const h = ask('para poder apuntar las carreras', state, NOW);
@@ -252,4 +252,22 @@ test('«Oyee Rutivo…» apunta ingreso o gasto con su concepto', () => {
   const b = ask('apúntame 10€ en tarjeta para gasto por gasolina', st, NOW, { noConfirm: true });
   assert.deepEqual([b.action.item.t, b.action.item.i, b.action.item.p, b.action.item.c], ['out', 10, 'tarjeta', 'Gasolina']);
   assert.match(a.speech, /por Carrera 1/);
+});
+
+test('frases de conducir: «quiero que me apuntes…», «de primera carrera, efectivo»', () => {
+  const st = { mov: [{ c: 'Peaje AP-7' }], srv: [], gas: [], huc: [], jor: [], fac: [], prv: [], cli: {}, cfg: {} };
+  const it = (q) => { const x = ask(q, st, NOW, { noConfirm: true }).action.item; return [x.t, x.i, x.p, x.c]; };
+  assert.deepEqual(it('quiero que me apuntes 15 euros como ingreso de carrera'), ['in', 15, 'efectivo', 'Carrera']);
+  assert.deepEqual(it('quiero que me apuntes 5 euros como gasto de peaje'), ['out', 5, 'efectivo', 'Peaje']);
+  assert.deepEqual(it('apúntame 15 euros de primera carrera, efectivo'), ['in', 15, 'efectivo', 'Primera carrera']);
+  assert.deepEqual(it('apunta un ingreso de 30 euros en efectivo de la carrera de Marbella'), ['in', 30, 'efectivo', 'Carrera de Marbella']);
+  assert.deepEqual(it('me apuntas 12 euros de gasto de café'), ['out', 12, 'efectivo', 'Café']);
+  // aprende: lo que ya usaste se escribe igual que siempre
+  assert.deepEqual(it('apunta 6 euros de gasto de peaje ap7'), ['out', 6, 'efectivo', 'Peaje AP-7']);
+  assert.deepEqual(it('apúntame 15 de primera carera'), ['in', 15, 'efectivo', 'Primera carrera']);
+});
+
+test('«¿qué palabras sabes?»: lo aprendido de tus apuntes', () => {
+  const st = { mov: [{ c: 'Carrera 1' }, { c: 'Carrera 1' }, { c: 'Peaje AP-7' }], srv: [], gas: [], huc: [], jor: [], fac: [], prv: [], cli: {}, cfg: {} };
+  assert.match(ask('¿qué palabras sabes?', st, NOW).text, /Carrera 1 · Peaje AP-7/);
 });
