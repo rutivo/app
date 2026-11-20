@@ -6,8 +6,8 @@ import { parseFuelReceipt } from '../fuelReceipt.js';
 import { S, getPhotoLocal, removePhotoLocal, save, savePhotoLocal } from '../store.js';
 import { cap, esc, eur, fd, sum, today, uid } from '../utils.js';
 import { fuelPdf } from './fuelPdf.js';
+import { firstPageCanvas } from '../pdfLib.js';
 
-const PDFJS_WORKER = 'vendor/pdf.worker-3.11.174.min.js';
 const TESSERACT = 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js';
 const TESSERACT_LANG = 'https://cdn.jsdelivr.net/npm/@tesseract.js-data/spa/4.0.0_best_int';
 let rerenderAll = () => {};
@@ -35,14 +35,7 @@ const shrinkImage = (file) =>
 
 /** Convierte la primera página de un PDF en imagen JPEG. */
 async function pdfToImage(file) {
-  const pdf = await window.pdfjsLib.getDocument({ data: await file.arrayBuffer() }).promise;
-  const page = await pdf.getPage(1);
-  const v0 = page.getViewport({ scale: 1 });
-  const viewport = page.getViewport({ scale: 1000 / v0.width });
-  const c = document.createElement('canvas');
-  c.width = viewport.width;
-  c.height = viewport.height;
-  await page.render({ canvasContext: c.getContext('2d'), viewport }).promise;
+  const c = await firstPageCanvas(file, 1000);
   return c.toDataURL('image/jpeg', 0.65);
 }
 
@@ -225,7 +218,6 @@ async function showReceipt(id) {
 
 export function initGasolina(rerender) {
   rerenderAll = rerender;
-  if (window.pdfjsLib) window.pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS_WORKER;
   $('#gf').value = today();
   $('#fg').onsubmit = saveFuel;
   $('#gh').onchange = () => {

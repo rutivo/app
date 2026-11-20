@@ -5,7 +5,7 @@ import { fuelBetween } from '../fuelPack.js';
 import { S, getPhotoLocal } from '../store.js';
 import { cap, eur, fd } from '../utils.js';
 
-const JSPDF = 'vendor/jspdf-2.5.1.umd.min.js';
+const JSPDF = 'vendor/jspdf-4.2.1.umd.min.js';
 
 const imageSize = (src) =>
   new Promise((resolve) => {

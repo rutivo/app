@@ -115,7 +115,7 @@ function createFirestore() {
 
 /** Servidor de la app (archivos del repositorio) en un puerto libre. */
 function serveApp() {
-  const types = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.png': 'image/png', '.woff2': 'font/woff2', '.webmanifest': 'application/manifest+json', '.wasm': 'application/wasm' };
+  const types = { '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.png': 'image/png', '.woff2': 'font/woff2', '.webmanifest': 'application/manifest+json', '.wasm': 'application/wasm' };
   const server = http.createServer((req, res) => {
     const u = new URL(req.url, 'http://x');
     let f = path.join(ROOT, decodeURIComponent(u.pathname));

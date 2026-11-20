@@ -1,5 +1,6 @@
 // Leer el texto de fotos, capturas, vídeos (grabación de pantalla) y PDF, dentro del móvil.
 import { loadScript } from './dom.js';
+import { firstPageCanvas } from './pdfLib.js';
 
 const TESSERACT = 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js';
 const LANG_PATH = 'https://cdn.jsdelivr.net/npm/@tesseract.js-data/spa/4.0.0_best_int';
@@ -81,17 +82,9 @@ async function videoFrames(file, max = 16) {
   return frames;
 }
 
-/** Primera página de un PDF como imagen (pdf.js ya va dentro de la app). */
+/** Primera página de un PDF como imagen (pdf.js va dentro de la app; ver pdfLib.js). */
 async function pdfPage(file) {
-  const pdf = await window.pdfjsLib.getDocument({ data: await file.arrayBuffer() }).promise;
-  const page = await pdf.getPage(1);
-  const v0 = page.getViewport({ scale: 1 });
-  const vp = page.getViewport({ scale: 1600 / v0.width });
-  const c = document.createElement('canvas');
-  c.width = vp.width;
-  c.height = vp.height;
-  await page.render({ canvasContext: c.getContext('2d'), viewport: vp }).promise;
-  return c;
+  return firstPageCanvas(file, 1600);
 }
 
 /** Une el texto de varios fotogramas sin repetir líneas. */

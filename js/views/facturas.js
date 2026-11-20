@@ -8,7 +8,7 @@ import { S, exportBackup, importBackup, markBackupDone, save } from '../store.js
 import { csvCell, esc, eur, fd, r2, slug, today, uid } from '../utils.js';
 
 const HTML2CANVAS = 'vendor/html2canvas-1.4.1.min.js';
-const JSPDF = 'vendor/jspdf-2.5.1.umd.min.js';
+const JSPDF = 'vendor/jspdf-4.2.1.umd.min.js';
 const A4_PX = 794; // ancho de A4 a 96 ppp
 
 let rerenderAll = () => {};
