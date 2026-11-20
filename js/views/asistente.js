@@ -4,6 +4,7 @@
 import { ask, trimChatter, weatherText } from '../asistente.js';
 import { readFlag, writeFlag } from '../dom.js';
 import { cachedStatus, etaLine } from '../flight.js';
+import { initWake, pauseWake, resumeWake, wakeEnabled } from '../despertar.js';
 import { createMic } from '../microfono.js';
 import { leavePlanOf, scheduleReminders } from '../reminders.js';
 import { leaveBody, leaveLine } from '../salida.js';
@@ -75,12 +76,18 @@ function speak(text) {
     const v = pickVoice();
     if (v) u.voice = v;
     u.rate = 1.03;
-    u.onend = () => { setState('idle'); keepListening(); };
-    u.onerror = () => { setState('idle'); keepListening(); };
+    // Si el sistema no deja hablar (iPhone sin un toque antes) o no avisa al terminar, no quedarse colgado
+    let done = false;
+    const finish = () => { if (done) return; done = true; clearTimeout(guard); setState('idle'); keepListening(); };
+    let guard = setTimeout(() => { if (!speechSynthesis.speaking) finish(); }, 1500);
+    u.onstart = () => { clearTimeout(guard); guard = setTimeout(finish, Math.min(30000, 2500 + text.length * 90)); };
+    u.onend = finish;
+    u.onerror = finish;
     setState('speaking');
     speechSynthesis.speak(u);
   } catch {
     setState('idle');
+    keepListening();
   }
 }
 
@@ -468,9 +475,15 @@ function listen() {
 
 // ---------- abrir / cerrar ----------
 
-export function openAssistant() {
-  unlockVoice();
-  if (ui) return listen();
+/**
+ * Abre el asistente. `cmd` (texto): viene de «Oye Rutivo»; si trae orden
+ * («Oye Rutivo, apúntame 20 €») la hace; si no, pregunta «¿Sí?» y escucha.
+ */
+export function openAssistant(cmd) {
+  const fromWake = typeof cmd === 'string';
+  pauseWake(); // el asistente usa su propio micro
+  if (!fromWake) unlockVoice();
+  if (ui) return fromWake && cmd ? handle(cmd) : listen();
   const root = document.createElement('div');
   root.className = 'siri';
   root.setAttribute('role', 'dialog');
@@ -482,6 +495,7 @@ export function openAssistant() {
     '<div class="siri-sug">' + SUGGEST.map((q) => '<button type="button" data-asq="' + esc(q) + '">' + esc(q) + '</button>').join('') + '</div>' +
     '<form class="siri-form" hidden><input autocomplete="off" enterkeyhint="send" placeholder="Escribe o dicta con el 🎤 del teclado"><button aria-label="Enviar">➤</button></form>' +
     '<div class="siri-status"></div>' +
+    '<button type="button" class="siri-wake" data-swake></button>' +
     '<button type="button" class="siri-retry" data-sretry>🎙️ Usar el micro de la app</button>' +
     '<div class="siri-bottom"><button type="button" class="siri-kb" data-skb aria-label="Escribir">⌨️</button>' +
     '<button type="button" class="siri-orb" data-sorb aria-label="Hablar"><i></i><i></i><i></i></button>' +
@@ -491,10 +505,18 @@ export function openAssistant() {
     form: root.querySelector('.siri-form'), input: root.querySelector('.siri-form input'), voz: root.querySelector('[data-svoz]') };
   const paintVoz = () => { ui.voz.textContent = voiceOn() ? '🔊' : '🔇'; ui.voz.title = voiceOn() ? 'Voz activada' : 'Sin voz'; };
   paintVoz();
+  const wakeBtn = root.querySelector('[data-swake]');
+  const paintWake = () => { wakeBtn.textContent = wakeEnabled() ? '👂 «Oye Rutivo» activado' : '👂 Activar «Oye Rutivo»'; wakeBtn.classList.toggle('on', wakeEnabled()); };
+  paintWake();
   root.addEventListener('click', (e) => {
     const el = e.target.closest('button');
     if (!el) return;
     if (el.matches('[data-sx]')) return closeAssistant();
+    if (el.matches('[data-swake]')) {
+      writeFlag('oyeRutivo', wakeEnabled() ? '0' : '1');
+      paintWake();
+      return setState('idle', wakeEnabled() ? 'Listo: con la app abierta, di «Oye Rutivo» y te escucho.' : '«Oye Rutivo» desactivado. Toca el icono para hablar.');
+    }
     if (el.matches('[data-svoz]')) { writeFlag(VOICE_KEY, voiceOn() ? '0' : '1'); paintVoz(); try { speechSynthesis.cancel(); } catch { /* */ } return setState('idle'); }
     if (el.matches('[data-sorb]')) return listen(); // escuchar; si ya escucha, «he terminado»; si habla, se calla y te escucha
     if (el.matches('[data-sretry]')) { writeFlag(DICT_KEY, '0'); root.classList.remove('dict'); ui.form.hidden = true; return listen(); }
@@ -530,7 +552,9 @@ export function openAssistant() {
   if (!useEar() && dictation()) root.classList.add('dict');
   paint();
   setState('idle');
-  listen(); // al abrir ya escucha (el toque en el botón cuenta como permiso)
+  if (fromWake && cmd) { convo = true; handle(cmd); } // «Oye Rutivo, apúntame…»: la orden directamente
+  else if (fromWake && useEar()) { convo = true; speak('¿Sí?'); } // contesta y se queda escuchando
+  else listen(); // al abrir ya escucha (el toque en el botón cuenta como permiso)
 }
 
 export function closeAssistant() {
@@ -541,6 +565,7 @@ export function closeAssistant() {
   try { speechSynthesis.cancel(); } catch { /* */ }
   if (ui) ui.root.remove();
   ui = null;
+  resumeWake(); // vuelve a esperar «Oye Rutivo»
 }
 
 export function initAssistant(rerender) {
@@ -551,7 +576,12 @@ export function initAssistant(rerender) {
   b.className = 'asis-fab';
   b.setAttribute('aria-label', 'Hablar con Rutivo');
   b.innerHTML = '<i></i>';
-  b.onclick = openAssistant;
+  b.onclick = () => openAssistant();
   document.body.appendChild(b);
+  // «Oye Rutivo»: el icono enseña si está escuchando (anillo) o si necesita un toque
+  initWake((rest) => openAssistant(rest), (state) => {
+    b.dataset.wake = state;
+    b.title = state === 'listening' ? 'Di «Oye Rutivo»' : state === 'tap' ? 'Toca para hablar (y activar «Oye Rutivo»)' : 'Hablar con Rutivo';
+  });
   if (window.speechSynthesis) try { speechSynthesis.getVoices(); } catch { /* */ }
 }
