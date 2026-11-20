@@ -77,3 +77,54 @@ Qué protege la app, cómo, y qué hay que revisar en cada servicio.
    emails activada y política de contraseñas (mínimo 8, con números).
 3. Verificación en dos pasos en GitHub, Google (Firebase), Cloudflare y RapidAPI.
 4. Revocar el token de Cloudflare compartido en el chat cuando no haga falta (caduca el 26/11).
+
+
+## Fase 1 · Tarea 4: configuración de Firebase (la hace el titular en las consolas)
+
+Nada de esto se ha cambiado desde el código. Son pasos manuales y reversibles.
+
+### 1. Política de contraseñas (Firebase → Authentication → Configuración → Política de contraseñas)
+- Modo: **Exigir** (o «Notificar» unos días si hay usuarios con contraseñas antiguas).
+- Longitud mínima **8**; exigir **minúscula** o **mayúscula** y **número**
+  (igual que la app: 8 caracteres, letras y números).
+- La app ya muestra el error `auth/password-does-not-meet-requirements` en español.
+
+### 2. Protección contra la enumeración de emails (Authentication → Configuración → Acciones del usuario)
+- Activar «**Protección contra la enumeración de correos electrónicos**».
+- Con ella activa, Firebase deja de decir si un email tiene cuenta (la app ya
+  muestra un mensaje genérico «Email o contraseña incorrectos»).
+
+### 3. Plantillas de email (Authentication → Plantillas)
+- Idioma **español** para «Verificación de correo» y «Restablecer contraseña».
+- La app envía el email de verificación al crear la cuenta y deja reenviarlo
+  desde Cuenta. No bloquea a quien no lo confirme.
+
+### 4. Restringir la clave pública de Firebase (Google Cloud → APIs y servicios → Credenciales)
+Clave «Browser key (auto created by Firebase)» del proyecto `rutivo-a8890`:
+- **Restricciones de aplicación** → Sitios web → `https://rutivo.github.io/*`
+  (y, solo si se prueba en local, `http://localhost/*`).
+- **Restricciones de API** → limitar a: *Identity Toolkit API*, *Token Service API*,
+  *Cloud Firestore API* (y *Firebase App Check API* cuando se active App Check).
+- Comprobar después que entrar, sincronizar y borrar cuenta siguen funcionando.
+
+### 5. App Check (preparado en el código, APAGADO)
+Para activarlo (cuando se quiera; conviene en fase 2):
+1. Google Cloud → reCAPTCHA → crear clave **reCAPTCHA Enterprise** (tipo web,
+   dominio `rutivo.github.io`).
+2. Firebase → App Check → registrar la app web con esa clave.
+3. En `js/config.js` poner `APP_CHECK_SITE_KEY = '<clave>'`.
+4. Añadir a la CSP de `index.html`:
+   - `script-src`: `https://www.google.com/recaptcha/` `https://www.gstatic.com/recaptcha/`
+     y `https://www.gstatic.com/firebasejs/10.14.1/` (ya está)
+   - `frame-src`: `https://www.google.com/recaptcha/` `https://recaptcha.google.com/recaptcha/`
+   - `connect-src`: `https://content-firebaseappcheck.googleapis.com` `https://www.google.com/recaptcha/`
+5. Publicar, comprobar en Firebase → App Check → *Métricas* que las peticiones
+   llegan «verificadas», y solo entonces pulsar **Aplicar** en Cloud Firestore.
+
+### Comprobado en el código
+- **Aislamiento entre usuarios**: las reglas reales (`firestore.rules`) probadas
+  con el **emulador oficial de Firestore**: 28/28 (`tests/rules/`).
+- Retirada la licencia de prueba de 15 días (`js/license.js`, desactivada) que
+  llevaba su clave secreta dentro del código.
+- La puerta de pruebas del reconocedor de voz (`__rutivoEarSrc`) solo funciona en
+  `localhost`/`127.0.0.1`; en la app publicada se ignora.

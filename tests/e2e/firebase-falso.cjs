@@ -14,13 +14,14 @@ const API = 'https://firestore.googleapis.com/__falso/';
 
 const APP_JS = 'export const initializeApp = (c) => ({ c });';
 const AUTH_JS = `
-const U = () => ({ uid: self.__uid || 'u1', email: (self.__uid || 'u1') + '@prueba.test' });
+const U = () => ({ uid: self.__uid || 'u1', email: (self.__uid || 'u1') + '@prueba.test', emailVerified: !!self.__verificado, reload: async () => {} });
 const A = { get currentUser() { return U(); }, languageCode: '' };
 export const getAuth = () => A;
 export const onAuthStateChanged = (a, f) => setTimeout(() => f(U()));
 export const createUserWithEmailAndPassword = async () => ({ user: U() });
 export const signInWithEmailAndPassword = async () => ({ user: U() });
 export const sendPasswordResetEmail = async () => {};
+export const sendEmailVerification = async () => { self.__verifEnviados = (self.__verifEnviados || 0) + 1; };
 export const signOut = async () => {};
 export const reauthenticateWithCredential = async () => {};
 export const deleteUser = async () => {};
@@ -139,7 +140,7 @@ async function device(browser, app, store, { uid = 'u1', local = null, owner = t
   await ctx.route('**/*', (r) => {
     const u = new URL(r.request().url());
     if (u.pathname.endsWith('/js/config.js')) {
-      return r.fulfill({ contentType: 'text/javascript', body: "export const FIREBASE_CONFIG={apiKey:'prueba',projectId:'prueba',authDomain:'prueba.test',appId:'1'};export const TRIAL_ENABLED=false;export const FIREBASE_SDK='" + SDK.slice(0, -1) + "';export const FLIGHT_API='';export const PUSH_PUBLIC_KEY='';" });
+      return r.fulfill({ contentType: 'text/javascript', body: "export const FIREBASE_CONFIG={apiKey:'prueba',projectId:'prueba',authDomain:'prueba.test',appId:'1'};export const TRIAL_ENABLED=false;export const FIREBASE_SDK='" + SDK.slice(0, -1) + "';export const FLIGHT_API='';export const PUSH_PUBLIC_KEY='';export const APP_CHECK_SITE_KEY='';" });
     }
     if (r.request().url().startsWith(SDK)) {
       const name = u.pathname.split('/').pop();

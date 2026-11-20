@@ -158,6 +158,12 @@ function profileCard() {
   return (
     '<div class="card profile"><div class="avatar">' + initial(currentUser.email) + '</div><div>' +
     '<b>' + esc(currentUser.email) + '</b><small class="ok">● Sincronizado en la nube</small></div></div>' +
+    (currentUser.emailVerified === false
+      ? '<div class="card warn-card" id="verif"><b>📧 Confirma tu email</b><div class="mut mt8">Te enviamos un enlace a ' + esc(currentUser.email) +
+        '. Confirmarlo protege tu cuenta (por ejemplo, para recuperar la contraseña). Mira también en spam.</div>' +
+        '<div class="row mt8"><button type="button" class="sec" id="verre">Reenviar email</button><button type="button" id="verok">Ya lo he confirmado</button></div>' +
+        '<div id="vermsg" class="mut mt8" role="status"></div></div>'
+      : '') +
     '<h3 class="sect">Sesión</h3>' +
     '<div class="card list">' +
     row('alo', '⎋', 'Cerrar sesión', 'Tus datos seguirán guardados en tu cuenta') +
@@ -208,10 +214,23 @@ export function renderAccount() {
   const wasOpen = $('#adel') && $('#adel').open;
   box.innerHTML = profileCard() + conflictsCard();
   const sok = $('#syncok');
-  if (sok) sok.onclick = () => { clearSyncConflicts(); renderAccount(); };
+  if (sok) sok.onclick = () => { sok.blur(); clearSyncConflicts(); renderAccount(); };
   const lg = $('#legalok');
   if (lg) lg.textContent = S.cfg.legal && S.cfg.legal.at && S.cfg.legal.at !== 'x' ? 'Aceptadas el ' + String(S.cfg.legal.at).slice(0, 10).split('-').reverse().join('/') : 'Léelas aquí';
   if (wasOpen && $('#adel')) $('#adel').open = true;
+  const vre = $('#verre');
+  if (vre) vre.onclick = async () => {
+    vre.disabled = true;
+    try { await fb.resendVerification(); $('#vermsg').textContent = 'Enviado ✓. Revisa tu correo (y spam).'; } catch (e) { $('#vermsg').textContent = fb.authErrorMessage(e); }
+    setTimeout(() => { vre.disabled = false; }, 30000);
+  };
+  const vok = $('#verok');
+  if (vok) vok.onclick = async () => {
+    try {
+      if (await fb.refreshVerified()) { vok.blur(); currentUser = { ...currentUser, emailVerified: true }; renderAccount(); toast('Email confirmado ✓'); }
+      else $('#vermsg').textContent = 'Aún no consta como confirmado. Abre el enlace del email y vuelve a tocar.';
+    } catch { $('#vermsg').textContent = 'Sin conexión. Inténtalo en un momento.'; }
+  };
   const out = $('#alo');
   if (out) out.onclick = () => signOut(out);
   const del = $('#adgo');

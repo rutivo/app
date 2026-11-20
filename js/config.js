@@ -24,9 +24,10 @@ export const FIREBASE_CONFIG = {
 };
 */
 
-// Periodo de prueba de 15 días con código de activación (js/license.js).
-// Desactivado: la app es gratis. Ponlo a true para volver a exigir activación.
-export const TRIAL_ENABLED = false;
+// App Check de Firebase (solo la app real puede usar tu Firebase). Vacío = apagado.
+// Para activarlo: ver SEGURIDAD.md («App Check»). No lo actives sin añadir antes
+// las líneas de reCAPTCHA a la política de seguridad (CSP) de index.html.
+export const APP_CHECK_SITE_KEY = '';
 
 // Dirección del intermediario de vuelos (Cloudflare Worker, ver worker/).
 // Con null, el panel del vuelo solo muestra la ruta y el enlace a Flightradar24.

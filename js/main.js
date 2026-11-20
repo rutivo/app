@@ -1,8 +1,6 @@
 // © 2026 Alejandro Antonio Fernández Moyano. Todos los derechos reservados. Ver LICENSE.
 // Punto de entrada: carga los datos, conecta las pantallas y pinta la app.
-import { $, $$, toast } from './dom.js';
-import { TRIAL_ENABLED } from './config.js';
-import { checkLicense } from './license.js';
+import { $, $$ } from './dom.js';
 import { checkLegal } from './legal.js';
 import { renderReminders, scheduleReminders } from './reminders.js';
 import { loadLocal, requestPersistentStorage } from './store.js';
@@ -109,4 +107,3 @@ if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
   navigator.serviceWorker.register('sw.js').catch(() => {});
 }
 initAccount(render);
-if (TRIAL_ENABLED) checkLicense(() => toast('App activada ✓'));

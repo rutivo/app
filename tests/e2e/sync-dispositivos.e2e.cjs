@@ -84,6 +84,9 @@ const sync = (page) => page.evaluate(async () => (await import('/js/cloud.js')).
     await wait(500);
     const card = await A.page.innerText('#acct');
     ok('4 · y se ve en Cuenta → Sincronización', /Sincronización/i.test(card) && /importe/.test(card), card.split('\n').slice(-4).join(' | '));
+    await A.page.click('#syncok');
+    await wait(400);
+    ok('4 · «Entendido, borrar estos avisos» los quita de la pantalla', !/Sincronización/i.test(await A.page.innerText('#acct')));
 
     // ---------- 5: una versión ANTIGUA de la app sobrescribe sin un registro (sin lápida) ----------
     const before = remoteMov(store);

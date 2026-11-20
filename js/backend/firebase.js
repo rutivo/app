@@ -4,7 +4,7 @@
 // Estructura en Firestore (ver firestore.rules):
 //   users/{uid}/data/{trozo}   datos de la app, troceados por mes/año
 //   users/{uid}/fotos/{id}     fotos de facturas de gasolina
-import { FIREBASE_CONFIG, FIREBASE_SDK } from '../config.js';
+import { APP_CHECK_SITE_KEY, FIREBASE_CONFIG, FIREBASE_SDK } from '../config.js';
 
 let sdk = null;
 
@@ -16,6 +16,13 @@ async function load() {
     import(FIREBASE_SDK + '/firebase-firestore.js'),
   ]);
   const firebaseApp = app.initializeApp(FIREBASE_CONFIG);
+  // App Check (preparado, APAGADO mientras APP_CHECK_SITE_KEY esté vacío): solo la
+  // app real podrá usar Firebase. Para activarlo ver SEGURIDAD.md (clave reCAPTCHA
+  // Enterprise + líneas de la CSP + «Aplicar» en la consola de Firebase).
+  if (APP_CHECK_SITE_KEY) {
+    const ac = await import(FIREBASE_SDK + '/firebase-app-check.js');
+    ac.initializeAppCheck(firebaseApp, { provider: new ac.ReCaptchaEnterpriseProvider(APP_CHECK_SITE_KEY), isTokenAutoRefreshEnabled: true });
+  }
   const authInstance = auth.getAuth(firebaseApp);
   authInstance.languageCode = 'es';
   sdk = { auth, fs, authInstance, db: fs.getFirestore(firebaseApp) };
@@ -27,7 +34,9 @@ const ERRORS = {
   'auth/email-already-in-use': 'Ya hay una cuenta con ese email. Entra con tu contraseña.',
   'auth/invalid-email': 'El email no es válido.',
   'auth/missing-email': 'Escribe tu email.',
-  'auth/weak-password': 'La contraseña debe tener al menos 6 caracteres.',
+  'auth/weak-password': 'La contraseña es demasiado débil: mínimo 8 caracteres, con letras y números.',
+  'auth/password-does-not-meet-requirements': 'La contraseña no cumple los requisitos: mínimo 8 caracteres, con letras y números.',
+  'auth/too-many-requests-verify': 'Ya te hemos enviado el email hace poco. Espera unos minutos.',
   'auth/missing-password': 'Escribe tu contraseña.',
   'auth/invalid-credential': 'Email o contraseña incorrectos.',
   'auth/wrong-password': 'Email o contraseña incorrectos.',
@@ -45,12 +54,33 @@ export const authErrorMessage = (err) => ERRORS[err && err.code] || 'No se pudo 
  */
 export async function watchSession(onChange) {
   const { auth, authInstance } = await load();
-  auth.onAuthStateChanged(authInstance, (u) => onChange(u ? { uid: u.uid, email: u.email } : null));
+  auth.onAuthStateChanged(authInstance, (u) => onChange(u ? { uid: u.uid, email: u.email, emailVerified: !!u.emailVerified } : null));
 }
 
 export async function register(email, password) {
   const { auth, authInstance } = await load();
-  await auth.createUserWithEmailAndPassword(authInstance, email, password);
+  const cred = await auth.createUserWithEmailAndPassword(authInstance, email, password);
+  // Email de confirmación (no bloquea: se puede usar la app mientras tanto)
+  try {
+    await auth.sendEmailVerification(cred.user);
+  } catch {
+    /* se podrá reenviar desde Cuenta */
+  }
+}
+
+/** Vuelve a enviar el email de confirmación. */
+export async function resendVerification() {
+  const { auth, authInstance } = await load();
+  if (authInstance.currentUser) await auth.sendEmailVerification(authInstance.currentUser);
+}
+
+/** ¿Ya confirmó el email? (lo pregunta al servidor) */
+export async function refreshVerified() {
+  const { authInstance } = await load();
+  const u = authInstance.currentUser;
+  if (!u) return false;
+  await u.reload();
+  return !!u.emailVerified;
 }
 
 export async function login(email, password) {

@@ -7,6 +7,12 @@ let seq = 0;
 const waiting = new Map();
 let progressCb = () => {};
 
+/**
+ * Origen de descarga del reconocedor. Solo las pruebas automáticas (en
+ * localhost) pueden cambiarlo; en la app publicada se ignora siempre.
+ */
+const earSrc = () => (['localhost', '127.0.0.1'].includes(location.hostname) && self.__rutivoEarSrc) || null;
+
 function start() {
   if (worker) return worker;
   worker = new Worker(new URL('./oidoWorker.js', import.meta.url), { type: 'module' });
@@ -37,7 +43,7 @@ const call = (type, payload, transfer) =>
 export function prepareEar(onProgress = () => {}) {
   let last = Date.now();
   progressCb = (p) => { last = Date.now(); onProgress(p); };
-  const ready = call('load', { src: self.__rutivoEarSrc || null });
+  const ready = call('load', { src: earSrc() });
   // Si en 60 s no avanza nada (sin internet, bloqueado…), no quedarse esperando
   const stuck = new Promise((resolve, reject) => {
     const t = setInterval(() => { if (Date.now() - last > 60000) { clearInterval(t); reject(new Error('sin progreso')); } }, 5000);
@@ -62,7 +68,7 @@ export async function transcribe(audio, timeoutMs = 45000) {
       reject(new Error('tiempo'));
     }, timeoutMs);
   });
-  const raw = await Promise.race([call('transcribe', { audio, src: self.__rutivoEarSrc || null }, [audio.buffer]), limit]).finally(() => clearTimeout(timer));
+  const raw = await Promise.race([call('transcribe', { audio, src: earSrc() }, [audio.buffer]), limit]).finally(() => clearTimeout(timer));
   const text = String(raw || '').trim();
   return HALLUCINATIONS.test(text) && text.split(' ').length < 6 ? '' : text;
 }

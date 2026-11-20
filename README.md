@@ -38,7 +38,6 @@ js/
   welcome.js          mensaje de bienvenida por WhatsApp
   logo.js             iconos y logo en SVG
   reminders.js        avisos de recogida, bienvenida y hucha
-  license.js          prueba de 15 días y código de activación
   dom.js              ayudas de interfaz (avisos, confirmación en dos toques, guardar archivos)
   views/              una pantalla por archivo: caja, transfer, gasolina, facturas, hucha,
                       cuenta (registro/entrada) y tips (avisos de instalar y de copia)
@@ -55,11 +54,17 @@ versiones anteriores: al actualizar, cada usuario conserva lo que tenía. Por es
 los campos usan nombres cortos (`mov`, `srv`, `f`, `i`…); su significado está
 documentado en `js/store.js`.
 
-No cambies `LICENSE_SECRET` ni `licenseCode()` en `js/license.js`: invalidaría los
-códigos de activación ya entregados.
 
 
 ## Licencia
 
 © 2026 Alejandro Antonio Fernández Moyano. Todos los derechos reservados.
 Software propietario: prohibida su copia, modificación o distribución sin autorización. Ver [LICENSE](LICENSE).
+
+## Pruebas
+
+- `npm test`: lógica (Node).
+- `npm run test:e2e`: en navegador con Playwright y un Firestore simulado
+  (facturas, sincronización entre móviles, PDF y seguridad).
+- `npm run test:rules`: reglas reales de Firestore con el emulador oficial
+  (necesita Java y `firebase-tools`, `@firebase/rules-unit-testing` y `firebase`).
