@@ -2,7 +2,7 @@
 // - Con los avisos del servidor activados (Web Push), llegan aunque la app esté
 //   cerrada, y el «Sal ya» se mueve solo si el vuelo se retrasa.
 // - Si el móvil no puede, funcionan con la app abierta o recién cerrada.
-import { $, toast } from './dom.js';
+import { $, readFlag, toast, writeFlag } from './dom.js';
 import { cachedStatus } from './flight.js';
 import { disablePush, enablePush, isIOS, pushActive, pushSupport, syncAlarms } from './push.js';
 import { currentPosition, isAirportPickup, leaveBody, leaveSettings, planFor } from './salida.js';
@@ -13,7 +13,8 @@ import { today } from './utils.js';
 const FIRED_KEY = 'avFired';
 const DEFAULT_LEAD_MIN = 30;
 const HORIZON_MS = 14 * 36e5; // avisos de las próximas 14 h
-const PRE_MIN = 15; // «Sal en 15 min» antes del «Sal ya»
+const PRE_MIN = 15;
+const TEST_KEY = 'pushPrueba'; // «Sal en 15 min» antes del «Sal ya»
 
 let timers = [];
 let lastPlans = new Map(); // id del servicio → plan de salida (para la pantalla)
@@ -86,6 +87,9 @@ export async function buildAlarms(now = Date.now()) {
     }
     if (s.sv && s.tl) add({ id: 'wc-' + s.f + '-' + s.id, at: new Date(s.f + 'T' + s.sv + ':00').getTime() - 60 * 6e4, title: 'Mandar bienvenida', body: (s.pa || 'Pasajero') + ' · vuelo ' + (s.vu || '') + ' sale a las ' + s.sv });
   }
+  // Notificación de prueba (botón «Probar»): llega al minuto, con la app cerrada
+  const testAt = +readFlag(TEST_KEY) || 0;
+  if (testAt > now - 6e4) add({ id: 'prueba-' + testAt, at: testAt, title: '🔔 Prueba de Rutivo', body: '¡Funciona! Los avisos te llegan aunque tengas la app cerrada.' });
   const day = today();
   if (S.huc.length && !S.huc.some((x) => x.f === day && x.i > 0)) add({ id: 'hu-' + day, at: new Date(day + 'T21:00:00').getTime(), title: 'Hucha', body: 'Recuerda meter hoy en la hucha' });
   const changed = [...plans].some(([k, p]) => { const o = lastPlans.get(k); return !o || Math.abs(o.leave - p.leave) > 3e4; }) || plans.size !== lastPlans.size;
@@ -149,7 +153,8 @@ export async function renderReminders() {
   const box = $('#avc'); // tras esperar: la pantalla de Cuenta puede haberse repintado
   if (!box) return;
   let state = '';
-  if (on && remote) state = '<div style="margin:6px 0"><b>Activados ✓ · llegan con la app cerrada</b></div>';
+  if (on && remote) state = '<div style="margin:6px 0"><b>Activados ✓ · llegan con la app cerrada</b></div>' +
+    '<button class="sec mt8" id="avtest" type="button">🔔 Probar: llega en 1 minuto</button>';
   else if (on && support === 'install') state = '<div style="margin:6px 0"><b>Activados (solo con la app abierta)</b></div><div class="mut">Para que lleguen con la app cerrada en iPhone: Compartir → «Añadir a pantalla de inicio», abre Rutivo desde ese icono y vuelve aquí.</div>';
   else if (on && support === 'ok') state = '<div style="margin:6px 0"><b>Activados (solo con la app abierta)</b></div><button class="mt8" id="avpush">🔔 Recibirlos con la app cerrada</button>';
   else if (on) state = '<div style="margin:6px 0"><b>Activados ✓</b></div><div class="mut">Este navegador no admite avisos con la app cerrada.</div>';
@@ -172,6 +177,19 @@ export async function renderReminders() {
       $$(id).onchange = () => { S.cfg[k] = Math.min(120, Math.max(0, +$$(id).value || 0)); save(); scheduleReminders(); };
     }
     if ($$('avpush')) $$('avpush').onclick = () => turnOnPush($$('avpush'));
+    if ($$('avtest')) $$('avtest').onclick = async () => {
+      writeFlag(TEST_KEY, String(Date.now() + 60000));
+      $$('avtest').disabled = true;
+      try {
+        await scheduleReminders();
+        await scheduleReminders(); // por si ya había un cálculo en marcha sin la prueba
+        $$('avtest').textContent = '✅ Enviada. Cierra Rutivo y espera 1 minuto';
+        toast('Ahora cierra Rutivo del todo (desliza hacia arriba). En 1 minuto te llega la notificación.');
+      } catch {
+        $$('avtest').disabled = false;
+        toast('Sin conexión. Inténtalo en un momento.');
+      }
+    };
     $$('avoff').onclick = async () => {
       S.cfg.avisos = 0;
       save();
