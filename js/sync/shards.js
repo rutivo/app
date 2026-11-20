@@ -12,6 +12,8 @@
 //   - nada que no quepa se sube, pero TAMPOCO se borra de la nube, y se avisa;
 //   - no se modifica ninguna factura (no se borra información original).
 
+import { stable } from './merge.js';
+
 export const MAX_DOC_BYTES = 900000; // margen bajo 1 MiB (Firestore) y 1.000.000 (reglas)
 const MAX_CHUNKS = 99; // «fac-2026-99»: el nombre más largo que admiten las reglas
 
@@ -70,8 +72,13 @@ const chunkKey = (year, i) => 'fac-' + year + (i ? '-' + i : '');
  *             tampoco se deben borrar de la nube (para no perder su copia);
  *   problems: [{kind, key, bytes, num?, fecha?}] para avisar.
  */
-export function buildShards(S, max = MAX_DOC_BYTES) {
-  const docs = { cfg: JSON.stringify({ cfg: S.cfg, cli: S.cli }) };
+export function buildShards(S, max = MAX_DOC_BYTES, extra = {}) {
+  // Las lápidas (registros borrados) viajan con los ajustes; las versiones
+  // anteriores de la app ignoran ese campo.
+  const del = extra.del && Object.values(extra.del).some((x) => x && Object.keys(x).length) ? extra.del : null;
+  // Formato canónico (registros ordenados y campos en orden fijo): el mismo
+  // contenido da siempre el mismo texto, así dos móviles no se reenvían lo mismo
+  const docs = { cfg: stable(del ? { cfg: S.cfg, cli: S.cli, del } : { cfg: S.cfg, cli: S.cli }) };
   const keep = [];
   const problems = [];
   const groups = {};
@@ -83,7 +90,8 @@ export function buildShards(S, max = MAX_DOC_BYTES) {
   add('huc', S.huc, byMonth);
   add('jor', S.jor, byMonth);
   add('prv', S.prv, () => 'all');
-  for (const k in groups) docs[k] = JSON.stringify(groups[k]);
+  const byId = (a, b) => (String(a.id) < String(b.id) ? -1 : String(a.id) > String(b.id) ? 1 : 0);
+  for (const k in groups) docs[k] = stable([...groups[k]].sort(byId));
 
   // Facturas: por año, repartidas en varios documentos si no caben en uno
   const years = {};
@@ -102,7 +110,7 @@ export function buildShards(S, max = MAX_DOC_BYTES) {
       keep.push(...Array.from({ length: MAX_CHUNKS + 1 }, (_, i) => chunkKey(year, i)));
       continue;
     }
-    chunks.forEach((c, i) => { docs[chunkKey(year, i)] = JSON.stringify(c); });
+    chunks.forEach((c, i) => { docs[chunkKey(year, i)] = stable(c); });
   }
 
   // Cualquier otro documento demasiado grande: no se sube ni se borra; se avisa
@@ -119,13 +127,13 @@ export function buildShards(S, max = MAX_DOC_BYTES) {
 
 /** Lee los documentos de la nube y los junta (admite «fac-2026», «fac-2026-1», …). */
 export function joinShards(list) {
-  const R = { mov: [], srv: [], fac: [], gas: [], huc: [], prv: [], jor: [], cli: {}, cfg: null, ts: 0 };
+  const R = { mov: [], srv: [], fac: [], gas: [], huc: [], prv: [], jor: [], cli: {}, cfg: null, ts: 0, del: {} };
   const sent = {};
   for (const d of list) {
     if (d.id === 'meta') { R.ts = (d.data && d.data.ts) || 0; continue; }
     sent[d.id] = d.data.j;
     const v = JSON.parse(d.data.j);
-    if (d.id === 'cfg') { R.cfg = v.cfg; R.cli = v.cli || {}; continue; }
+    if (d.id === 'cfg') { R.cfg = v.cfg; R.cli = v.cli || {}; R.del = v.del || {}; continue; }
     const list2 = R[d.id.split('-')[0]];
     if (Array.isArray(list2) && Array.isArray(v)) list2.push(...v);
   }

@@ -2,9 +2,12 @@
 //
 // El móvil siempre guarda una copia local (store.js); la nube es la copia
 // buena. Los datos se suben troceados por mes/año para enviar solo lo que
-// cambia (ver sync/shards.js). Si dos móviles editan a la vez, gana el último en guardar.
+// cambia (ver sync/shards.js). Varios móviles se fusionan registro a registro
+// sin perder nada (ver sync/merge.js), y cada escritura comprueba que nadie
+// haya cambiado el documento mientras tanto.
 import { $ } from './dom.js';
 import { LISTS, S, clearLocal, hasLocalData, replaceState, setSaveListener, writeLocal } from './store.js';
+import { merge3, sameState, snapshot } from './sync/merge.js';
 import { buildShards, classifyError, joinShards, shardLabel } from './sync/shards.js';
 
 const OWNER_KEY = 'cajaOwner'; // usuario al que pertenecen los datos de este móvil
@@ -12,7 +15,6 @@ const OWNER_KEY = 'cajaOwner'; // usuario al que pertenecen los datos de este m�
 let remote = null; // almacén: list, put, remove, putPhoto, getPhoto, removePhoto
 let lastSent = {}; // trozo → JSON subido la última vez
 let busy = false;
-let dirty = false;
 let pending = false; // hay cambios locales sin subir
 let failed = false; // la última subida falló por algo pasajero (sin conexión…): se reintenta
 let problems = []; // lo que no se pudo subir y por qué (se avisa; no se pierde nada)
@@ -73,179 +75,286 @@ const setOwner = (uid) => {
 };
 export const localOwner = getOwner;
 
-/** Une dos listas por id; gana `a`. */
-const unionById = (a, b) => {
-  const m = new Map();
-  [...b, ...a].forEach((x) => m.set(x.id, x));
-  return [...m.values()];
-};
+// ---------- base de la fusión (por usuario, en el móvil) ----------
+// La «base» es lo último en lo que este móvil y la nube coincidían (solo huellas).
+// Con ella se sabe qué ha cambiado en cada lado desde entonces (ver sync/merge.js).
 
-/**
- * Sube lo que ha cambiado, documento a documento. Un fallo en uno no impide
- * subir los demás. Lo que no cabe o falla no se borra de la nube y se avisa.
- */
-async function push() {
-  status('Guardando en tu cuenta…');
-  S.ts = S.ts || Date.now();
-  const { docs, keep, problems: found } = buildShards(S);
-  const issues = [...found];
-  let offline = false;
-  for (const k in docs) {
-    if (lastSent[k] === docs[k]) continue;
-    try {
-      await remote.put(k, { j: docs[k] });
-      lastSent[k] = docs[k];
-    } catch (err) {
-      const kind = classifyError(err, typeof navigator === 'undefined' || navigator.onLine !== false);
-      if (kind === 'offline') { offline = true; break; }
-      issues.push({ kind, key: k });
-    }
+const BASE_KEY = (uid) => 'syncBase:' + uid;
+const CONFLICTS_KEY = (uid) => 'syncConflicts:' + uid;
+let uidNow = null;
+let base = null; // {snap, tombs, metaTs}
+let rerenderFn = () => {};
+
+function loadBase(uid) {
+  try {
+    const b = JSON.parse(localStorage.getItem(BASE_KEY(uid)) || 'null');
+    return b && b.snap ? b : null;
+  } catch {
+    return null;
   }
-  // Solo se borran de la nube los documentos que ya no existen de verdad
-  // (nunca los que no se han podido subir ni los que fallaron)
-  if (!offline) {
-    const failedKeys = new Set(issues.map((x) => x.key));
-    for (const k of Object.keys(lastSent)) {
-      if (k in docs || keep.includes(k) || failedKeys.has(k)) continue;
-      try {
-        await remote.remove(k);
-        delete lastSent[k];
-      } catch (err) {
-        if (classifyError(err) === 'offline') { offline = true; break; }
-      }
-    }
+}
+function saveBase() {
+  if (!uidNow || !base) return;
+  try {
+    localStorage.setItem(BASE_KEY(uidNow), JSON.stringify(base));
+  } catch {
+    /* sin espacio: la próxima vez se fusiona sin base (se une todo, no se borra nada) */
   }
-  // La marca de «última versión» solo se actualiza si TODO está en la nube:
-  // así otro móvil nunca sustituye sus datos por una copia incompleta.
-  if (!offline && !issues.length) {
-    try {
-      await remote.put('meta', { ts: S.ts });
-    } catch (err) {
-      if (classifyError(err) === 'offline') offline = true;
-      else issues.push({ kind: classifyError(err), key: 'meta' });
-    }
-  }
-  setProblems(issues);
-  failed = offline || issues.some((x) => ['quota', 'unknown'].includes(x.kind));
-  if (offline) status('Sin conexión: los cambios están en este móvil y se subirán al volver internet.');
-  else if (issues.length) status(problemText(problems[0]) + (problems.length > 1 ? ' (y ' + (problems.length - 1) + ' más)' : ''));
-  else status('Datos guardados en tu cuenta ✓');
 }
 
-/** Sube los cambios; si llegan más mientras sube, vuelve a subir al acabar. */
+/** Cosas cambiadas a la vez en dos móviles: se quedó lo de este y aquí se guarda lo otro. */
+export function syncConflicts() {
+  try {
+    return uidNow ? JSON.parse(localStorage.getItem(CONFLICTS_KEY(uidNow)) || '[]') : [];
+  } catch {
+    return [];
+  }
+}
+export function clearSyncConflicts() {
+  try {
+    if (uidNow) localStorage.removeItem(CONFLICTS_KEY(uidNow));
+  } catch {
+    /* nada */
+  }
+  notify();
+}
+function addConflicts(list) {
+  if (!list.length || !uidNow) return;
+  const at = Date.now();
+  const all = [...list.map((c) => ({ ...c, at })), ...syncConflicts()].slice(0, 100);
+  try {
+    localStorage.setItem(CONFLICTS_KEY(uidNow), JSON.stringify(all));
+  } catch {
+    /* sin espacio */
+  }
+}
+function notify() {
+  try {
+    window.dispatchEvent(new CustomEvent('rutivo:sync', { detail: syncProblems() }));
+  } catch {
+    /* fuera del navegador */
+  }
+}
+
+/** El estado que sabemos que hay en la nube (según lo último leído o escrito). */
+const remoteKnown = () => joinShards(Object.entries(lastSent).map(([id, j]) => ({ id, data: { j } }))).R;
+
+/** Aplica el estado fusionado a la app (sin tocar lo que no cambia). */
+function apply(state) {
+  for (const k of LISTS) S[k] = state[k];
+  S.cfg = state.cfg;
+  S.cli = state.cli;
+  writeLocal();
+  rerenderFn();
+}
+
+// ---------- sincronización ----------
+
+const STALE = 'stale';
+const isStale = (err) => err && (err.code === STALE || err.code === 'aborted' || err.code === 'failed-precondition');
+
+/**
+ * Una pasada de sincronización:
+ *  1. Lee solo la marca de versión (1 lectura). Si la nube no ha cambiado desde
+ *     la base, no se descarga nada.
+ *  2. Si cambió: descarga, fusiona registro a registro con lo de este móvil y lo aplica.
+ *  3. Sube lo que ha cambiado, documento a documento y con comprobación: si
+ *     otro móvil lo cambió mientras tanto, se vuelve a leer y fusionar (no se pisa).
+ *  4. Solo si todo está subido, actualiza la marca de versión.
+ * Devuelve {offline, issues}.
+ */
+async function syncOnce(force = false) {
+  const online = typeof navigator === 'undefined' || navigator.onLine !== false;
+  for (let attempt = 0; attempt < 4; attempt++) {
+    // 1. ¿Ha cambiado la nube?
+    let meta;
+    try {
+      meta = await remote.get('meta');
+    } catch (err) {
+      return { offline: classifyError(err, online) === 'offline', issues: classifyError(err, online) === 'offline' ? [] : [{ kind: classifyError(err), key: 'meta' }] };
+    }
+    const metaTs = meta && typeof meta.ts === 'number' ? meta.ts : null;
+    let tombs = base ? base.tombs || {} : {};
+    if (force || attempt > 0 || !base || base.metaTs !== metaTs || !Object.keys(lastSent).length) {
+      // 2. Descargar y fusionar
+      let fetched;
+      try {
+        fetched = joinShards(await remote.list());
+      } catch (err) {
+        return { offline: classifyError(err, online) === 'offline', issues: [] };
+      }
+      lastSent = fetched.sent;
+      const R = fetched.R;
+      const merged = merge3(base ? base.snap : null, S, R, R.del || {});
+      tombs = merged.tombs;
+      if (!sameState(merged.state, S)) {
+        apply(merged.state);
+        if (merged.conflicts.length) addConflicts(merged.conflicts);
+        status(merged.conflicts.length
+          ? '🔀 Cambios de otro móvil juntados. ' + merged.conflicts.length + ' cambiado(s) en los dos: se ha quedado lo de este móvil (detalle en Cuenta).'
+          : 'Datos actualizados desde tu cuenta ✓');
+      } else if (merged.conflicts.length) addConflicts(merged.conflicts);
+      base = { snap: snapshot(R), tombs: R.del || {}, metaTs };
+      saveBase();
+    }
+    force = false;
+
+    // 3. Subir lo que ha cambiado: documentos + marca de versión, juntos y de forma atómica.
+    //    Si otro móvil escribió desde que leímos la marca, no se escribe nada ('stale'):
+    //    se vuelve a leer, fusionar y reintentar. Así nunca se pisa a nadie.
+    const { docs, keep, problems: found } = buildShards(S, undefined, { del: tombs });
+    const issues = [...found];
+    const sets = {};
+    for (const k in docs) if (lastSent[k] !== docs[k]) sets[k] = docs[k];
+    const deletes = Object.keys(lastSent).filter((k) => k !== 'meta' && !(k in docs) && !keep.includes(k));
+    if (!Object.keys(sets).length && !deletes.length) return { offline: false, issues };
+
+    // En lotes de ~8 MB como mucho (límite de Firestore por transacción: 10 MiB)
+    const batches = [];
+    let cur = { sets: {}, deletes: [], bytes: 0 };
+    for (const [k, j] of Object.entries(sets)) {
+      if (cur.bytes + j.length > 8e6 && Object.keys(cur.sets).length) { batches.push(cur); cur = { sets: {}, deletes: [], bytes: 0 }; }
+      cur.sets[k] = j;
+      cur.bytes += j.length;
+    }
+    cur.deletes = deletes;
+    batches.push(cur);
+
+    let ts = metaTs;
+    let stale = false;
+    const write = async (b) => {
+      const newTs = Math.max(Date.now(), (ts || 0) + 1);
+      await remote.commit({ sets: Object.fromEntries(Object.entries(b.sets).map(([k, j]) => [k, { j }])), deletes: b.deletes, expectTs: ts, newTs });
+      for (const [k, j] of Object.entries(b.sets)) lastSent[k] = j;
+      for (const k of b.deletes) delete lastSent[k];
+      ts = newTs;
+    };
+    try {
+      for (const b of batches) {
+        try {
+          await write(b);
+        } catch (err) {
+          if (isStale(err)) { stale = true; break; }
+          const kind = classifyError(err, online);
+          if (kind === 'offline') return { offline: true, issues };
+          // Algo del lote no se acepta: se prueba documento a documento para que
+          // un documento con problemas no impida guardar los demás
+          for (const k of [...Object.keys(b.sets), ...b.deletes.map((d) => '\u0000' + d)]) {
+            const single = k.startsWith('\u0000') ? { sets: {}, deletes: [k.slice(1)] } : { sets: { [k]: b.sets[k] }, deletes: [] };
+            try {
+              await write(single);
+            } catch (e2) {
+              if (isStale(e2)) { stale = true; break; }
+              const k2 = classifyError(e2, online);
+              if (k2 === 'offline') return { offline: true, issues };
+              issues.push({ kind: k2, key: k.replace('\u0000', '') });
+            }
+          }
+          if (stale) break;
+        }
+      }
+    } finally {
+      // Lo que ya esté en la nube pasa a ser la base, con su marca de versión
+      base = { snap: snapshot(remoteKnown()), tombs, metaTs: ts };
+      saveBase();
+      if (ts !== metaTs) { S.ts = ts; writeLocal(); } // compatibilidad con versiones anteriores
+    }
+    if (stale) continue; // otro móvil escribió a la vez: leer, fusionar y reintentar
+    return { offline: false, issues };
+  }
+  return { offline: false, issues: [{ kind: 'busy', key: 'meta' }] };
+}
+
+let running = null;
+let again = false;
+let forceNext = false;
+
+/** Sincroniza (de una en una; si se pide otra mientras tanto, se repite al acabar). */
+function requestSync(force = false) {
+  if (!remote) return Promise.resolve(true);
+  forceNext = forceNext || force;
+  if (running) { again = true; return running; }
+  busy = true;
+  running = (async () => {
+    let res = { offline: false, issues: [] };
+    do {
+      again = false;
+      pending = false;
+      const f = forceNext;
+      forceNext = false;
+      try {
+        res = await syncOnce(f);
+      } catch {
+        res = { offline: true, issues: [] };
+      }
+    } while (again && remote);
+    setProblems(res.issues.filter((x) => x.kind !== 'busy'));
+    failed = res.offline || res.issues.some((x) => ['quota', 'unknown', 'busy'].includes(x.kind));
+    if (res.offline) { pending = true; status('Sin conexión: los cambios están en este móvil y se subirán al volver internet.'); }
+    else if (problems.length) status(problemText(problems[0]) + (problems.length > 1 ? ' (y ' + (problems.length - 1) + ' más)' : ''));
+    else if (!/juntados|actualizados/.test(($('#sync') || {}).textContent || '')) status('Datos guardados en tu cuenta ✓');
+    notify();
+    return !failed && !res.offline;
+  })().finally(() => {
+    running = null;
+    busy = false;
+  });
+  return running;
+}
+
+/** Sube los cambios ahora (y trae los de otros móviles). true si todo quedó guardado. */
 export async function flush() {
   if (!remote) return true;
   clearTimeout(timer);
-  if (busy) {
-    dirty = true;
-    while (busy) await new Promise((r) => setTimeout(r, 100));
-    return !failed;
-  }
-  busy = true;
-  do {
-    dirty = false;
-    pending = false;
-    await push();
-  } while (dirty);
-  busy = false;
-  return !failed;
+  return requestSync();
 }
 
 function schedule() {
   if (!remote) return false;
   pending = true;
   clearTimeout(timer);
-  timer = setTimeout(flush, 900);
+  timer = setTimeout(() => requestSync(), 900);
   return true;
-}
-
-/** Lee todo lo que hay en la nube. */
-async function fetchRemote() {
-  return joinShards(await remote.list());
-}
-
-function takeRemote(R) {
-  LISTS.forEach((k) => (S[k] = R[k]));
-  S.cli = R.cli;
-  if (R.cfg) S.cfg = R.cfg;
-  S.ts = R.ts;
 }
 
 /**
  * Primera sincronización al entrar en una cuenta.
- * - Datos de este mismo usuario: gana la copia más reciente.
- * - Datos de antes de tener cuenta: se juntan con los de la nube (migración).
  * - Datos de OTRO usuario en este móvil: se borran y se cargan los de la nube.
+ * - Datos de antes de tener cuenta, o de este usuario: se FUSIONAN con la nube
+ *   (registro a registro; sin base la primera vez se une todo y no se borra nada).
  */
-async function firstSync(uid, rerender) {
+async function firstSync(uid) {
   const owner = getOwner();
   if (owner && owner !== uid) {
     clearLocal();
     replaceState(null);
   }
-  const { R, sent } = await fetchRemote();
-  lastSent = sent;
-  const local = hasLocalData();
-
-  if (local && !owner) {
-    // Migración: lo que había en el móvil se suma a la cuenta.
-    LISTS.forEach((k) => (S[k] = unionById(S[k] || [], R[k])));
-    S.cli = { ...R.cli, ...S.cli };
-    if (!S.cfg.nom && R.cfg) S.cfg = R.cfg;
-    S.ts = Date.now();
-    setOwner(uid);
-    writeLocal();
-    rerender();
-    await flush();
-    return;
-  }
+  uidNow = uid;
+  base = owner === uid ? loadBase(uid) : null;
   setOwner(uid);
-  if (R.ts && (!local || R.ts > (S.ts || 0))) {
-    takeRemote(R);
-    writeLocal();
-    rerender();
-    status('Datos cargados desde tu cuenta ✓');
-  } else if (local) {
-    await flush();
-  } else {
-    status('Cuenta conectada. Aquí se guardarán tus datos ✓');
-  }
-}
-
-/** Trae los cambios hechos desde otro móvil (si no hay cambios propios pendientes). */
-async function refresh(rerender) {
-  // Con algo sin subir (pendiente, fallido o que no cabe) no se descarga: se perdería lo de este móvil
-  if (!remote || pending || busy || failed || problems.length) return;
-  try {
-    const { R, sent } = await fetchRemote();
-    if (R.ts && R.ts > (S.ts || 0)) {
-      lastSent = sent;
-      takeRemote(R);
-      writeLocal();
-      rerender();
-      status('Datos actualizados desde tu cuenta ✓');
-    }
-  } catch {
-    /* sin conexión: se intentará más tarde */
-  }
+  lastSent = {};
+  const ok = await requestSync(true);
+  if (ok && !hasLocalData()) status('Cuenta conectada. Aquí se guardarán tus datos ✓');
 }
 
 let listenersOn = false;
+let pollTimer = null;
 
 /** Conecta el estado a un almacén remoto del usuario `uid`. */
 export async function connect(store, uid, rerender) {
   remote = store;
+  rerenderFn = rerender;
   setSaveListener(schedule);
   if (!listenersOn) {
     listenersOn = true;
-    addEventListener('online', () => (failed || pending ? flush() : refresh(rerender)));
-    document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible') refresh(rerender);
-      else if (pending) flush();
-    });
+    addEventListener('online', () => requestSync());
+    document.addEventListener('visibilitychange', () => { if (remote) requestSync(); });
   }
+  clearInterval(pollTimer);
+  // Cada minuto, con la app a la vista, mira si otro móvil ha cambiado algo (1 lectura)
+  pollTimer = setInterval(() => { if (remote && document.visibilityState === 'visible' && !running) requestSync(); }, 60000);
   try {
-    await firstSync(uid, rerender);
+    await firstSync(uid);
   } catch {
     status('Sin conexión con tu cuenta: trabajando con los datos de este móvil.');
   }
@@ -254,6 +363,9 @@ export async function connect(store, uid, rerender) {
 /** Deja de sincronizar (los cambios ya no se suben). */
 export function stopSync() {
   remote = null;
+  uidNow = null;
+  base = null;
+  clearInterval(pollTimer);
   clearTimeout(timer);
   pending = false;
   failed = false;

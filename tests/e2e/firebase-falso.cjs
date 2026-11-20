@@ -39,7 +39,20 @@ async function call(op, p, body) {
 export async function getDocs(col) { const j = await call('list', col.path); return { docs: j.docs.map((d) => ({ id: d.id, ref: { path: col.path + '/' + d.id }, data: () => d.data })) }; }
 export const setDoc = (ref, data) => call('set', ref.path, data);
 export const deleteDoc = (ref) => call('del', ref.path);
-export async function getDoc(ref) { const j = await call('get', ref.path); return { exists: () => j.data != null, data: () => j.data }; }`;
+export async function getDoc(ref) { const j = await call('get', ref.path); return { exists: () => j.data != null, data: () => j.data }; }
+// Transacción: lo leído se comprueba en el servidor al confirmar (como Firestore)
+export async function runTransaction(db, fn) {
+  const reads = [];
+  const ops = [];
+  const tx = {
+    async get(ref) { const j = await call('get', ref.path); reads.push({ path: ref.path, data: j.data }); return { exists: () => j.data != null, data: () => j.data }; },
+    set(ref, data) { ops.push({ op: 'set', path: ref.path, data }); },
+    delete(ref) { ops.push({ op: 'del', path: ref.path }); },
+  };
+  const out = await fn(tx);
+  if (ops.length) await call('commit', ops[0].path, { reads, ops });
+  return out;
+}`;
 
 /** Las mismas comprobaciones que firestore.rules (y el límite de tamaño de Firestore). */
 function check(uid, op, p, body) {
@@ -60,7 +73,7 @@ function check(uid, op, p, body) {
 
 function createFirestore() {
   const db = new Map(); // ruta completa → datos
-  const state = { offline: false, reject: new Map(), writes: [] };
+  const state = { offline: false, reject: new Map(), writes: [], ops: {} };
   return {
     db, state,
     docsOf: (uid) => Object.fromEntries([...db].filter(([k]) => k.startsWith('users/' + uid + '/data/')).map(([k, v]) => [k.split('/').pop(), v])),
@@ -68,6 +81,7 @@ function createFirestore() {
       const u = new URL(r.request().url());
       if (state.offline) return r.abort('internetdisconnected');
       const op = u.pathname.split('/').pop();
+      state.ops[op] = (state.ops[op] || 0) + 1;
       const p = u.searchParams.get('p');
       const uid = r.request().headers()['x-uid'];
       const body = JSON.parse(r.request().postData() || 'null');
@@ -79,6 +93,20 @@ function createFirestore() {
       if (op === 'list') return reply({ docs: [...db].filter(([k]) => k.startsWith(p + '/') && !k.slice(p.length + 1).includes('/')).map(([k, v]) => ({ id: k.split('/').pop(), data: v })) });
       if (op === 'get') return reply({ data: db.has(p) ? db.get(p) : null });
       if (op === 'set') { db.set(p, body); state.writes.push(p); return reply({ ok: true }); }
+      if (op === 'commit') {
+        // Si algo de lo leído ha cambiado desde entonces, se rechaza (como Firestore: «aborted»)
+        if (state.beforeCommit) await state.beforeCommit(body);
+        for (const rd of body.reads) if (JSON.stringify(db.has(rd.path) ? db.get(rd.path) : null) !== JSON.stringify(rd.data)) return reply({ error: { code: 'aborted', message: 'Transaction conflict.' } });
+        for (const o of body.ops) {
+          const e = check(uid, o.op === 'set' ? 'set' : 'del', o.path, o.data);
+          if (e) return reply({ error: e });
+        }
+        // Si el lote incluye un documento rechazado, se rechaza todo el lote (como Firestore)
+        const hit = body.ops.find((o) => state.reject.has(o.path.split('/').pop()));
+        if (hit) return reply({ error: state.reject.get(hit.path.split('/').pop()) });
+        for (const o of body.ops) { if (o.op === 'set') { db.set(o.path, o.data); state.writes.push(o.path); } else db.delete(o.path); }
+        return reply({ ok: true });
+      }
       if (op === 'del') { db.delete(p); return reply({ ok: true }); }
       return reply({ error: { code: 'unknown', message: op } });
     },
@@ -104,8 +132,10 @@ function serveApp() {
  * Un «móvil»: contexto de navegador con su propio almacenamiento, conectado al
  * Firestore simulado como el usuario `uid`. `local`: datos que ya tenía el móvil.
  */
-async function device(browser, app, store, { uid = 'u1', local = null, owner = true } = {}) {
+async function device(browser, app, store, { uid = 'u1', local = null, owner = true, name = '' } = {}) {
   const ctx = await browser.newContext({ locale: 'es-ES', timezoneId: 'Europe/Madrid', viewport: { width: 400, height: 860 } });
+  let off = false; // sin conexión SOLO este móvil
+  const log = [];
   await ctx.route('**/*', (r) => {
     const u = new URL(r.request().url());
     if (u.pathname.endsWith('/js/config.js')) {
@@ -116,7 +146,11 @@ async function device(browser, app, store, { uid = 'u1', local = null, owner = t
       const body = name === 'firebase-app.js' ? APP_JS : name === 'firebase-auth.js' ? AUTH_JS : FS_JS;
       return r.fulfill({ contentType: 'text/javascript', headers: { 'access-control-allow-origin': '*' }, body });
     }
-    if (r.request().url().startsWith(API)) return store.route(r);
+    if (r.request().url().startsWith(API)) {
+      if (off) return r.abort('internetdisconnected');
+      log.push(u.pathname.split('/').pop() + ' ' + decodeURIComponent(u.searchParams.get('p') || '').split('/').pop());
+      return store.route(r);
+    }
     if (u.hostname === '127.0.0.1') return r.continue();
     return r.abort();
   });
@@ -132,7 +166,12 @@ async function device(browser, app, store, { uid = 'u1', local = null, owner = t
     if (owner) localStorage.setItem('cajaOwner', uid);
   }, [uid, local, owner]);
   await page.goto(app.url);
-  return { ctx, page };
+  /** Corta o devuelve la conexión de este móvil (como el modo avión). */
+  const setOffline = async (v) => {
+    off = v;
+    await page.evaluate((v) => { Object.defineProperty(navigator, 'onLine', { configurable: true, get: () => !v }); window.dispatchEvent(new Event(v ? 'offline' : 'online')); }, v);
+  };
+  return { ctx, page, setOffline, log, name };
 }
 
 module.exports = { createFirestore, serveApp, device };

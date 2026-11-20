@@ -5,7 +5,7 @@
 //  - Dentro de Claude: se sincroniza con la cuenta de Claude, sin registro.
 //  - Sin nada configurado: solo en el móvil (como versiones anteriores).
 import { claudeStore } from '../backend/claude.js';
-import { connect, disconnectAndWipe, flush, hasUnsavedChanges, localOwner, status, stopSync } from '../cloud.js';
+import { clearSyncConflicts, connect, disconnectAndWipe, flush, hasUnsavedChanges, localOwner, status, stopSync, syncConflicts } from '../cloud.js';
 import { FIREBASE_CONFIG } from '../config.js';
 import { $, confirmTapTimed, toast } from '../dom.js';
 import { S, hasLocalData } from '../store.js';
@@ -175,13 +175,40 @@ function profileCard() {
   );
 }
 
+const AREA = { mov: 'Caja', srv: 'Servicio', fac: 'Factura', gas: 'Gasolina', huc: 'Hucha', prv: 'Proveedor', jor: 'Jornada', cfg: 'Ajustes', cli: 'Cliente' };
+const FIELD = { i: 'importe', c: 'concepto', p: 'pago', f: 'fecha', h: 'hora', t: 'tipo', o: 'origen', d: 'destino', pa: 'pasajero', vu: 'vuelo', cl: 'cliente', num: 'número' };
+const short = (v) => {
+  if (v == null) return '(borrado)';
+  const s = typeof v === 'object' ? (v.c || v.num || v.nom || v.cl || JSON.stringify(v)) : String(v);
+  return s.length > 40 ? s.slice(0, 40) + '…' : s;
+};
+
+/** Cosas cambiadas a la vez en dos móviles (se quedó lo de este móvil; aquí se ve lo otro). */
+function conflictsCard() {
+  const list = syncConflicts();
+  if (!list.length) return '';
+  const row = (c) => {
+    const what = (AREA[c.list || c.area] || c.list || c.area) + (c.field ? ' · ' + (FIELD[c.field] || c.field) : '');
+    const when = new Date(c.at).toLocaleString('es-ES', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+    const txt = c.kind === 'deleted-here-changed-there' ? 'Lo borraste aquí, pero en otro móvil lo cambiaron: se ha conservado (' + short(c.remote) + ').'
+      : c.kind === 'deleted-there-changed-here' ? 'Lo borraron en otro móvil, pero aquí lo cambiaste: se ha conservado (' + short(c.local) + ').'
+        : 'Aquí: ' + short(c.local) + ' · En el otro móvil: ' + short(c.remote) + '. Se ha quedado el de aquí.';
+    return '<div class="it"><div><b>' + esc(what) + '</b><small>' + esc(when) + ' · ' + esc(txt) + '</small></div></div>';
+  };
+  return '<h3 class="sect">Sincronización</h3><div class="card warn-card"><div class="mut">Cambios hechos a la vez en dos móviles. No se ha perdido nada: aquí tienes el otro valor por si quieres corregirlo.</div>' +
+    '<div class="list mt8">' + list.slice(0, 20).map(row).join('') + '</div>' +
+    '<button type="button" class="sec mt8" id="syncok">Entendido, borrar estos avisos</button></div>';
+}
+
 export function renderAccount() {
   renderAvatarButton();
   const box = $('#acct');
   // No repintar mientras se escribe (p. ej. la contraseña para eliminar la cuenta).
   if (!box || box.contains(document.activeElement)) return;
   const wasOpen = $('#adel') && $('#adel').open;
-  box.innerHTML = profileCard();
+  box.innerHTML = profileCard() + conflictsCard();
+  const sok = $('#syncok');
+  if (sok) sok.onclick = () => { clearSyncConflicts(); renderAccount(); };
   const lg = $('#legalok');
   if (lg) lg.textContent = S.cfg.legal && S.cfg.legal.at && S.cfg.legal.at !== 'x' ? 'Aceptadas el ' + String(S.cfg.legal.at).slice(0, 10).split('-').reverse().join('/') : 'Léelas aquí';
   if (wasOpen && $('#adel')) $('#adel').open = true;
@@ -274,6 +301,7 @@ async function startClaude() {
 
 export function initAccount(rerender) {
   rerenderAll = rerender;
+  window.addEventListener('rutivo:sync', () => renderAccount());
   renderAccount();
   if (accountsEnabled()) startFirebase();
   else if (window.claude) startClaude();

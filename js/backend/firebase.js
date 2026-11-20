@@ -100,6 +100,24 @@ export function userStore(uid) {
     },
     put: (id, value) => fs.setDoc(fs.doc(data(), id), value),
     remove: (id) => fs.deleteDoc(fs.doc(data(), id)),
+    async get(id) {
+      const snap = await fs.getDoc(fs.doc(data(), id));
+      return snap.exists() ? snap.data() : null;
+    },
+    /**
+     * Escribe varios documentos y la marca de versión en UNA transacción, solo si
+     * la marca sigue siendo `expectTs` (nadie ha escrito desde que se leyó). Si
+     * otro móvil escribió entre medias, falla con code 'stale' y no se escribe nada.
+     */
+    commit: ({ sets = {}, deletes = [], expectTs, newTs }) => fs.runTransaction(db, async (tx) => {
+      const metaRef = fs.doc(data(), 'meta');
+      const snap = await tx.get(metaRef);
+      const cur = snap.exists() && typeof snap.data().ts === 'number' ? snap.data().ts : null;
+      if (cur !== expectTs) throw Object.assign(new Error('stale'), { code: 'stale' });
+      for (const [id, value] of Object.entries(sets)) tx.set(fs.doc(data(), id), value);
+      for (const id of deletes) tx.delete(fs.doc(data(), id));
+      tx.set(metaRef, { ts: newTs });
+    }),
     putPhoto: (id, dataUrl) => fs.setDoc(photo(id), { d: dataUrl }),
     async getPhoto(id) {
       const snap = await fs.getDoc(photo(id));

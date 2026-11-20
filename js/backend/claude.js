@@ -13,6 +13,19 @@ export async function claudeStore() {
     },
     put: (id, value) => col().doc(id).set(value),
     remove: (id) => col().doc(id).delete(),
+    async get(id) {
+      const snap = await col().doc(id).get();
+      return snap.exists ? snap.data() : null;
+    },
+    // Este almacén no tiene transacciones: se comprueba la marca justo antes de escribir
+    async commit({ sets = {}, deletes = [], expectTs, newTs }) {
+      const snap = await col().doc('meta').get();
+      const cur = snap.exists && typeof snap.data().ts === 'number' ? snap.data().ts : null;
+      if (cur !== expectTs) throw Object.assign(new Error('stale'), { code: 'stale' });
+      for (const [id, value] of Object.entries(sets)) await col().doc(id).set(value);
+      for (const id of deletes) await col().doc(id).delete();
+      await col().doc('meta').set({ ts: newTs });
+    },
     putPhoto: (id, dataUrl) => col().doc('foto-' + id).set({ d: dataUrl }),
     async getPhoto(id) {
       const snap = await col().doc('foto-' + id).get();

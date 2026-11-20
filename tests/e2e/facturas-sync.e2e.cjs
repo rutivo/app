@@ -1,6 +1,7 @@
 // Tarea 1: facturas antiguas y sincronización segura (navegador real + Firestore simulado).
 // Uso: node tests/e2e/facturas-sync.e2e.cjs
 const { chromium } = require('playwright');
+const { isDeepStrictEqual } = require('util'); // mismo contenido (el orden de los campos no importa)
 const { createFirestore, serveApp, device } = require('./firebase-falso.cjs');
 
 const res = [];
@@ -39,7 +40,7 @@ const sortId = (l) => [...l].sort((a, b) => a.id.localeCompare(b.id));
     const B = await device(browser, app, store, { local: null, owner: false });
     await wait(3500);
     const facB = (await local(B.page)).fac || [];
-    ok('A7 · un segundo móvil descarga las 9 facturas idénticas (ida y vuelta sin pérdidas)', JSON.stringify(sortId(facB)) === JSON.stringify(sortId(facA)), facB.length + ' facturas');
+    ok('A7 · un segundo móvil descarga las 9 facturas idénticas (ida y vuelta sin pérdidas)', isDeepStrictEqual(sortId(facB), sortId(facA)), facB.length + ' facturas');
     await B.page.evaluate(() => document.querySelector('.tabs button[data-v="fa"]').click());
     await B.page.waitForTimeout(500);
     ok('A8 · las facturas antiguas se ven y se abren en el segundo móvil', /001/.test(await B.page.innerText('#lfac')) && (await B.page.evaluate(() => { document.querySelector('#lfac [data-of]').click(); return new Promise((r) => setTimeout(() => r(document.querySelector('#sheet').innerText), 400)); })).includes('Viajes Costa'));
@@ -53,7 +54,7 @@ const sortId = (l) => [...l].sort((a, b) => a.id.localeCompare(b.id));
     store.db.set('users/u1/data/meta', { ts: 5000 });
     const C = await device(browser, app, store, { local: null, owner: false });
     await wait(3000);
-    ok('B1 · lee la nube en formato antiguo sin problemas', JSON.stringify(sortId((await local(C.page)).fac)) === JSON.stringify(sortId(old)));
+    ok('B1 · lee la nube en formato antiguo sin problemas', isDeepStrictEqual(sortId((await local(C.page)).fac), sortId(old)));
     await C.ctx.close();
 
     // ---------- C: una factura que no cabe sola: no se sube, NO se borra de la nube, y se avisa ----------
@@ -66,7 +67,14 @@ const sortId = (l) => [...l].sort((a, b) => a.id.localeCompare(b.id));
     await wait(4000);
     const d2 = store.docsOf('u1');
     ok('C1 · el documento de 2027 que ya estaba en la nube no se ha tocado ni borrado', d2['fac-2027'] && d2['fac-2027'].j === JSON.stringify(prev));
-    ok('C2 · la marca de versión NO se actualiza (otro móvil no cogerá una copia incompleta)', d2.meta.ts === 500);
+    // Otro móvil (versión nueva) sincroniza: fusiona sin borrar; y este móvil vuelve a
+    // sincronizar: la factura que no cabe sigue aquí (nunca se pierde)
+    const D2 = await device(browser, app, store, { local: null, owner: false });
+    await wait(3000);
+    await D.page.evaluate(async () => (await import('/js/cloud.js')).flush());
+    await wait(500);
+    ok('C2 · otro móvil sincronizando no hace perder la factura que no cabe', (await local(D.page)).fac.some((f) => f.id === huge.id) && (await local(D2.page)).fac.some((f) => f.id === prev[0].id));
+    await D2.ctx.close();
     const msg = await syncText(D.page);
     ok('C3 · aviso claro en la pantalla principal (no dice «sin conexión»)', /No se pudo sincronizar la factura 002/.test(msg) && !/Sin conexión/.test(msg), msg);
     ok('C4 · el resto sí se sube (caja y ajustes)', !!d2['mov-2026-11'] && !!d2.cfg);
