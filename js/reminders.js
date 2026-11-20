@@ -87,6 +87,7 @@ export async function buildAlarms(now = Date.now()) {
     if (s.sv && s.tl) add({ id: 'wc-' + s.f + '-' + s.id, at: new Date(s.f + 'T' + s.sv + ':00').getTime() - 60 * 6e4, title: 'Mandar bienvenida', body: (s.pa || 'Pasajero') + ' · vuelo ' + (s.vu || '') + ' sale a las ' + s.sv });
   }
   const day = today();
+  for (const a of dailyAlarms(S, now)) add(a);
   if (S.huc.length && !S.huc.some((x) => x.f === day && x.i > 0)) add({ id: 'hu-' + day, at: new Date(day + 'T21:00:00').getTime(), title: 'Hucha', body: 'Recuerda meter hoy en la hucha' });
   const changed = [...plans].some(([k, p]) => { const o = lastPlans.get(k); return !o || Math.abs(o.leave - p.leave) > 3e4; }) || plans.size !== lastPlans.size;
   lastPlans = plans;
@@ -128,6 +129,32 @@ export function scheduleReminders() {
   return running;
 }
 
+const DAILY_MORNING = '10:30';
+const DAILY_NIGHT = '21:30';
+const isoDay = (ms) => { const d = new Date(ms); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
+
+/**
+ * Recordatorios de cada día (hoy y los 2 siguientes, para que lleguen aunque no abras la app):
+ * por la mañana, empezar la jornada (hora y km); por la noche, apuntar gastos e ingresos.
+ * La mañana no se avisa si ya empezaste la jornada de ese día.
+ */
+export function dailyAlarms(state, now = Date.now()) {
+  const cfg = state.cfg || {};
+  if (cfg.diario === 0) return [];
+  const morning = /^\d\d:\d\d$/.test(cfg.diaM || '') ? cfg.diaM : DAILY_MORNING;
+  const night = /^\d\d:\d\d$/.test(cfg.diaN || '') ? cfg.diaN : DAILY_NIGHT;
+  const out = [];
+  for (let k = 0; k < 3; k++) {
+    const d = isoDay(now + k * 864e5);
+    const started = (state.jor || []).some((j) => j.f === d && (j.hi || j.ki));
+    const am = new Date(d + 'T' + morning + ':00').getTime();
+    const pm = new Date(d + 'T' + night + ':00').getTime();
+    if (!started && am > now) out.push({ id: 'dia-m-' + d, at: am, title: '☀️ Empieza un nuevo día', body: 'Apunta la hora de inicio y los km del coche en Rutivo.' });
+    if (pm > now) out.push({ id: 'dia-n-' + d, at: pm, title: '📝 No olvides apuntar lo de hoy', body: 'Tus gastos e ingresos del día, y los km al terminar. Un minuto y lo tienes al día.' });
+  }
+  return out;
+}
+
 function settingsHtml() {
   const st = leaveSettings(S.cfg);
   const num = (id, label, v) => '<label class="f" for="' + id + '">' + label + '</label><input id="' + id + '" type="number" min="0" max="120" inputmode="numeric" value="' + v + '">';
@@ -138,6 +165,11 @@ function settingsHtml() {
     num('salant', 'En otras recogidas, llegar … min antes', st.early) +
     num('salcol', 'Colchón extra (min)', st.buffer) +
     num('saldef', 'Camino si no sé dónde estás (min)', st.fallback) +
+    '</details>' +
+    '<details class="mt10"><summary><b>📅 Recordatorios de cada día</b></summary>' +
+    '<label class="chk mt8"><input type="checkbox" id="diaon"' + (S.cfg.diario !== 0 ? ' checked' : '') + '> Avisarme cada día</label>' +
+    '<div class="row"><div><label class="f" for="diam">☀️ Empezar el día</label><input id="diam" type="time" value="' + (S.cfg.diaM || DAILY_MORNING) + '"></div>' +
+    '<div><label class="f" for="dian">📝 Apuntar lo del día</label><input id="dian" type="time" value="' + (S.cfg.diaN || DAILY_NIGHT) + '"></div></div>' +
     '</details>';
 }
 
@@ -168,6 +200,8 @@ export async function renderReminders() {
   if (on) {
     if ($$('avl')) $$('avl').onchange = () => { S.cfg.avlead = Math.max(0, +$$('avl').value || 0); save(); scheduleReminders(); };
     $$('salon').onchange = () => { S.cfg.salya = $$('salon').checked ? 1 : 0; save(); renderReminders(); scheduleReminders(); };
+    $$('diaon').onchange = () => { S.cfg.diario = $$('diaon').checked ? 1 : 0; save(); scheduleReminders(); };
+    for (const [id, k] of [['diam', 'diaM'], ['dian', 'diaN']]) $$(id).onchange = () => { if ($$(id).value) { S.cfg[k] = $$(id).value; save(); scheduleReminders(); } };
     for (const [id, k] of [['salat', 'salAt'], ['salant', 'salAnt'], ['salcol', 'salCol'], ['saldef', 'salDef']]) {
       $$(id).onchange = () => { S.cfg[k] = Math.min(120, Math.max(0, +$$(id).value || 0)); save(); scheduleReminders(); };
     }
