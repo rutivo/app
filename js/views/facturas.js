@@ -1,6 +1,7 @@
 // Pantalla "Facturas": datos del emisor, logo, emisión de facturas, PDF y copia de seguridad.
 import { $, $$, confirmTapTimed, disarm, downloadBlob, loadScript, onClick, saveFile, toast } from '../dom.js';
 import { COLORS, ICON_NAMES, ICONS, accentColor, iconSvg, logoSvg } from '../logo.js';
+import { problemText, syncProblems } from '../cloud.js';
 import { clientProblems, fingerprint, isoWithZone, issuerProblems, lastHash, nextRectNumber, recordString } from '../facturaLegal.js';
 import { baseOf, invoiceTotals, nextInvoiceNumber } from '../money.js';
 import { S, exportBackup, importBackup, markBackupDone, save } from '../store.js';
@@ -160,13 +161,24 @@ function renderInvoices() {
   if (clients.includes(current)) select.value = current;
   renderPending();
 
+  // Avisos de sincronización de facturas (nunca se pierden: siguen en el móvil)
+  const facIssues = syncProblems().filter((p) => p.kind === 'invoice-too-big' || String(p.key).startsWith('fac-'));
+  const box = $('#facsync');
+  if (box) {
+    box.hidden = !facIssues.length;
+    box.innerHTML = facIssues.length
+      ? '<b>Facturas sin sincronizar con tu cuenta</b>' + facIssues.map((p) => '<div class="mt8">' + esc(problemText(p)) + '</div>').join('') +
+        '<div class="mut mt8">No se ha borrado nada: siguen en este móvil y en la copia de seguridad. Haz una copia (Cuenta → Copia de seguridad) por si acaso.</div>'
+      : '';
+  }
+  const unsynced = (f) => facIssues.some((p) => (p.num && p.num === f.num && p.fecha === f.fecha) || (!p.num && String(p.key).startsWith('fac-' + String(f.fecha).slice(0, 4))));
   $('#lfac').innerHTML = S.fac.length
     ? [...S.fac]
         .reverse()
         .map((f) => {
           const rect = f.tipo && f.tipo !== 'F1';
           const tag = f.anulada ? ' <span class="tag pend">Anulada (' + esc(f.anulada) + ')</span>' : rect ? ' <span class="tag">Rectificativa de ' + esc(f.rect.num) + '</span>' : '';
-          return '<div class="it" data-of="' + esc(f.id) + '"><div><b>' + esc(f.num) + '</b>' + tag + '<small>' + esc(f.cl.nom) + ' · ' + fd(f.fecha) + '</small></div>' +
+          return '<div class="it" data-of="' + esc(f.id) + '"><div><b>' + esc(f.num) + '</b>' + tag + (unsynced(f) ? ' <span class="tag pend">⚠️ Sin sincronizar</span>' : '') + '<small>' + esc(f.cl.nom) + ' · ' + fd(f.fecha) + '</small></div>' +
             '<div><b>' + eur(invoiceTotals(f).t) + '</b>' +
             '<button class="x" data-df="' + esc(f.id) + '" aria-label="Borrar factura">×</button></div></div>';
         })
@@ -547,6 +559,7 @@ export function initFacturas(rerender) {
   onClick('[data-af]', annulInvoice);
   onClick('[data-df]', deleteInvoice);
   $('#faon').onclick = () => { S.cfg.facOn = 1; save(); rerenderAll(); };
+  window.addEventListener('rutivo:sync', () => renderInvoices());
   $('#fanoff').onclick = () => { S.cfg.facOn = 0; save(); rerenderAll(); toast('«Crear facturas» oculto. Tus facturas siguen guardadas.'); };
   $('#faexp').onclick = exportRegister;
   $('#invanul').onclick = () => annulInvoice($('#invanul'));

@@ -1071,3 +1071,5 @@ body:has(input:focus, textarea:focus, select:focus) .asis-fab { opacity: 0; poin
 /* Filas que son enlaces (p. ej. «Legal»): igual que los botones, sin subrayado */
 a.row-btn, a.row-btn:visited { text-decoration: none; color: inherit; }
 a.row-btn .chev { text-decoration: none; }
+/* Avisos de sincronización */
+.warn-card { border-left: 4px solid var(--out) !important; }

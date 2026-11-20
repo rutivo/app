@@ -2,9 +2,10 @@
 //
 // El móvil siempre guarda una copia local (store.js); la nube es la copia
 // buena. Los datos se suben troceados por mes/año para enviar solo lo que
-// cambia. Si dos móviles editan a la vez, gana el último en guardar.
+// cambia (ver sync/shards.js). Si dos móviles editan a la vez, gana el último en guardar.
 import { $ } from './dom.js';
 import { LISTS, S, clearLocal, hasLocalData, replaceState, setSaveListener, writeLocal } from './store.js';
+import { buildShards, classifyError, joinShards, shardLabel } from './sync/shards.js';
 
 const OWNER_KEY = 'cajaOwner'; // usuario al que pertenecen los datos de este móvil
 
@@ -13,8 +14,34 @@ let lastSent = {}; // trozo → JSON subido la última vez
 let busy = false;
 let dirty = false;
 let pending = false; // hay cambios locales sin subir
-let failed = false; // la última subida falló
+let failed = false; // la última subida falló por algo pasajero (sin conexión…): se reintenta
+let problems = []; // lo que no se pudo subir y por qué (se avisa; no se pierde nada)
 let timer;
+
+/** Lo que no se ha podido sincronizar ahora mismo: [{kind, key, label, num?, bytes?}]. */
+export const syncProblems = () => problems.slice();
+
+const kb = (b) => (b >= 1048576 ? (b / 1048576).toFixed(1).replace('.', ',') + ' MB' : Math.round(b / 1024) + ' KB');
+
+/** Mensaje claro para cada problema (siempre dice que los datos siguen en el móvil). */
+export function problemText(p) {
+  if (p.kind === 'invoice-too-big') return '⚠️ No se pudo sincronizar la factura ' + p.num + ' (' + kb(p.bytes) + ', demasiado grande). Sigue guardada en este móvil.';
+  if (p.kind === 'doc-too-big' || p.kind === 'too-big') return '⚠️ No se pudo sincronizar «' + p.label + '»: ocupa demasiado' + (p.bytes ? ' (' + kb(p.bytes) + ')' : '') + '. Sigue guardado en este móvil.';
+  if (p.kind === 'too-many-chunks') return '⚠️ No se pudieron sincronizar «' + p.label + '»: son demasiadas. Siguen guardadas en este móvil.';
+  if (p.kind === 'denied') return '⚠️ No se pudo guardar «' + p.label + '» en tu cuenta (permiso denegado). Tus datos siguen en este móvil; cierra sesión y vuelve a entrar.';
+  if (p.kind === 'auth') return '⚠️ Tu sesión ha caducado: no se pudo guardar en tu cuenta. Vuelve a entrar; tus datos siguen en este móvil.';
+  if (p.kind === 'quota') return '⚠️ No se pudo guardar ahora (servicio saturado). Se reintentará; tus datos siguen en este móvil.';
+  return '⚠️ No se pudo guardar «' + p.label + '» en tu cuenta. Se reintentará; tus datos siguen en este móvil.';
+}
+
+function setProblems(list) {
+  problems = list.map((p) => ({ ...p, label: p.label || shardLabel(p.key) }));
+  try {
+    window.dispatchEvent(new CustomEvent('rutivo:sync', { detail: syncProblems() }));
+  } catch {
+    /* fuera del navegador */
+  }
+}
 
 /**
  * Estado del guardado. En la pantalla principal solo se enseña si hay algo que
@@ -53,47 +80,56 @@ const unionById = (a, b) => {
   return [...m.values()];
 };
 
-/** Divide el estado en trozos pequeños (por mes o año). */
-function shards() {
-  const out = { cfg: JSON.stringify({ cfg: S.cfg, cli: S.cli }) };
-  const groups = {};
-  const add = (prefix, list, keyOf) => list.forEach((x) => (groups[prefix + '-' + keyOf(x)] ||= []).push(x));
-  const byMonth = (x) => x.f.slice(0, 7);
-  add('mov', S.mov, byMonth);
-  add('srv', S.srv, byMonth);
-  add('gas', S.gas, byMonth);
-  add('huc', S.huc, byMonth);
-  add('jor', S.jor || [], byMonth);
-  add('prv', S.prv, () => 'all');
-  add('fac', S.fac, (x) => x.fecha.slice(0, 4));
-  for (const k in groups) out[k] = JSON.stringify(groups[k]);
-  return out;
-}
-
+/**
+ * Sube lo que ha cambiado, documento a documento. Un fallo en uno no impide
+ * subir los demás. Lo que no cabe o falla no se borra de la nube y se avisa.
+ */
 async function push() {
-  try {
-    status('Guardando en tu cuenta…');
-    S.ts = S.ts || Date.now();
-    const docs = shards();
-    for (const k in docs) {
-      if (lastSent[k] !== docs[k]) {
-        await remote.put(k, { j: docs[k] });
-        lastSent[k] = docs[k];
-      }
+  status('Guardando en tu cuenta…');
+  S.ts = S.ts || Date.now();
+  const { docs, keep, problems: found } = buildShards(S);
+  const issues = [...found];
+  let offline = false;
+  for (const k in docs) {
+    if (lastSent[k] === docs[k]) continue;
+    try {
+      await remote.put(k, { j: docs[k] });
+      lastSent[k] = docs[k];
+    } catch (err) {
+      const kind = classifyError(err, typeof navigator === 'undefined' || navigator.onLine !== false);
+      if (kind === 'offline') { offline = true; break; }
+      issues.push({ kind, key: k });
     }
+  }
+  // Solo se borran de la nube los documentos que ya no existen de verdad
+  // (nunca los que no se han podido subir ni los que fallaron)
+  if (!offline) {
+    const failedKeys = new Set(issues.map((x) => x.key));
     for (const k of Object.keys(lastSent)) {
-      if (!(k in docs)) {
+      if (k in docs || keep.includes(k) || failedKeys.has(k)) continue;
+      try {
         await remote.remove(k);
         delete lastSent[k];
+      } catch (err) {
+        if (classifyError(err) === 'offline') { offline = true; break; }
       }
     }
-    await remote.put('meta', { ts: S.ts });
-    failed = false;
-    status('Datos guardados en tu cuenta ✓');
-  } catch {
-    failed = true;
-    status('Sin conexión: los cambios están en este móvil y se subirán al volver internet.');
   }
+  // La marca de «última versión» solo se actualiza si TODO está en la nube:
+  // así otro móvil nunca sustituye sus datos por una copia incompleta.
+  if (!offline && !issues.length) {
+    try {
+      await remote.put('meta', { ts: S.ts });
+    } catch (err) {
+      if (classifyError(err) === 'offline') offline = true;
+      else issues.push({ kind: classifyError(err), key: 'meta' });
+    }
+  }
+  setProblems(issues);
+  failed = offline || issues.some((x) => ['quota', 'unknown'].includes(x.kind));
+  if (offline) status('Sin conexión: los cambios están en este móvil y se subirán al volver internet.');
+  else if (issues.length) status(problemText(problems[0]) + (problems.length > 1 ? ' (y ' + (problems.length - 1) + ' más)' : ''));
+  else status('Datos guardados en tu cuenta ✓');
 }
 
 /** Sube los cambios; si llegan más mientras sube, vuelve a subir al acabar. */
@@ -125,20 +161,7 @@ function schedule() {
 
 /** Lee todo lo que hay en la nube. */
 async function fetchRemote() {
-  const docs = await remote.list();
-  const meta = docs.find((d) => d.id === 'meta');
-  const R = { mov: [], srv: [], fac: [], gas: [], huc: [], prv: [], jor: [], cli: {}, cfg: null, ts: meta ? meta.data.ts || 0 : 0 };
-  const sent = {};
-  for (const d of docs) {
-    if (d.id === 'meta') continue;
-    sent[d.id] = d.data.j;
-    const v = JSON.parse(d.data.j);
-    if (d.id === 'cfg') {
-      R.cfg = v.cfg;
-      R.cli = v.cli || {};
-    } else R[d.id.split('-')[0]]?.push(...v);
-  }
-  return { R, sent };
+  return joinShards(await remote.list());
 }
 
 function takeRemote(R) {
@@ -191,7 +214,8 @@ async function firstSync(uid, rerender) {
 
 /** Trae los cambios hechos desde otro móvil (si no hay cambios propios pendientes). */
 async function refresh(rerender) {
-  if (!remote || pending || busy || failed) return;
+  // Con algo sin subir (pendiente, fallido o que no cabe) no se descarga: se perdería lo de este móvil
+  if (!remote || pending || busy || failed || problems.length) return;
   try {
     const { R, sent } = await fetchRemote();
     if (R.ts && R.ts > (S.ts || 0)) {
@@ -233,6 +257,7 @@ export function stopSync() {
   clearTimeout(timer);
   pending = false;
   failed = false;
+  problems = [];
   lastSent = {};
   setSaveListener(() => false);
 }
