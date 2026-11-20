@@ -766,7 +766,7 @@ details[open] > summary.row-btn .chev { transform: rotate(90deg); }
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.28);
 }
 :root[data-theme="elegante"] .tabs {
-  background: rgba(10, 20, 38, 0.92);
+  background: rgba(10, 20, 38, 0.97);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
   border-top-color: rgba(255, 255, 255, 0.08);
@@ -939,7 +939,7 @@ span.siri-kb { background: none; }
   --card-bg: rgba(255, 255, 255, .88);
   --card-line: rgba(20, 32, 43, .08);
   --card-shadow: 0 8px 24px rgba(20, 32, 60, .08);
-  --tabs-bg: rgba(255, 255, 255, .82);
+  --tabs-bg: rgba(255, 255, 255, .95);
   --field-bg: #fff;
   --field-line: #d9dfe5;
   --sec-bg: #fff;
@@ -951,7 +951,7 @@ span.siri-kb { background: none; }
     --card-bg: linear-gradient(180deg, rgba(255,255,255,.075), rgba(255,255,255,.035));
     --card-line: rgba(255, 255, 255, .09);
     --card-shadow: 0 10px 30px rgba(0, 0, 0, .25);
-    --tabs-bg: rgba(14, 20, 38, .72);
+    --tabs-bg: rgba(14, 20, 38, .95);
     --field-bg: rgba(0, 0, 0, .25);
     --field-line: rgba(255, 255, 255, .09);
     --sec-bg: rgba(255, 255, 255, .06);
@@ -965,7 +965,7 @@ span.siri-kb { background: none; }
     --card-bg: linear-gradient(180deg, rgba(255,255,255,.075), rgba(255,255,255,.035));
     --card-line: rgba(255, 255, 255, .09);
     --card-shadow: 0 10px 30px rgba(0, 0, 0, .25);
-    --tabs-bg: rgba(14, 20, 38, .72);
+    --tabs-bg: rgba(14, 20, 38, .95);
     --field-bg: rgba(0, 0, 0, .25);
     --field-line: rgba(255, 255, 255, .09);
     --sec-bg: rgba(255, 255, 255, .06);
@@ -1011,11 +1011,12 @@ button:not([class]), button.mt10:not(.sec), button.small-btn:not(.sec) { backgro
 button.sec { background: var(--sec-bg); border: 1px solid var(--card-line); }
 input, select, textarea { border-radius: 14px !important; background: var(--field-bg) !important; border-color: var(--field-line) !important; }
 
-/* Barra de pestañas flotante con iconos */
+/* Barra de pestañas con iconos, pegada abajo (sin hueco por debajo) */
 .tabs {
-  left: 12px; right: 12px; bottom: calc(10px + env(safe-area-inset-bottom, 0px)); max-width: 536px; margin: 0 auto;
-  border-radius: 24px; padding: 6px; background: var(--tabs-bg); border: 1px solid var(--card-line);
-  backdrop-filter: blur(20px) saturate(160%); -webkit-backdrop-filter: blur(20px) saturate(160%); box-shadow: 0 12px 30px rgba(0,0,0,.25); z-index: 10;
+  left: 0; right: 0; bottom: 0; margin: 0;
+  border-radius: 22px 22px 0 0; padding: 6px max(6px, calc((100vw - 548px) / 2)) calc(6px + env(safe-area-inset-bottom, 0px));
+  background: var(--tabs-bg); border: 0; border-top: 1px solid var(--card-line);
+  backdrop-filter: blur(20px) saturate(160%); -webkit-backdrop-filter: blur(20px) saturate(160%); box-shadow: 0 -6px 20px rgba(0,0,0,.18); z-index: 10;
 }
 .tabs button { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 8px 2px 7px; font-size: 11px; border-radius: 18px; box-shadow: none !important; background: transparent !important; }
 .tabs button::before { content: ''; width: 24px; height: 24px; background: currentColor; -webkit-mask: var(--ic) center / contain no-repeat; mask: var(--ic) center / contain no-repeat; }
