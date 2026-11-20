@@ -46,7 +46,8 @@ export function leavePlan(s, flight, drive, cfg = {}, now = Date.now()) {
     airport,
     landing,
     delay: arr ? arrivalDelay(flight) : null,
-    off: airport && arr ? Math.round((leave - arr) / 6e4) : null, // minutos desde el aterrizaje (para el servidor)
+    // minutos desde el aterrizaje (para el servidor). Sin datos del vuelo aún, cuenta la hora del servicio como aterrizaje previsto
+    off: airport ? Math.round((leave - landing) / 6e4) : null,
     late: leave < now,
   };
 }

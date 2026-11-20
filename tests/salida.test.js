@@ -35,3 +35,9 @@ test('sin vuelo ni posición: hora del servicio y camino por defecto', () => {
 test('tráfico: hora punta laborable más lenta que la noche', () => {
   assert.ok(trafficFactor(new Date('2026-11-18T08:15:00')) > trafficFactor(new Date('2026-11-18T23:30:00')));
 });
+
+test('sin datos del vuelo todavía: el servidor podrá moverlo igual', () => {
+  const p = leavePlan(srv, null, null, { salDef: 30 }, T('08:00'));
+  // aterrizaje previsto = hora del servicio (15:00); salir 15:10 − 30 − 5 = 14:35 → 25 min antes de aterrizar
+  assert.equal(p.off, -25);
+});
