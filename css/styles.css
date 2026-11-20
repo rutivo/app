@@ -1068,3 +1068,6 @@ body:has(input:focus, textarea:focus, select:focus) .asis-fab { opacity: 0; poin
 .next-item > div:first-child { min-width: 0; flex: 1 1 auto; }
 .next-item small.sal-mini, .next-item small.fl-mini { white-space: normal; }
 .next-item .small-btn { flex: 0 0 auto; }
+/* Filas que son enlaces (p. ej. «Legal»): igual que los botones, sin subrayado */
+a.row-btn, a.row-btn:visited { text-decoration: none; color: inherit; }
+a.row-btn .chev { text-decoration: none; }

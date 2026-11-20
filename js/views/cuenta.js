@@ -162,11 +162,6 @@ function profileCard() {
     '<div class="card list">' +
     row('alo', '⎋', 'Cerrar sesión', 'Tus datos seguirán guardados en tu cuenta') +
     '</div>' +
-    '<h3 class="sect">Legal</h3>' +
-    '<div class="card list">' +
-    '<a class="row-btn" href="legal.html" target="_blank" rel="noopener"><span class="ico" aria-hidden="true">📄</span><span class="txt"><b>Condiciones, privacidad y aviso legal</b><small>' +
-    (S.cfg.legal ? 'Aceptadas el ' + esc(String(S.cfg.legal.at).slice(0, 10).split('-').reverse().join('/')) : 'Léelas aquí') + '</small></span><span class="chev" aria-hidden="true">›</span></a>' +
-    '</div>' +
     '<h3 class="sect">Privacidad</h3>' +
     '<div class="card list"><details class="row-more" id="adel">' +
     '<summary class="row-btn danger"><span class="ico" aria-hidden="true">✕</span>' +
@@ -187,6 +182,8 @@ export function renderAccount() {
   if (!box || box.contains(document.activeElement)) return;
   const wasOpen = $('#adel') && $('#adel').open;
   box.innerHTML = profileCard();
+  const lg = $('#legalok');
+  if (lg) lg.textContent = S.cfg.legal && S.cfg.legal.at && S.cfg.legal.at !== 'x' ? 'Aceptadas el ' + String(S.cfg.legal.at).slice(0, 10).split('-').reverse().join('/') : 'Léelas aquí';
   if (wasOpen && $('#adel')) $('#adel').open = true;
   const out = $('#alo');
   if (out) out.onclick = () => signOut(out);
