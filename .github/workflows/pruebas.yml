@@ -1,0 +1,78 @@
+# Integración continua de Rutivo: en cada cambio se ejecutan todas las pruebas y
+# se revisan las librerías. Cada lunes, además, se buscan avisos de seguridad
+# nuevos aunque no haya cambios (las librerías envejecen).
+name: Pruebas
+
+on:
+  push:
+  pull_request:
+  schedule:
+    - cron: '17 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pruebas-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  logica:
+    name: Lógica (Node)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm test
+
+  librerias:
+    name: Librerías (integridad y avisos de seguridad)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Archivos de vendor/ sin alterar (SHA-256)
+        run: cd vendor && sha256sum -c SHA256SUMS
+      - name: Avisos de seguridad (npm audit de las versiones exactas)
+        run: npm run test:libs
+
+  reglas:
+    name: Reglas de Firestore (emulador oficial)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm run test:rules
+
+  navegador:
+    name: Navegador (Playwright)
+    needs: logica
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
+        env:
+          TZ: Europe/Madrid
