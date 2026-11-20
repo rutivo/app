@@ -20,7 +20,8 @@ let ui = null;
 const voiceOn = () => readFlag(VOICE_KEY) !== '0';
 // Modo dictado: si el micro de la app no capta nada en este móvil, se usa el 🎤 del teclado (siempre funciona)
 const DICT_KEY = 'asisDictado';
-const dictation = () => readFlag(DICT_KEY) === '1' || !Recognition;
+// En iPhone, por defecto el dictado del teclado: tras hablar Rutivo, el micro web deja de oír (fallo de iOS)
+const dictation = () => !Recognition || readFlag(DICT_KEY) === '1' || (isIOS && readFlag(DICT_KEY) !== '0');
 
 // ---------- voz que habla ----------
 
@@ -265,11 +266,22 @@ function listen() {
   r.maxAlternatives = 4;
   const quiet = (ms) => { clearTimeout(silence); silence = setTimeout(() => { if (rec === r) try { r.stop(); } catch { /* */ } }, ms); };
   r.onstart = () => { started = true; if (rec === r) recLive = true; setState('listening'); quiet(isIOS ? 9000 : 7000); };
-  r.onaudiostart = () => { if (!heard) setState('listening', '🎙️ Micro abierto… habla'); };
-  r.onsoundstart = () => { if (!heard) setState('listening', '🔊 Oigo sonido…'); };
-  r.onspeechstart = () => { if (!heard) setState('listening', '🗣️ Oigo voz…'); };
+  let sound = false;
+  r.onaudiostart = () => {
+    if (!heard) setState('listening', '🎙️ Micro abierto… habla');
+    // Micro abierto pero sin ningún sonido en 5 s: el fallo del iPhone → al teclado, sin esperar más
+    setTimeout(() => {
+      if (rec === r && !sound && !heard && ui) {
+        stopListening();
+        useDictation('El micro de la app se abre pero no oye nada en este móvil. Usa el 🎤 del teclado: habla y se envía solo.');
+      }
+    }, 5000);
+  };
+  r.onsoundstart = () => { sound = true; if (!heard) setState('listening', '🔊 Oigo sonido…'); };
+  r.onspeechstart = () => { sound = true; if (!heard) setState('listening', '🗣️ Oigo voz…'); };
   r.onresult = (e) => {
     heard = true;
+    sound = true;
     interim = '';
     for (let i = e.resultIndex; i < e.results.length; i++) {
       const res = e.results[i];
@@ -338,7 +350,7 @@ export function openAssistant() {
     '<div class="siri-sug">' + SUGGEST.map((q) => '<button type="button" data-asq="' + esc(q) + '">' + esc(q) + '</button>').join('') + '</div>' +
     '<form class="siri-form" hidden><input autocomplete="off" enterkeyhint="send" placeholder="Escribe o dicta con el 🎤 del teclado"><button aria-label="Enviar">➤</button></form>' +
     '<div class="siri-status"></div>' +
-    '<button type="button" class="siri-retry" data-sretry>🎙️ Probar otra vez el micro de la app</button>' +
+    '<button type="button" class="siri-retry" data-sretry>🎙️ Usar el micro de la app</button>' +
     '<div class="siri-bottom"><button type="button" class="siri-kb" data-skb aria-label="Escribir">⌨️</button>' +
     '<button type="button" class="siri-orb" data-sorb aria-label="Hablar"><i></i><i></i><i></i></button>' +
     '<span class="siri-kb"></span></div>';
