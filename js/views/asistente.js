@@ -18,6 +18,9 @@ let rerenderAll = () => {};
 let ui = null;
 
 const voiceOn = () => readFlag(VOICE_KEY) !== '0';
+// Modo dictado: si el micro de la app no capta nada en este móvil, se usa el 🎤 del teclado (siempre funciona)
+const DICT_KEY = 'asisDictado';
+const dictation = () => readFlag(DICT_KEY) === '1' || !Recognition;
 
 // ---------- voz que habla ----------
 
@@ -227,14 +230,22 @@ function micHelp(error) {
 function showKeyboard(hint) {
   ui.form.hidden = false;
   setState('idle', hint || LABELS.idle);
+  ui.input.focus(); // dentro del toque: el iPhone abre el teclado
   setTimeout(() => ui.input.focus(), 30);
+}
+
+/** Pasar al dictado del teclado (y recordarlo en este móvil). */
+function useDictation(why) {
+  writeFlag(DICT_KEY, '1');
+  if (ui) ui.root.classList.add('dict');
+  showKeyboard(why || 'Toca el 🎤 del teclado y habla. Se envía solo cuando terminas.');
 }
 
 /** Empieza a escuchar. Se llama SIEMPRE desde un toque (lo exige el iPhone). */
 function listen() {
   unlockVoice();
   try { speechSynthesis.cancel(); } catch { /* */ }
-  if (!Recognition) return showKeyboard(micHelp());
+  if (dictation()) return showKeyboard('Toca el 🎤 del teclado y habla. Se envía solo cuando terminas.');
   // Tocar mientras escucha = parar. Si una escucha anterior se quedó colgada, se descarta y se empieza otra.
   if (rec && recLive && ui && ui.root.dataset.state === 'listening') { finishListening(); return; }
   stopListening();
@@ -254,6 +265,9 @@ function listen() {
   r.maxAlternatives = 4;
   const quiet = (ms) => { clearTimeout(silence); silence = setTimeout(() => { if (rec === r) try { r.stop(); } catch { /* */ } }, ms); };
   r.onstart = () => { started = true; if (rec === r) recLive = true; setState('listening'); quiet(isIOS ? 9000 : 7000); };
+  r.onaudiostart = () => { if (!heard) setState('listening', '🎙️ Micro abierto… habla'); };
+  r.onsoundstart = () => { if (!heard) setState('listening', '🔊 Oigo sonido…'); };
+  r.onspeechstart = () => { if (!heard) setState('listening', '🗣️ Oigo voz…'); };
   r.onresult = (e) => {
     heard = true;
     interim = '';
@@ -283,7 +297,7 @@ function listen() {
     misses++;
     if (misses >= 2 && failed !== 'aborted') {
       misses = 0;
-      return showKeyboard('No consigo oírte bien con el micro de la app. Toca el 🎤 del teclado y dicta: funciona igual.');
+      return useDictation('El micro de la app no capta nada en este móvil. A partir de ahora: toca el 🎤 del teclado y habla (se envía solo).');
     }
     if (failed === 'aborted') return setState('idle');
     if (failed && failed !== 'no-speech') return showKeyboard(micHelp(failed));
@@ -300,6 +314,7 @@ function listen() {
   setTimeout(() => {
     if (rec === r && !started && !heard && ui) {
       stopListening();
+      if (++misses >= 2) { misses = 0; return useDictation('El micro de la app no arranca en este móvil. A partir de ahora: toca el 🎤 del teclado y habla (se envía solo).'); }
       showKeyboard('El micrófono no ha arrancado. Toca el 🎤 del teclado y dicta, o vuelve a tocar la bola.');
     }
   }, 4000);
@@ -323,6 +338,7 @@ export function openAssistant() {
     '<div class="siri-sug">' + SUGGEST.map((q) => '<button type="button" data-asq="' + esc(q) + '">' + esc(q) + '</button>').join('') + '</div>' +
     '<form class="siri-form" hidden><input autocomplete="off" enterkeyhint="send" placeholder="Escribe o dicta con el 🎤 del teclado"><button aria-label="Enviar">➤</button></form>' +
     '<div class="siri-status"></div>' +
+    '<button type="button" class="siri-retry" data-sretry>🎙️ Probar otra vez el micro de la app</button>' +
     '<div class="siri-bottom"><button type="button" class="siri-kb" data-skb aria-label="Escribir">⌨️</button>' +
     '<button type="button" class="siri-orb" data-sorb aria-label="Hablar"><i></i><i></i><i></i></button>' +
     '<span class="siri-kb"></span></div>';
@@ -337,19 +353,35 @@ export function openAssistant() {
     if (el.matches('[data-sx]')) return closeAssistant();
     if (el.matches('[data-svoz]')) { writeFlag(VOICE_KEY, voiceOn() ? '0' : '1'); paintVoz(); try { speechSynthesis.cancel(); } catch { /* */ } return setState('idle'); }
     if (el.matches('[data-sorb]')) return listen(); // escuchar; si ya escucha, «he terminado»; si habla, se calla y te escucha
+    if (el.matches('[data-sretry]')) { writeFlag(DICT_KEY, '0'); root.classList.remove('dict'); ui.form.hidden = true; return listen(); }
     if (el.matches('[data-asyes]')) { unlockVoice(); return handle('sí'); }
     if (el.matches('[data-asno]')) { unlockVoice(); return handle('no'); }
     if (el.matches('[data-skb]')) { if (ui.form.hidden) showKeyboard(); else ui.form.hidden = true; return; }
     if (el.matches('[data-asq]')) { unlockVoice(); return handle(el.dataset.asq); }
     if (el.matches('[data-asundo]')) { undoAt(+el.dataset.asundo); paint(); }
   });
-  ui.form.onsubmit = (e) => {
-    e.preventDefault();
-    unlockVoice();
+  const send = () => {
+    clearTimeout(autoSend);
     const v = ui.input.value;
     ui.input.value = '';
     handle(v);
   };
+  let autoSend = null;
+  ui.form.onsubmit = (e) => {
+    e.preventDefault();
+    unlockVoice();
+    send();
+  };
+  // El dictado del teclado va escribiendo; cuando deja de escribir 1,8 s, se envía solo
+  ui.input.addEventListener('input', (e) => {
+    clearTimeout(autoSend);
+    if (!dictation() || !ui.input.value.trim()) return;
+    if (e.inputType === 'insertText' && e.data && e.data.length === 1) return; // tecleando a mano: espera a «Enviar»
+    setState('idle', '✍️ ' + ui.input.value.trim().slice(-60));
+    autoSend = setTimeout(send, 1800);
+  });
+  ui.input.addEventListener('focus', unlockVoice);
+  if (dictation()) root.classList.add('dict');
   paint();
   setState('idle');
   listen(); // al abrir ya escucha (el toque en el botón cuenta como permiso)

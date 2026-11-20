@@ -893,3 +893,5 @@ span.siri-kb { background: none; }
 .siri-yn { display: flex; gap: 8px; margin-top: 10px; }
 .siri-yn button { flex: 1; margin: 0; padding: 10px; font-size: 15px; border-radius: 12px; }
 .siri-yn button.sec { background: rgba(255, 255, 255, .12); color: #fff; border: 0; }
+.siri-retry { display: none; width: auto; margin: 6px auto 0; padding: 6px 12px; font-size: 13px; border-radius: 999px; background: rgba(255, 255, 255, .1); color: #fff; border: 0; }
+.siri.dict .siri-retry { display: block; }
