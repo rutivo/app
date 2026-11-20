@@ -430,8 +430,8 @@ const isValidBackup = (text) => {
   }
 };
 
-function applyBackup(text) {
-  const ok = importBackup(text);
+async function applyBackup(text) {
+  const ok = await importBackup(text);
   rerenderAll();
   toast(ok ? 'Datos restaurados.' : 'Se restauraron, pero no se pudieron guardar en este dispositivo.');
 }

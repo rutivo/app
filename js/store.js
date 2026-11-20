@@ -17,6 +17,8 @@
 //   cfg  configuración y datos del emisor
 //   ts   marca de tiempo del último cambio
 
+import * as idb from './localDb.js';
+
 const STORAGE_KEY = 'cajaTransfer';
 const BACKUP_KEY = 'lastBackup'; // fecha de la última copia de seguridad
 const PHOTO_PREFIX = 'foto_';
@@ -107,11 +109,12 @@ export function clearLocal() {
     const keys = [];
     for (let i = 0; i < localStorage.length; i++) keys.push(localStorage.key(i));
     for (const k of keys) {
-      if (k === STORAGE_KEY || k.startsWith(PHOTO_PREFIX) || k === 'avFired' || k === BACKUP_KEY) localStorage.removeItem(k);
+      if (k === STORAGE_KEY || k.startsWith(PHOTO_PREFIX) || k === 'avFired' || k === BACKUP_KEY || k === MIGRATED_KEY) localStorage.removeItem(k);
     }
   } catch {
     /* sin almacenamiento */
   }
+  idb.clear('fotos');
 }
 
 /** Pide al navegador que no borre los datos de la app por su cuenta. */
@@ -128,8 +131,32 @@ export function hasLocalData() {
 }
 
 // ---------- fotos de gasolina ----------
+// Se guardan en el almacén grande del móvil (IndexedDB, ver localDb.js). Si no
+// está disponible, en localStorage como antes. Las fotos antiguas de localStorage
+// se pasan con migratePhotos() sin riesgo: primero se copian y se comprueban, y
+// la copia antigua solo se borra en una apertura posterior si la nueva sigue igual.
 
-export function savePhotoLocal(id, dataUrl) {
+const lsGet = (k) => {
+  try {
+    return localStorage.getItem(k);
+  } catch {
+    return null;
+  }
+};
+const lsRemove = (k) => {
+  try {
+    localStorage.removeItem(k);
+  } catch {
+    /* sin acceso al almacenamiento */
+  }
+};
+
+/** Guarda la foto en el móvil. Devuelve true si quedó guardada. */
+export async function savePhotoLocal(id, dataUrl) {
+  if (await idb.set('fotos', id, dataUrl)) {
+    lsRemove(PHOTO_PREFIX + id); // por si había una versión antigua
+    return true;
+  }
   try {
     localStorage.setItem(PHOTO_PREFIX + id, dataUrl);
     return true;
@@ -138,20 +165,62 @@ export function savePhotoLocal(id, dataUrl) {
   }
 }
 
-export function getPhotoLocal(id) {
-  try {
-    return localStorage.getItem(PHOTO_PREFIX + id);
-  } catch {
-    return null;
-  }
+/** La foto guardada en este móvil, o null. */
+export async function getPhotoLocal(id) {
+  return (await idb.get('fotos', id)) || lsGet(PHOTO_PREFIX + id);
 }
 
-export function removePhotoLocal(id) {
+export async function removePhotoLocal(id) {
+  lsRemove(PHOTO_PREFIX + id);
+  await idb.del('fotos', id);
+}
+
+const MIGRATED_KEY = 'fotosIdb'; // cuándo se copiaron por primera vez las fotos al almacén grande
+const MIGRATION_WAIT = 3600e3; // la copia antigua se borra como pronto 1 hora después
+
+/**
+ * Pasa las fotos de localStorage al almacén grande. Nunca borra una foto que
+ * no esté ya, idéntica, en el almacén grande desde una apertura anterior.
+ * Devuelve {copied, freed, left}.
+ */
+export async function migratePhotos(now = Date.now()) {
+  const out = { copied: 0, freed: 0, left: 0 };
+  let ids = [];
   try {
-    localStorage.removeItem(PHOTO_PREFIX + id);
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && k.startsWith(PHOTO_PREFIX)) ids.push(k.slice(PHOTO_PREFIX.length));
+    }
   } catch {
-    /* sin acceso al almacenamiento */
+    return out;
   }
+  if (!ids.length || !(await idb.available())) {
+    out.left = ids.length;
+    return out;
+  }
+  const since = +lsGet(MIGRATED_KEY) || 0;
+  const canFree = since > 0 && now - since >= MIGRATION_WAIT;
+  for (const id of ids) {
+    const old = lsGet(PHOTO_PREFIX + id);
+    if (!old) continue;
+    const cur = await idb.get('fotos', id);
+    if (cur === old && canFree) {
+      lsRemove(PHOTO_PREFIX + id);
+      out.freed++;
+    } else if (cur !== old) {
+      // Lo de localStorage solo se escribe si el almacén grande falló: es lo más reciente.
+      if ((await idb.set('fotos', id, old)) && (await idb.get('fotos', id)) === old) out.copied++;
+      out.left++;
+    } else out.left++;
+  }
+  if (!since && out.copied) {
+    try {
+      localStorage.setItem(MIGRATED_KEY, String(now));
+    } catch {
+      /* sin espacio: se reintenta en la próxima apertura */
+    }
+  }
+  return out;
 }
 
 // ---------- copia de seguridad ----------
@@ -178,7 +247,7 @@ export function daysSinceBackup(now = Date.now()) {
 }
 
 /** Valida y aplica una copia. Lanza un Error si no es válida. */
-export function importBackup(text) {
+export async function importBackup(text) {
   let data;
   try {
     data = JSON.parse(text.trim());
@@ -191,7 +260,7 @@ export function importBackup(text) {
   replaceState({ ...base, cfg: {}, ...data });
   S.cfg = { iva: 10, ...S.cfg };
   // Las fotos no viajan en la copia: se quita la marca si no están en este dispositivo.
-  for (const g of S.gas) if (g.ph && !getPhotoLocal(g.id)) delete g.ph;
+  for (const g of S.gas) if (g.ph && !(await getPhotoLocal(g.id))) delete g.ph;
   return save();
 }
 

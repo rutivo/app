@@ -9,7 +9,7 @@
   "scripts": {
     "start": "npx -y http-server@14.1.1 -c-1 -p 8080 .",
     "test": "node --test tests/*.test.js",
-    "test:e2e": "node tests/e2e/facturas-sync.e2e.cjs && node tests/e2e/sync-dispositivos.e2e.cjs && node tests/e2e/pdf.e2e.cjs && node tests/e2e/seguridad.e2e.cjs",
+    "test:e2e": "node tests/e2e/facturas-sync.e2e.cjs && node tests/e2e/sync-dispositivos.e2e.cjs && node tests/e2e/pdf.e2e.cjs && node tests/e2e/seguridad.e2e.cjs && node tests/e2e/almacen.e2e.cjs",
     "test:rules": "firebase emulators:exec --config tests/rules/firebase.json --project demo-rutivo \"node tests/rules/reglas.test.mjs\"",
     "test:libs": "node tests/seguridad-librerias.mjs"
   },

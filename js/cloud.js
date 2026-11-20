@@ -6,6 +6,7 @@
 // sin perder nada (ver sync/merge.js), y cada escritura comprueba que nadie
 // haya cambiado el documento mientras tanto.
 import { $ } from './dom.js';
+import * as idb from './localDb.js';
 import { LISTS, S, clearLocal, hasLocalData, replaceState, setSaveListener, writeLocal } from './store.js';
 import { merge3, sameState, snapshot } from './sync/merge.js';
 import { buildShards, classifyError, joinShards, shardLabel } from './sync/shards.js';
@@ -85,21 +86,50 @@ let uidNow = null;
 let base = null; // {snap, tombs, metaTs}
 let rerenderFn = () => {};
 
-function loadBase(uid) {
+// La base se guarda en el almacén grande del móvil (IndexedDB): con muchos
+// registros ocupa cientos de KB y en localStorage competía con los datos.
+// Si no hay almacén grande, sigue en localStorage como antes. Perderla nunca
+// borra datos: sin base, la fusión une todo y no borra nada.
+const parseBase = (txt) => {
   try {
-    const b = JSON.parse(localStorage.getItem(BASE_KEY(uid)) || 'null');
+    const b = JSON.parse(txt || 'null');
     return b && b.snap ? b : null;
   } catch {
     return null;
   }
-}
-function saveBase() {
-  if (!uidNow || !base) return;
+};
+async function loadBase(uid) {
+  const fromIdb = parseBase(await idb.get('sync', BASE_KEY(uid)));
+  if (fromIdb) return fromIdb;
   try {
-    localStorage.setItem(BASE_KEY(uidNow), JSON.stringify(base));
+    return parseBase(localStorage.getItem(BASE_KEY(uid)));
   } catch {
-    /* sin espacio: la próxima vez se fusiona sin base (se une todo, no se borra nada) */
+    return null;
   }
+}
+let baseWrite = Promise.resolve();
+let baseReady = Promise.resolve();
+function saveBase() {
+  if (!uidNow || !base) return baseWrite;
+  const key = BASE_KEY(uidNow);
+  const txt = JSON.stringify(base); // se copia ya: lo que se guarda es la base de este momento
+  // En orden: una escritura no puede adelantar a la anterior
+  baseWrite = baseWrite.then(async () => {
+    if (await idb.set('sync', key, txt)) {
+      try {
+        localStorage.removeItem(key); // la copia antigua ya no hace falta
+      } catch {
+        /* nada */
+      }
+      return;
+    }
+    try {
+      localStorage.setItem(key, txt);
+    } catch {
+      /* sin espacio: la próxima vez se fusiona sin base (se une todo, no se borra nada) */
+    }
+  });
+  return baseWrite;
 }
 
 /** Cosas cambiadas a la vez en dos móviles: se quedó lo de este y aquí se guarda lo otro. */
@@ -164,6 +194,8 @@ const isStale = (err) => err && (err.code === STALE || err.code === 'aborted' ||
  * Devuelve {offline, issues}.
  */
 async function syncOnce(force = false) {
+  await baseReady;
+  if (!remote) return { offline: false, issues: [] };
   const online = typeof navigator === 'undefined' || navigator.onLine !== false;
   for (let attempt = 0; attempt < 4; attempt++) {
     // 1. ¿Ha cambiado la nube?
@@ -196,6 +228,10 @@ async function syncOnce(force = false) {
       } else if (merged.conflicts.length) addConflicts(merged.conflicts);
       base = { snap: snapshot(R), tombs: R.del || {}, metaTs };
       saveBase();
+    } else {
+      // La nube no ha cambiado: aun así, lo borrado en este móvil necesita su lápida.
+      // Sin ella, otro móvil que aún lo tiene lo vería «faltar sin lápida» y lo recuperaría.
+      tombs = merge3(base.snap, S, remoteKnown(), tombs).tombs;
     }
     force = false;
 
@@ -330,7 +366,14 @@ async function firstSync(uid) {
     replaceState(null);
   }
   uidNow = uid;
-  base = owner === uid ? loadBase(uid) : null;
+  base = null;
+  // La base se lee del almacén grande (asíncrono): ninguna sincronización empieza antes
+  baseReady = (async () => {
+    const loaded = owner === uid ? await loadBase(uid) : null;
+    if (uidNow === uid) base = loaded;
+  })();
+  await baseReady;
+  if (uidNow !== uid) return; // se cerró la sesión mientras se leía
   setOwner(uid);
   lastSent = {};
   const ok = await requestSync(true);

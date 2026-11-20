@@ -3,7 +3,7 @@
 import { $, $$ } from './dom.js';
 import { checkLegal } from './legal.js';
 import { renderReminders, scheduleReminders } from './reminders.js';
-import { loadLocal, requestPersistentStorage } from './store.js';
+import { loadLocal, migratePhotos, requestPersistentStorage } from './store.js';
 import { initTheme, renderThemeChoice } from './theme.js';
 import { initCaja, renderCaja } from './views/caja.js';
 import { accountsEnabled, initAccount, renderAccount } from './views/cuenta.js';
@@ -102,6 +102,8 @@ initUpcoming();
 initAssistant(render);
 render();
 requestPersistentStorage();
+// Fotos antiguas de localStorage → almacén grande (copia primero; ver store.js)
+setTimeout(() => migratePhotos().catch(() => {}), 1500);
 
 if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
   navigator.serviceWorker.register('sw.js').catch(() => {});

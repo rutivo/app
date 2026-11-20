@@ -81,7 +81,7 @@ export async function fuelPdf(from, to, progress = () => {}) {
     if (!g.ph) continue;
     progress(done, withPhoto.length);
     const n = pack.list.indexOf(g) + 1;
-    const src = getPhotoLocal(g.id) || (await downloadPhoto(g.id));
+    const src = (await getPhotoLocal(g.id)) || (await downloadPhoto(g.id));
     done++;
     pdf.addPage();
     y = 16;

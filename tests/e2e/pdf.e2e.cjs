@@ -84,7 +84,8 @@ const FIX = path.join(__dirname, 'fixtures');
 
     // ---------- Leer: subir un PDF como ticket de gasolina (lo que hace el usuario) ----------
     await page.evaluate(() => document.querySelector('.tabs button[data-v="ga"]').click());
-    const before = await page.evaluate(() => Object.keys(localStorage).filter((k) => k.startsWith('foto_')).length);
+    const fotos = () => page.evaluate(() => new Promise((ok) => { const r = indexedDB.open('rutivo'); r.onsuccess = () => { const d = r.result; if (!d.objectStoreNames.contains('fotos')) return ok(Object.keys(localStorage).filter((k) => k.startsWith('foto_')).length); const q = d.transaction('fotos').objectStore('fotos').count(); q.onsuccess = () => ok(q.result + Object.keys(localStorage).filter((k) => k.startsWith('foto_')).length); }; }));
+    const before = await fotos();
     const input = await page.$('#v-ga input[type=file]');
     await input.setInputFiles({ name: 'ticket.pdf', mimeType: 'application/pdf', buffer: gasPdf });
     await page.waitForTimeout(2500);
@@ -92,7 +93,7 @@ const FIX = path.join(__dirname, 'fixtures');
     await page.fill('#gi', '20').catch(() => {});
     await page.evaluate(() => { const f = document.querySelector('#v-ga form'); if (f) f.requestSubmit(); });
     await page.waitForTimeout(1500);
-    const after = await page.evaluate(() => Object.keys(localStorage).filter((k) => k.startsWith('foto_')).length);
+    const after = await fotos();
     ok('6 · al subir un PDF como ticket, se convierte en imagen y se guarda', after > before, before + ' → ' + after + ' fotos');
 
     // ---------- iPhone con iOS < 17.4 (sin Promise.withResolvers), en la app y en el proceso aparte ----------

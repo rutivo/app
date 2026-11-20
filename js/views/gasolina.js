@@ -42,7 +42,7 @@ async function pdfToImage(file) {
 /** Guarda la foto en el móvil y/o en la cuenta. Devuelve true si se guardó en algún sitio. */
 async function storeReceipt(id, file) {
   const dataUrl = file.type === 'application/pdf' ? await pdfToImage(file) : await shrinkImage(file);
-  const local = savePhotoLocal(id, dataUrl);
+  const local = await savePhotoLocal(id, dataUrl);
   const cloud = canStorePhotoInCloud(dataUrl);
   if (!local && !cloud) return false;
   if (cloud) uploadPhoto(id, dataUrl);
@@ -211,7 +211,7 @@ function deleteFuel(id) {
 }
 
 async function showReceipt(id) {
-  const src = getPhotoLocal(id) || (await downloadPhoto(id));
+  const src = (await getPhotoLocal(id)) || (await downloadPhoto(id));
   $('#phi').src = src || '';
   $('#ph').classList.add('on');
 }

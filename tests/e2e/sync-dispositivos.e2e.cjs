@@ -108,6 +108,16 @@ const sync = (page) => page.evaluate(async () => (await import('/js/cloud.js')).
     console.log('   operaciones A:', A.log.join(', '), '| B:', B.log.join(', '));
     ok('7 · sin cambios: ninguna descarga completa (solo 1 lectura de la marca por sincronización)', !store.state.ops.list && (store.state.ops.get || 0) <= 3, JSON.stringify(store.state.ops));
 
+    // ---------- 7b: borrar en un móvil que está al día (la nube no ha cambiado) ----------
+    // Fallo de la versión anterior: se borraba de la nube sin lápida y el otro móvil lo recuperaba.
+    const victim = (await local(A.page)).mov[0].id;
+    await edit(A.page, (S, id) => { S.mov = S.mov.filter((m) => m.id !== id); }, victim);
+    await wait(2500);
+    const tomb = JSON.parse(store.docsOf('u1').cfg.j).del;
+    ok('7b · borrado en un móvil al día: se deja lápida en la nube', !!(tomb && tomb.mov && tomb.mov[victim]), victim);
+    await sync(B.page); await wait(1500); await sync(A.page);
+    ok('7b · y el otro móvil también lo borra (no lo recupera)', !(await local(B.page)).mov.some((m) => m.id === victim) && !remoteMov(store).some((m) => m.id === victim) && !(await local(A.page)).mov.some((m) => m.id === victim));
+
     // ---------- 8: compatibilidad con el formato de la versión anterior de la app ----------
     const docs = store.docsOf('u1');
     ok('8 · los documentos siguen el mismo formato y nombres (los lee la versión anterior)', Object.keys(docs).every((k) => /^(meta|cfg|(mov|srv|gas|huc|jor|prv|fac)-[0-9a-z-]{3,7})$/.test(k)) && Array.isArray(JSON.parse(docs['mov-2026-11'].j)) && typeof docs.meta.ts === 'number');
