@@ -32,3 +32,11 @@ test('CSV para Excel en español', () => {
   assert.match(csv, /017;10\/11\/2026;Charly;B9;213,64;21,36;235,00/);
   assert.doesNotMatch(csv, /Otro trimestre/);
 });
+
+import { csvCell } from '../js/utils.js';
+test('CSV sin fórmulas que Excel ejecute', () => {
+  assert.equal(csvCell('=HYPERLINK("http://malo")'), '"\'=HYPERLINK(""http://malo"")"');
+  assert.equal(csvCell('+34 600'), "'+34 600");
+  assert.equal(csvCell('-50,00'), '-50,00');
+  assert.equal(csvCell('Agencia Sol'), 'Agencia Sol');
+});

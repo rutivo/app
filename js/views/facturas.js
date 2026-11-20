@@ -4,7 +4,7 @@ import { COLORS, ICON_NAMES, ICONS, accentColor, iconSvg, logoSvg } from '../log
 import { clientProblems, fingerprint, isoWithZone, issuerProblems, lastHash, nextRectNumber, recordString } from '../facturaLegal.js';
 import { baseOf, invoiceTotals, nextInvoiceNumber } from '../money.js';
 import { S, exportBackup, importBackup, markBackupDone, save } from '../store.js';
-import { esc, eur, fd, r2, slug, today, uid } from '../utils.js';
+import { csvCell, esc, eur, fd, r2, slug, today, uid } from '../utils.js';
 
 const HTML2CANVAS = 'vendor/html2canvas-1.4.1.min.js';
 const JSPDF = 'vendor/jspdf-2.5.1.umd.min.js';
@@ -278,7 +278,7 @@ function exportRegister() {
       anuladaPor: f.anulada || '', rectificaA: f.rect ? f.rect.num : '', generada: f.gen || '', huellaAnterior: f.prev || '', huella: f.huella || '' };
   });
   const head = Object.keys(rows[0] || { numero: '' });
-  const csv = [head.join(';'), ...rows.map((r) => head.map((k) => '"' + String(r[k]).replace(/"/g, '""') + '"').join(';'))].join('\r\n');
+  const csv = [head.join(';'), ...rows.map((r) => head.map((k) => csvCell(r[k])).join(';'))].join('\r\n');
   downloadBlob(new Blob(['﻿' + csv], { type: 'text/csv' }), 'Registro-facturas-' + today() + '.csv');
 }
 

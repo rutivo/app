@@ -36,6 +36,16 @@ export const slug = (s) =>
   s.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^A-Za-z0-9]+/g, '-').replace(/^-|-$/g, '');
 
 /** Suma una propiedad numérica de una lista. */
+/**
+ * Celda de CSV segura: entre comillas si hace falta y, si empieza por = + - @
+ * (y no es un número), con un apóstrofo delante para que Excel no la ejecute como fórmula.
+ */
+export function csvCell(v) {
+  let s = String(v == null ? '' : v);
+  if (/^[=+\-@\t\r]/.test(s) && !/^-?\d+([.,]\d+)?$/.test(s)) s = "'" + s;
+  return /[;"\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+}
+
 export const sum = (list, get) => list.reduce((acc, x) => acc + get(x), 0);
 
 export const MONTHS = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];

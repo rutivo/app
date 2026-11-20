@@ -18,6 +18,19 @@ import { initAssistant } from './views/asistente.js';
 import { initTips } from './views/tips.js';
 import { initTransfer, renderTransfer } from './views/transfer.js';
 
+// Seguridad: Rutivo no se deja abrir dentro de otra web (clickjacking: una página
+// falsa encima que te hace tocar botones sin darte cuenta). GitHub Pages no deja
+// poner la cabecera que lo impide, así que se hace aquí.
+if (window.top !== window.self && !window.claude) {
+  document.documentElement.innerHTML = '';
+  try {
+    window.top.location.replace(location.href);
+  } catch {
+    /* si no deja salir del marco, al menos no se ve nada */
+  }
+  throw new Error('Rutivo no se puede abrir dentro de otra página');
+}
+
 /** Vuelve a pintar todas las pantallas a partir del estado. */
 function render() {
   renderBrand();

@@ -2,9 +2,9 @@
 <html lang="es">
 <head>
   <meta charset="utf-8">
-  <!-- Seguridad: solo se ejecuta código de la propia app, de Firebase (Google) y del lector de tickets (el tiempo: Open-Meteo).
-       Si añades un servicio externo nuevo, hay que añadir su dirección aquí. -->
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://www.gstatic.com https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https://tile.openstreetmap.org https://server.arcgisonline.com; connect-src 'self' data: blob: https://*.googleapis.com https://www.gstatic.com https://cdn.jsdelivr.net https://rutivo-vuelos.pokeboostmlg.workers.dev https://api.adsbdb.com https://api.open-meteo.com https://geocoding-api.open-meteo.com https://huggingface.co https://*.huggingface.co https://*.hf.co https://nominatim.openstreetmap.org https://router.project-osrm.org; frame-src https://rutivo-a8890.firebaseapp.com; media-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; manifest-src 'self'">
+  <!-- Seguridad: solo se ejecuta código de la propia app y de las VERSIONES EXACTAS de Firebase y del lector
+       de tickets (Tesseract). Si actualizas una librería o añades un servicio externo, cambia su dirección aquí. -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://www.gstatic.com/firebasejs/10.14.1/ https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/ https://cdn.jsdelivr.net/npm/tesseract.js@v5.1.1/ https://cdn.jsdelivr.net/npm/tesseract.js-core@v5.1.1/ https://cdn.jsdelivr.net/npm/tesseract.js-core@5.1.1/ 'wasm-unsafe-eval'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob: https://tile.openstreetmap.org https://server.arcgisonline.com; connect-src 'self' data: blob: https://firestore.googleapis.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://www.gstatic.com/firebasejs/10.14.1/ https://cdn.jsdelivr.net/npm/ https://rutivo-vuelos.pokeboostmlg.workers.dev https://api.adsbdb.com https://api.open-meteo.com https://geocoding-api.open-meteo.com https://huggingface.co https://*.huggingface.co https://*.hf.co https://nominatim.openstreetmap.org https://router.project-osrm.org; frame-src https://rutivo-a8890.firebaseapp.com; media-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'self'; manifest-src 'self'; upgrade-insecure-requests">
   <meta name="referrer" content="strict-origin-when-cross-origin">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Rutivo</title>
@@ -15,7 +15,6 @@
   <meta name="theme-color" content="#1d5fe0">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="apple-touch-icon" href="icon-192.png">
-  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>

@@ -1,13 +1,9 @@
 // Informe del trimestre para el gestor. Funciones puras.
 import { baseOf, cashStats, invoiceTotals } from './money.js';
-import { fd, quarterOf, r2, sum } from './utils.js';
+import { fd, quarterOf, r2, sum, csvCell } from './utils.js';
 
 const money = (n) => r2(n).toFixed(2).replace('.', ',');
-const cell = (v) => {
-  const s = String(v == null ? '' : v);
-  return /[;"\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
-};
-const row = (cells) => cells.map(cell).join(';');
+const row = (cells) => cells.map(csvCell).join(';');
 
 /** Datos del trimestre `q` ("2026-T4"). */
 export function quarterData(state, q) {

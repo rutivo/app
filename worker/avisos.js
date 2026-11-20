@@ -9,6 +9,7 @@ import { sendPush } from './push.js';
 import { flightFor } from './vuelos.js';
 
 const MAX_ALARMS = 40;
+const MAX_FLIGHTS = 12; // avisos que siguen un vuelo, por móvil
 const CHECKS = [90, 35]; // minutos antes de salir en los que se revisa el vuelo
 const MOVE_MIN = 5; // solo se mueve la salida si cambia 5 min o más
 
@@ -25,7 +26,7 @@ export function cleanAlarms(list, now = Date.now()) {
     if (!x.id || !x.title) continue;
     if (Number.isInteger(a.pre) && a.pre > 0 && a.pre <= 60) x.pre = a.pre;
     const fl = a.fl;
-    if (fl && /^[A-Z0-9]{2}\d{1,4}[A-Z]?$/.test(fl.n) && /^\d{4}-\d{2}-\d{2}$/.test(fl.d) && Number.isFinite(fl.off) && Math.abs(fl.off) <= 600) {
+    if (fl && out.filter((a) => a.fl).length < MAX_FLIGHTS && /^[A-Z0-9]{2}\d{1,4}[A-Z]?$/.test(fl.n) && /^\d{4}-\d{2}-\d{2}$/.test(fl.d) && Number.isFinite(fl.off) && Math.abs(fl.off) <= 600) {
       x.fl = { n: fl.n, d: fl.d, off: Math.round(fl.off), who: clip(fl.who, 40) };
     }
     out.push(x);

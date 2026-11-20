@@ -17,12 +17,17 @@ const POS_SECONDS = 30;
 const ADSB = ['https://api.adsb.lol/v2/hex/', 'https://api.airplanes.live/v2/hex/'];
 const ADB = 'https://aerodatabox.p.rapidapi.com';
 
-const SECURITY = { 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer', 'Cross-Origin-Resource-Policy': 'cross-origin' };
+const SECURITY = {
+  'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer', 'Cross-Origin-Resource-Policy': 'cross-origin',
+  'Content-Security-Policy': "default-src 'none'; frame-ancestors 'none'", 'X-Frame-Options': 'DENY',
+  'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',
+};
 const json = (body, status, headers) =>
   new Response(JSON.stringify(body), { status, headers: { ...SECURITY, ...headers, 'content-type': 'application/json; charset=utf-8' } });
 
 // Límite por persona (IP) y hora de consultas que salen fuera de la caché.
-const LIMITS = { flight: 40, pos: 400, avisos: 120 };
+const LIMITS = { flight: 40, pos: 400, avisos: 120, flightAll: 250 };
+const GLOBAL = { headers: new Headers({ 'CF-Connecting-IP': 'todos' }) };
 /** true si esta IP aún puede hacer otra consulta de tipo `kind` esta hora. */
 async function allowed(cache, request, kind, ctx) {
   const ip = request.headers.get('CF-Connecting-IP') || 'x';
@@ -167,6 +172,8 @@ export async function flightFor(env, n, d, fresh = false) {
   if (!fresh) {
     const hit = await cache.match(cacheKey);
     if (hit) return hit.json();
+    // Consultas de los avisos: también cuentan en el tope global
+    if (!(await allowed(cache, GLOBAL, 'flightAll', { waitUntil: (p) => p }))) return null;
   }
   const res = await fetch(ADB + '/flights/number/' + n + '/' + d + '?withAircraftImage=false&withLocation=true', {
     headers: { 'X-RapidAPI-Key': String(env.RAPIDAPI_KEY || '').trim(), 'X-RapidAPI-Host': 'aerodatabox.p.rapidapi.com' },
@@ -211,6 +218,8 @@ export default {
 
     if (url.pathname === '/avisos') {
       if (request.method !== 'POST') return json({ error: 'method' }, 405, cors);
+      // Solo JSON: así el navegador siempre pregunta antes (CORS) y otras webs no pueden mandar formularios
+      if (!(request.headers.get('content-type') || '').startsWith('application/json')) return json({ error: 'bad_request' }, 415, cors);
       if (!env.AVISOS || !env.VAPID_PRIVATE) return json({ error: 'off' }, 503, cors);
       const text = await request.text();
       if (text.length > 20000) return json({ error: 'too_big' }, 413, cors);
@@ -221,7 +230,7 @@ export default {
       const sub = { endpoint: data.sub.endpoint, keys: { p256dh: data.sub.keys.p256dh, auth: data.sub.keys.auth } };
       const stub = env.AVISOS.get(env.AVISOS.idFromName(await deviceId(sub.endpoint)));
       const r = await stub.fetch('https://avisos/', { method: 'POST', body: JSON.stringify({ sub, alarms: data.alarms, tz: data.tz, test: !!data.test, off: !!data.off }) });
-      return json(await r.json(), 200, cors);
+      return json(await r.json(), 200, { ...cors, 'Cache-Control': 'no-store' });
     }
     if (request.method !== 'GET') return json({ error: 'method' }, 405, cors);
     if (url.pathname === '/pos') {
@@ -245,6 +254,8 @@ export default {
     const hit = await cache.match(cacheKey);
     if (hit) return json(await hit.json(), 200, { ...cors, 'x-cache': 'hit' });
     if (!(await allowed(cache, request, 'flight', ctx))) return json({ error: 'too_many' }, 429, cors);
+    // Tope global (todas las IP juntas): aunque alguien use muchas IP, no puede agotar el cupo de AeroDataBox
+    if (!(await allowed(cache, GLOBAL, 'flightAll', ctx))) return json({ error: 'busy' }, 503, cors);
     const body = await flightFor(env, n, d, true);
     if (!body) return json({ error: 'upstream' }, 502, cors);
     return json(body, 200, { ...cors, 'x-cache': 'miss' });

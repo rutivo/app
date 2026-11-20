@@ -1,7 +1,7 @@
 // Service worker: la app funciona sin conexión.
 // Estrategia "red primero": siempre intenta la versión nueva y, si no hay red,
 // usa la copia guardada. Sube CACHE al cambiar la lista de archivos.
-const CACHE = 'gestor-transfer-v47';
+const CACHE = 'gestor-transfer-v48';
 const FILES = [
   './',
   './index.html',
@@ -10,6 +10,8 @@ const FILES = [
   './icon-192.png',
   './icon-512.png',
   './css/styles.css',
+  './fonts/manrope-latin.woff2',
+  './fonts/manrope-latin-ext.woff2',
   './js/main.js',
   './js/agency.js',
   './js/asistente.js',
@@ -74,7 +76,7 @@ self.addEventListener('activate', (e) => {
 
 // Solo se guardan los archivos de la app y las librerías; los mapas y las
 // consultas de vuelos siempre van a la red (y así no llenan el móvil).
-const KEEP = [self.location.origin, 'https://cdn.jsdelivr.net', 'https://www.gstatic.com'];
+const KEEP = [self.location.origin, 'https://cdn.jsdelivr.net/npm', 'https://www.gstatic.com/firebasejs'];
 
 self.addEventListener('fetch', (e) => {
   if (e.request.method !== 'GET') return;

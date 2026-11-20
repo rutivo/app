@@ -49,3 +49,31 @@ Qué protege la app, cómo, y qué hay que revisar en cada servicio.
 - «¿Me compensa?» y «Sal ya» consultan rutas en OpenStreetMap (Nominatim) y OSRM
   sin clave. Tu posición solo se usa en el móvil para calcular el camino; a esos
   servicios solo les llegan coordenadas sueltas, sin tu nombre ni tus datos.
+
+## Endurecimiento (noviembre 2026)
+
+- **Política de seguridad (CSP) por versión exacta:** solo se ejecuta código de la
+  app y de `firebasejs/10.14.1` y `tesseract.js@5.1.1` (no de todo jsDelivr/gstatic).
+  `base-uri 'none'`, `upgrade-insecure-requests`, conexiones a Google limitadas a
+  Firestore, Identity Toolkit y Secure Token.
+- **Fuente propia** (Manrope, licencia OFL) en `fonts/`: sin llamadas a Google Fonts
+  (también evita enviar la IP de los usuarios a Google).
+- **Anti-clickjacking:** la app no se muestra dentro de otra web (GitHub Pages no
+  permite la cabecera `frame-ancestors`; se hace en `js/main.js`).
+- **Datos de fuera saneados** (copias de seguridad, nube, almacenamiento): solo las
+  listas conocidas, sin claves `__proto__`/`constructor`, profundidad limitada.
+- **CSV sin fórmulas:** las celdas que empiezan por `= + - @` llevan un apóstrofo
+  para que Excel no las ejecute (inyección de fórmulas).
+- **Servidor:** cabeceras `CSP default-src 'none'`, `X-Frame-Options`, HSTS;
+  `/avisos` solo acepta JSON; tope global de consultas de vuelos por hora (también
+  las de los avisos) y máximo 12 avisos con vuelo por móvil.
+
+### Tareas del titular (fuera del código)
+
+1. Google Cloud → APIs y servicios → Credenciales → clave de Firebase:
+   restringir a sitios web `https://rutivo.github.io/*` y a las APIs Identity
+   Toolkit, Token Service y Cloud Firestore.
+2. Firebase → Authentication → Configuración: protección contra enumeración de
+   emails activada y política de contraseñas (mínimo 8, con números).
+3. Verificación en dos pasos en GitHub, Google (Firebase), Cloudflare y RapidAPI.
+4. Revocar el token de Cloudflare compartido en el chat cuando no haga falta (caduca el 26/11).

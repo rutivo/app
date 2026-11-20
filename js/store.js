@@ -30,16 +30,44 @@ const emptyState = () => ({
 /** Estado global. Se modifica en el sitio para que todos los módulos vean lo mismo. */
 export const S = emptyState();
 
+const BAD_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+
+/** Copia limpia de datos externos: sin claves peligrosas, sin funciones, profundidad limitada. */
+function clean(v, depth = 0) {
+  if (depth > 8) return null;
+  if (Array.isArray(v)) return v.slice(0, 100000).map((x) => clean(x, depth + 1));
+  if (v && typeof v === 'object') {
+    const out = {};
+    for (const k of Object.keys(v)) if (!BAD_KEYS.has(k)) out[k] = clean(v[k], depth + 1);
+    return out;
+  }
+  return typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean' || v === null ? v : null;
+}
+
+/**
+ * Estado válido a partir de datos de fuera (copia de seguridad, nube, almacenamiento):
+ * solo las listas conocidas (y como listas de objetos), cfg y cli como objetos.
+ */
+export function sanitizeState(data) {
+  const d = clean(data && typeof data === 'object' ? data : {});
+  const out = emptyState();
+  for (const k of LISTS) out[k] = Array.isArray(d[k]) ? d[k].filter((x) => x && typeof x === 'object' && !Array.isArray(x)) : [];
+  if (d.cfg && typeof d.cfg === 'object' && !Array.isArray(d.cfg)) out.cfg = { ...out.cfg, ...d.cfg };
+  if (d.cli && typeof d.cli === 'object' && !Array.isArray(d.cli)) out.cli = d.cli;
+  if (typeof d.ts === 'number') out.ts = d.ts;
+  return out;
+}
+
 /** Sustituye todo el estado por `data` (null = estado vacío). */
 export function replaceState(data) {
   for (const k of Object.keys(S)) delete S[k];
-  Object.assign(S, data || emptyState());
+  Object.assign(S, data ? sanitizeState(data) : emptyState());
 }
 
 export function loadLocal() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) Object.assign(S, JSON.parse(raw));
+    if (raw) Object.assign(S, sanitizeState(JSON.parse(raw)));
   } catch {
     /* datos dañados o almacenamiento bloqueado: se empieza vacío */
   }
