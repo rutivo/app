@@ -260,6 +260,45 @@ const EXPENSES = [
 ];
 const INCOMES = [[/propina/, 'Propina'], [/transfer/, 'Transfer'], [/aeropuerto/, 'Carrera aeropuerto'], [/servicio/, 'Servicio']];
 
+const CONCEPT_FIX = { cadera: 'carrera', caderas: 'carreras', caldera: 'carrera', calderas: 'carreras', carera: 'carrera', carreta: 'carrera', carrea: 'carrera', carrena: 'carrera',
+  casolina: 'gasolina', gasolinas: 'gasolina', parkin: 'parking', parquin: 'parking', peage: 'peaje', propinas: 'propina', lavao: 'lavado' };
+
+const PAY_WORDS = /^(?:en |con |por |el |la )*(efectivo|tarjeta|metálico|metalico|bizum|datáfono|datafono|visa|transferencia|tpv|mano|cash|billetes)\b\s*/i;
+
+/**
+ * El concepto tal como lo dices: lo que va detrás de «por», «para» o
+ * «concepto» («…por carrera 1» → «Carrera 1», «concepto propina de Richard»
+ * → «Propina de Richard»). Sin importes, forma de pago ni «gasto/ingreso».
+ * Devuelve '' si no dijiste concepto.
+ */
+export function conceptOf(original) {
+  const s = String(original || '').replace(/[«»"“”¿?¡!]/g, ' ').replace(/,?\s*\b(por favor|gracias)\b/gi, ' ').replace(/\s+/g, ' ').trim().replace(/[.,;:]+$/, '');
+  const marks = [...s.matchAll(/\b(?:en concepto de|por concepto de|concepto(?: de)?|por|para)\s+/gi)];
+  for (let k = marks.length - 1; k >= 0; k--) {
+    let rest = s.slice(marks[k].index + marks[k][0].length);
+    // quitar lo que no es concepto: forma de pago, importe, «gasto/ingreso»
+    for (let i = 0; i < 4; i++) {
+      rest = rest
+        .replace(PAY_WORDS, '')
+        .replace(/^(?:un |una )?(gasto|ingreso|cobro|pago)s?\b( (de|por|en|con))?\s*/i, '')
+        .replace(/^(?:el|la|los|las|un|una|mi|la de|el de)\s+/i, '')
+        .trim();
+    }
+    rest = rest
+      .replace(/\s+(?:en|con|por|y)\s+(?:el |la )?(efectivo|tarjeta|metálico|metalico|bizum|datáfono|datafono|visa|transferencia|tpv)\b.*$/i, '')
+      .replace(/\s+(?:de|por)?\s*\d+([.,]\d+)?\s*(?:€|euros?)\b.*$/i, '')
+      .replace(/\s+(?:como|para)\s+(gasto|ingreso).*$/i, '')
+      .replace(/[.,;:]+$/, '')
+      .trim();
+    // Palabras que el oído confunde a menudo («cadera 1» → «carrera 1»)
+    rest = rest.replace(/^(\S+)/, (w) => CONCEPT_FIX[w.toLowerCase()] || w);
+    if (rest && !/^(gasto|ingreso|cobro|pago|euros?|€)$/i.test(rest) && !/^\d+([.,]\d+)?\s*(€|euros?)?$/i.test(rest)) {
+      return (rest.charAt(0).toUpperCase() + rest.slice(1)).slice(0, 50);
+    }
+  }
+  return '';
+}
+
 function answer(t, state, now, helpers) {
   const day = iso(now);
   // --- Órdenes: apuntar ---
@@ -280,10 +319,11 @@ function answer(t, state, now, helpers) {
     const expense = !forcedIn && (!!cat || /gasto|gaste|gastado|pagado|pague|como gasto/.test(t));
     const fuel = false;
     const income = INCOMES.find(([re]) => re.test(t));
-    const c = expense ? (cat ? cat[1] : 'Gasto') : income ? income[1] : 'Carrera';
+    const said = conceptOf(helpers.original);
+    const c = said || (expense ? (cat ? cat[1] : 'Gasto') : income ? income[1] : 'Carrera');
     return { kind: 'action', action: { list: 'mov', item: { f: day, t: expense || fuel ? 'out' : 'in', p: pay, i: r2(amount), c } },
       text: (expense || fuel ? '🧾 Gasto apuntado: **' : '💶 Apuntado: **') + eur(amount) + '** · ' + pay + ' · ' + c,
-      speech: (expense || fuel ? 'Gasto apuntado: ' : 'Apuntado: ') + spoken(amount) + (pay === 'tarjeta' ? ' con tarjeta' : ' en efectivo') };
+      speech: (expense || fuel ? 'Gasto apuntado: ' : 'Apuntado: ') + spoken(amount) + (pay === 'tarjeta' ? ' con tarjeta' : ' en efectivo') + (said ? ', por ' + said : '') };
   }
 
   // --- Ayuda ---
@@ -599,7 +639,7 @@ export function ask(input, state, now = new Date(), helpers = {}, ctx = {}) {
   // Completar algo que quedó a medias o seguir con la última pregunta
   if (ctx.pending && amountOf(t) !== null && !QUESTION.test(t)) t = ctx.pending + ' ' + t;
   else if (ctx.last && FOLLOW.test(t)) t = ctx.last.replace(/\b(hoy|ayer|anteayer|esta semana|la semana pasada|este mes|el mes pasado|este ano|el ano pasado|este trimestre|el trimestre pasado|(en )?(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre))\b/g, '').trim() + ' ' + t.replace(/^y /, '');
-  const r = answer(t, state, now, helpers);
+  const r = answer(t, state, now, { ...helpers, original: input });
   if (hello) { r.text = hello + r.text; r.speech = 'Hola. ' + r.speech; }
   // Con ruido: si el móvil no estaba seguro o la frase llegó muy larga, preguntar antes de apuntar
   const doubtful = (helpers.confidence > 0 && helpers.confidence < 0.55) || t.split(' ').length > 14;

@@ -9,7 +9,7 @@ import { earSupported, prepareEar, transcribe } from './oido.js';
 
 const KEY = 'oyeRutivo';
 const MIN_S = 0.5; // frases más cortas: golpes, toses…
-const MAX_S = 8; // frases más largas: conversación o radio, no es «Oye Rutivo…»
+const MAX_S = 10; // frases más largas: conversación o radio, no es «Oye Rutivo…»
 
 export const wakeEnabled = () => readFlag(KEY) !== '0';
 export function setWakeEnabled(on) {
@@ -19,8 +19,8 @@ export function setWakeEnabled(on) {
 }
 
 const norm = (w) => w.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]/g, '');
-const NAME = /^(rutivo|rutibo|rutiva|rutivos|rutino|rotivo|routivo|ruptivo|rutigo|rutivio|rutifo)$/;
-const CALL = /^(oye|oie|olle|oy|hoy|hey|ey|eh|ei|oyes|o|el|e|y|a|ah)$/; // «Hoy el Rutivo…» (lo que a veces oye Whisper)
+const NAME = /^(rutivo|rutibo|rutiva|rutivos|rutino|rotivo|routivo|ruptivo|rutigo|rutivio|rutifo|rutivu|ruto|rutio|ruti)$/;
+const CALL = /^(o+y+e+s?|oie|olle|oy|hoy|hey|ey|eh|ei|o|el|e|y|a|ah)$/; // «Hoy el Rutivo…» (lo que a veces oye Whisper)
 
 /**
  * ¿Es una llamada a Rutivo? Devuelve {rest} con lo que se dijo después

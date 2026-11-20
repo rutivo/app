@@ -228,3 +228,28 @@ test('trimChatter quita la charla de fondo antes de la orden', () => {
 test('variantes de «tarjeta» que oye Whisper con ruido', () => {
   for (const w of ['derjeta', 'terjeta', 'darjeta']) assert.match(normalize('15 euros en ' + w), /tarjeta/);
 });
+
+import { conceptOf } from '../js/asistente.js';
+test('concepto tal como lo dices', () => {
+  const cases = {
+    'Oyee Rutivo apúntame 15 € en efectivo por carrera 1': 'Carrera 1',
+    'apúntame 10€ en tarjeta para gasto por gasolina': 'Gasolina',
+    'apúntame 30 en efectivo concepto propina de Richard': 'Propina de Richard',
+    'apúntame 18 euros por la carrera de Richard en tarjeta.': 'Carrera de Richard',
+    'gasto de 12 euros por parking del aeropuerto': 'Parking del aeropuerto',
+    'apúntame 20 por tarjeta': '',
+    'apúntame 40 euros en efectivo': '',
+    'apunta 15 euros por favor': '',
+    'apuntame 15 euros en efectivo por cadera 1.': 'Carrera 1',
+  };
+  for (const [q, want] of Object.entries(cases)) assert.equal(conceptOf(q), want, q);
+});
+
+test('«Oyee Rutivo…» apunta ingreso o gasto con su concepto', () => {
+  const st = { mov: [], srv: [], gas: [], huc: [], jor: [], fac: [], prv: [], cli: {}, cfg: {} };
+  const a = ask('apúntame 15 € en efectivo por carrera 1', st, NOW, { noConfirm: true });
+  assert.deepEqual([a.action.item.t, a.action.item.i, a.action.item.p, a.action.item.c], ['in', 15, 'efectivo', 'Carrera 1']);
+  const b = ask('apúntame 10€ en tarjeta para gasto por gasolina', st, NOW, { noConfirm: true });
+  assert.deepEqual([b.action.item.t, b.action.item.i, b.action.item.p, b.action.item.c], ['out', 10, 'tarjeta', 'Gasolina']);
+  assert.match(a.speech, /por Carrera 1/);
+});
