@@ -3,6 +3,8 @@
   "version": "2.0.0",
   "description": "Rutivo / Gestor Transfer: caja, servicios, gasolina, facturas y hucha para conductores de transfer.",
   "private": true,
+  "license": "SEE LICENSE IN LICENSE",
+  "author": "Alejandro Antonio Fernández Moyano",
   "type": "module",
   "scripts": {
     "start": "npx -y http-server@14.1.1 -c-1 -p 8080 .",

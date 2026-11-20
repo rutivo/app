@@ -1,3 +1,4 @@
+// © 2026 Alejandro Antonio Fernández Moyano. Todos los derechos reservados. Ver LICENSE.
 // Avisos con la app cerrada: cada móvil tiene su «despertador» (Durable Object)
 // con sus avisos pendientes. A la hora de cada uno manda una notificación Web Push.
 //

@@ -1,3 +1,4 @@
+// © 2026 Alejandro Antonio Fernández Moyano. Todos los derechos reservados. Ver LICENSE.
 // Notificaciones Web Push (sin librerías): firma VAPID (RFC 8292) y cifrado
 // aes128gcm (RFC 8291 / 8188). Funciona en Cloudflare Workers y en Node 20+.
 

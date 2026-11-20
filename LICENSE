@@ -1,0 +1,42 @@
+Rutivo — Licencia de uso (software propietario)
+
+Copyright (c) 2026 Alejandro Antonio Fernández Moyano.
+Todos los derechos reservados.
+
+Rutivo (su código fuente, diseño, textos, logotipos, nombre y demás elementos)
+es una obra protegida por el Texto Refundido de la Ley de Propiedad Intelectual
+(Real Decreto Legislativo 1/1996) y por la normativa de propiedad industrial.
+El titular de todos los derechos de explotación es Alejandro Antonio Fernández
+Moyano.
+
+1. USO PERMITIDO
+   Se permite usar la aplicación web publicada en https://rutivo.github.io/app/
+   para su finalidad, de acuerdo con las Condiciones de uso (legal.html).
+
+2. QUEDA PROHIBIDO, sin autorización previa y por escrito del titular:
+   a) copiar, reproducir, descargar para su reutilización o distribuir el código
+      fuente, total o parcialmente;
+   b) modificarlo, traducirlo, adaptarlo o crear obras derivadas a partir de él;
+   c) publicarlo, alojarlo o ponerlo a disposición de terceros con este u otro
+      nombre, gratis o de pago;
+   d) venderlo, alquilarlo, sublicenciarlo o usarlo con fines comerciales;
+   e) usar el nombre «Rutivo», su logotipo o su diseño en otros productos.
+
+   Que el código sea visible en el navegador o en un repositorio público no
+   concede ningún permiso para usarlo.
+
+3. COMPONENTES DE TERCEROS
+   Rutivo incluye bibliotecas de código abierto (jsPDF, html2canvas, PDF.js,
+   Leaflet, Tesseract.js, transformers.js) y la fuente Manrope, que se rigen por
+   sus propias licencias (MIT, Apache 2.0, BSD o SIL Open Font License). Esta
+   licencia no se aplica a esos componentes.
+
+4. SIN GARANTÍA
+   Se ofrece «tal cual», sin garantías, en los términos de las Condiciones de uso.
+
+5. INCUMPLIMIENTO
+   Cualquier uso no autorizado podrá dar lugar a las acciones civiles y penales
+   que correspondan. Ley aplicable: española. Tribunales: los de Málaga, salvo
+   que la ley disponga otra cosa.
+
+Contacto para autorizaciones: imporcefa@hotmail.com

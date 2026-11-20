@@ -1,3 +1,4 @@
+// © 2026 Alejandro Antonio Fernández Moyano. Todos los derechos reservados. Ver LICENSE.
 // Asistente de voz de Rutivo, al estilo Siri: pantalla completa, bola que escucha,
 // lo que dices en grande y la respuesta hablada. Todo se calcula en el móvil.
 import { ask, trimChatter, weatherText } from '../asistente.js';

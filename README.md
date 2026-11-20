@@ -57,3 +57,9 @@ documentado en `js/store.js`.
 
 No cambies `LICENSE_SECRET` ni `licenseCode()` en `js/license.js`: invalidaría los
 códigos de activación ya entregados.
+
+
+## Licencia
+
+© 2026 Alejandro Antonio Fernández Moyano. Todos los derechos reservados.
+Software propietario: prohibida su copia, modificación o distribución sin autorización. Ver [LICENSE](LICENSE).

@@ -1,3 +1,4 @@
+// © 2026 Alejandro Antonio Fernández Moyano. Todos los derechos reservados. Ver LICENSE.
 // Punto de entrada: carga los datos, conecta las pantallas y pinta la app.
 import { $, $$, toast } from './dom.js';
 import { TRIAL_ENABLED } from './config.js';

@@ -1,3 +1,4 @@
+// © 2026 Alejandro Antonio Fernández Moyano. Todos los derechos reservados. Ver LICENSE.
 // Intermediario de vuelos de Rutivo (Cloudflare Worker).
 //
 // La app pide  GET /flight?n=FR4250&d=2026-11-19  y este Worker consulta

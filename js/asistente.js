@@ -1,3 +1,4 @@
+// © 2026 Alejandro Antonio Fernández Moyano. Todos los derechos reservados. Ver LICENSE.
 // Asistente de Rutivo: entiende preguntas y órdenes en español sobre tus datos.
 // Funciones puras: todo se calcula en el móvil, sin enviar nada fuera.
 import { huchaStatus, huchasOf } from './huchas.js';
