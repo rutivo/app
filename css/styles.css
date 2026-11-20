@@ -1064,3 +1064,7 @@ body:has(input:focus, textarea:focus, select:focus) .asis-fab { opacity: 0; poin
 .hf-undo { width: auto; margin: 0; padding: 7px 12px; font-size: 13px; border-radius: 999px; background: rgba(255, 255, 255, .12) !important; box-shadow: none !important; color: #fff; }
 .hf-x { position: absolute; top: 6px; right: 6px; width: 28px; height: 28px; margin: 0; padding: 0; border-radius: 50%; background: rgba(255, 255, 255, .1) !important; color: #fff; font-size: 13px; box-shadow: none !important; }
 @keyframes hfIn { from { opacity: 0; transform: translateY(8px) scale(.97); } }
+/* Próximos: el texto se ajusta y el botón «Llevarme» nunca se sale de la pantalla */
+.next-item > div:first-child { min-width: 0; flex: 1 1 auto; }
+.next-item small.sal-mini, .next-item small.fl-mini { white-space: normal; }
+.next-item .small-btn { flex: 0 0 auto; }
