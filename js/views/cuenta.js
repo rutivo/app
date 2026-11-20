@@ -8,8 +8,9 @@ import { claudeStore } from '../backend/claude.js';
 import { connect, disconnectAndWipe, flush, hasUnsavedChanges, localOwner, status, stopSync } from '../cloud.js';
 import { FIREBASE_CONFIG } from '../config.js';
 import { $, confirmTapTimed, toast } from '../dom.js';
-import { hasLocalData } from '../store.js';
+import { S, hasLocalData } from '../store.js';
 import { esc } from '../utils.js';
+import { legalLinks, rememberAccepted } from '../legal.js';
 
 /** Contraseña de una cuenta nueva: mínimo 8, con letras y números, y que no sea el email. Devuelve el problema o ''. */
 export function passwordProblem(pw, email = '') {
@@ -51,7 +52,8 @@ function showWall({ offline = false } = {}) {
     '</div>' +
     '<label class="f" for="aem">Email</label><input id="aem" type="email" autocomplete="email" inputmode="email" autocapitalize="off" required>' +
     '<label class="f" for="apw">Contraseña</label><input id="apw" type="password" autocomplete="current-password" minlength="6" required>' +
-    '<div id="apw2box"><div class="mut">Mínimo 8 caracteres, con letras y números.</div><label class="f" for="apw2">Repite la contraseña</label><input id="apw2" type="password" autocomplete="new-password" minlength="6"></div>' +
+    '<div id="apw2box"><div class="mut">Mínimo 8 caracteres, con letras y números.</div><label class="f" for="apw2">Repite la contraseña</label><input id="apw2" type="password" autocomplete="new-password" minlength="6">' +
+    '<label class="chk mt10"><input type="checkbox" id="alegal"><span>He leído y acepto las ' + legalLinks + '.</span></label></div>' +
     '<div id="aerr" class="out mt8" role="alert"></div>' +
     '<button id="ago">Entrar</button>' +
     '<button type="button" class="sec" id="arst">He olvidado mi contraseña</button>' +
@@ -82,13 +84,17 @@ function showWall({ offline = false } = {}) {
       const weak = passwordProblem(pw, email);
       if (weak) return error(weak);
       if (pw !== wall.querySelector('#apw2').value) return error('Las contraseñas no coinciden.');
+      if (!wall.querySelector('#alegal').checked) return error('Para crear la cuenta, acepta las condiciones de uso y la política de privacidad.');
     }
     const button = wall.querySelector('#ago');
     button.disabled = true;
     error('');
     try {
       await ensureFirebase();
-      if (mode() === 'register') await fb.register(email, pw);
+      if (mode() === 'register') {
+        rememberAccepted();
+        await fb.register(email, pw);
+      }
       else await fb.login(email, pw);
       // watchSession se encarga del resto al detectar la sesión.
     } catch (err) {
@@ -155,6 +161,11 @@ function profileCard() {
     '<h3 class="sect">Sesión</h3>' +
     '<div class="card list">' +
     row('alo', '⎋', 'Cerrar sesión', 'Tus datos seguirán guardados en tu cuenta') +
+    '</div>' +
+    '<h3 class="sect">Legal</h3>' +
+    '<div class="card list">' +
+    '<a class="row-btn" href="legal.html" target="_blank" rel="noopener"><span class="ico" aria-hidden="true">📄</span><span class="txt"><b>Condiciones, privacidad y aviso legal</b><small>' +
+    (S.cfg.legal ? 'Aceptadas el ' + esc(String(S.cfg.legal.at).slice(0, 10).split('-').reverse().join('/')) : 'Léelas aquí') + '</small></span><span class="chev" aria-hidden="true">›</span></a>' +
     '</div>' +
     '<h3 class="sect">Privacidad</h3>' +
     '<div class="card list"><details class="row-more" id="adel">' +

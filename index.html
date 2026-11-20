@@ -28,7 +28,7 @@
     <div id="tips"></div>
     <div class="card" id="prox" hidden></div>
     <div class="road"></div>
-    <div id="sync" class="mut">Tus datos se guardan en este dispositivo.</div>
+    <div id="sync" class="mut" hidden></div>
     <h1>Caja diaria</h1>
     <div class="card" id="mes"></div>
     <details class="card"><summary><b>Todos los meses</b></summary><div id="lmes"></div></details>
@@ -194,20 +194,31 @@
       <label class="f" for="eib">Número de cuenta (IBAN)</label><input id="eib">
       <label class="f" for="eul">Última factura emitida (nº)</label><input id="eul" type="number" min="0" inputmode="numeric">
       <label class="f" for="iva">IVA (%)</label><input id="iva" type="number" step="0.1" min="0" inputmode="decimal">
+      <div id="ivamotbox"><label class="f" for="ivamot">Motivo de que no lleve IVA (obligatorio con IVA 0)</label><input id="ivamot" placeholder="Ej.: Operación exenta, art. 20 Ley del IVA"></div>
       <label class="f" for="egest">Email de tu gestor (opcional)</label><input id="egest" type="email" inputmode="email" autocapitalize="off">
       <label class="f" for="echof">Tu nombre en el mensaje de bienvenida (opcional)</label><input id="echof" placeholder="Si lo dejas vacío, se usa tu nombre de pila">
       <label class="f" for="epunto">Punto de encuentro habitual (opcional)</label><input id="epunto" placeholder="Ej.: llegadas, puerta 3">
     </details>
 
+    <div class="card" id="faoff">
+      <b>🧾 Crear facturas (extra opcional)</b>
+      <div class="mut mt8">No hace falta para usar Rutivo. Actívalo solo si quieres hacer facturas desde la app; si no, puedes seguir haciéndolas como siempre.</div>
+      <button class="mt10" id="faon" type="button">Activar facturas</button>
+    </div>
+    <div class="fa-x">
     <div class="card">
+      <div class="note-legal" id="falegal"></div>
       <label class="f" for="fc">Cliente a facturar</label><select id="fc"></select>
       <div id="cd">
-        <label class="f" for="cnif">NIF del cliente</label><input id="cnif">
+        <label class="chk mt8"><input type="checkbox" id="cpart"> Es un particular (sin NIF)</label>
+        <div id="cnifbox"><label class="f" for="cnif">NIF del cliente</label><input id="cnif" autocapitalize="characters"></div>
         <label class="f" for="cdir">Dirección del cliente</label><input id="cdir">
       </div>
       <h2 class="mt14">Servicios sin facturar</h2>
       <div id="pk"></div>
+      <div id="mkerr" class="out mt8" role="alert"></div>
       <button id="mk">Crear factura</button>
+    </div>
     </div>
 
     <details class="card" id="trim"><summary><b>📊 Trimestres e impuestos</b></summary>
@@ -216,8 +227,16 @@
       <button class="sec" id="tqsend" type="button">📤 Enviar este trimestre a mi gestor</button>
     </details>
 
+    <div class="fa-x">
     <h2>Facturas emitidas</h2>
     <div class="card" id="lfac"></div>
+    <div class="card">
+      <div class="mut">Las facturas emitidas no se pueden borrar ni cambiar (lo exige la ley). Para anular una, se hace una <b>factura rectificativa</b>.</div>
+      <button class="sec mt10" id="faexp" type="button">⬇️ Descargar registro de facturas</button>
+      <button class="sec" id="fachk" type="button">🔒 Comprobar que no se han alterado</button>
+      <button class="sec" id="fanoff" type="button">Ocultar «Crear facturas»</button>
+    </div>
+    </div>
   </section>
 
   <!-- ============ CUENTA (se abre con el botón del avatar) ============ -->

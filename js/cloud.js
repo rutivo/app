@@ -16,9 +16,15 @@ let pending = false; // hay cambios locales sin subir
 let failed = false; // la última subida falló
 let timer;
 
+/**
+ * Estado del guardado. En la pantalla principal solo se enseña si hay algo que
+ * atender (sin conexión, error, sin cuenta): cuando todo va bien no molesta.
+ */
 export function status(text) {
   const el = $('#sync');
-  if (el) el.textContent = text;
+  if (!el) return;
+  el.textContent = text;
+  el.hidden = !/sin conexi|no se pudo|error|solo en este m|copias de seguridad/i.test(text);
 }
 
 export const cloudEnabled = () => !!remote;

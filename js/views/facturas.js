@@ -1,6 +1,7 @@
 // Pantalla "Facturas": datos del emisor, logo, emisión de facturas, PDF y copia de seguridad.
-import { $, $$, confirmTap, confirmTapTimed, disarm, downloadBlob, loadScript, onClick, saveFile, toast } from '../dom.js';
+import { $, $$, confirmTapTimed, disarm, downloadBlob, loadScript, onClick, saveFile, toast } from '../dom.js';
 import { COLORS, ICON_NAMES, ICONS, accentColor, iconSvg, logoSvg } from '../logo.js';
+import { clientProblems, fingerprint, isoWithZone, issuerProblems, lastHash, nextRectNumber, recordString, verifyChain } from '../facturaLegal.js';
 import { baseOf, invoiceTotals, nextInvoiceNumber } from '../money.js';
 import { S, exportBackup, importBackup, markBackupDone, save } from '../store.js';
 import { esc, eur, fd, r2, slug, today, uid } from '../utils.js';
@@ -90,7 +91,7 @@ const shrinkLogo = (file) =>
 const ISSUER_FIELDS = {
   // id del campo → clave en cfg
   en: 'nom', enif: 'nif', ed: 'dir', ecp: 'cp', eloc: 'loc', eib: 'iban',
-  lic: 'lic', echof: 'chof', epunto: 'punto', ln: 'ln', lsub: 'ls', l3: 'l3', egest: 'gestor',
+  lic: 'lic', echof: 'chof', epunto: 'punto', ln: 'ln', lsub: 'ls', l3: 'l3', egest: 'gestor', ivamot: 'ivaMot',
 };
 
 function renderIssuer() {
@@ -98,7 +99,10 @@ function renderIssuer() {
     if (!['ln', 'lsub', 'l3'].includes(id)) $('#' + id).value = S.cfg[key] || '';
   }
   $('#iva').value = S.cfg.iva;
+  $('#ivamotbox').style.display = S.cfg.iva > 0 ? 'none' : 'block';
   $('#eul').value = lastIssued();
+  // Con facturas emitidas, el número de la última no se puede tocar (la numeración debe ser correlativa)
+  $('#eul').disabled = S.fac.length > 0;
   renderLogoEditor();
 }
 
@@ -106,6 +110,8 @@ function readIssuer() {
   const cfg = { ...S.cfg };
   for (const [id, key] of Object.entries(ISSUER_FIELDS)) cfg[key] = $('#' + id).value;
   cfg.iva = +$('#iva').value || 0;
+  cfg.nif = String(cfg.nif || '').toUpperCase().replace(/[\s.-]/g, '');
+  $('#ivamotbox').style.display = cfg.iva > 0 ? 'none' : 'block';
   S.cfg = cfg;
   save();
   renderBrand();
@@ -119,6 +125,9 @@ function renderPending() {
   const known = S.cli[client] || {};
   $('#cnif').value = known.nif || '';
   $('#cdir').value = known.dir || '';
+  $('#cpart').checked = !!known.part;
+  $('#cnifbox').style.display = known.part ? 'none' : 'block';
+  $('#mkerr').textContent = '';
   $('#cd').style.display = client ? 'block' : 'none';
   $('#mk').style.display = client ? 'block' : 'none';
   $('#pk').innerHTML = list.length
@@ -133,7 +142,19 @@ function renderPending() {
     : '<span class="mut">Cuando registres servicios en Transfer, aparecerán aquí.</span>';
 }
 
+/** «Crear facturas» es un extra: activado si lo eliges o si ya tienes facturas. */
+export const invoicesOn = () => (S.cfg.facOn == null ? S.fac.length > 0 : !!S.cfg.facOn);
+
+const LEGAL_NOTE =
+  'ℹ️ Rutivo no envía tus facturas a Hacienda (Verifactu): todavía no es obligatorio (para autónomos, fecha oficial 1-7-2027). ' +
+  'Cada factura queda guardada con su número correlativo y una huella que impide alterarla. Si un cliente te pide factura, estás obligado a dársela; si no, hacerla aquí es opcional.';
+
 function renderInvoices() {
+  const on = invoicesOn();
+  $('#faoff').hidden = on;
+  $$('.fa-x').forEach((el) => { el.hidden = !on; });
+  if (!on) return;
+  $('#falegal').textContent = LEGAL_NOTE;
   const clients = [...new Set(S.srv.filter((s) => !s.fid).map((s) => s.cl))];
   const select = $('#fc');
   const current = select.value;
@@ -146,55 +167,114 @@ function renderInvoices() {
   $('#lfac').innerHTML = S.fac.length
     ? [...S.fac]
         .reverse()
-        .map(
-          (f) =>
-            '<div class="it" data-of="' + esc(f.id) + '"><div><b>' + esc(f.num) + '</b><small>' + esc(f.cl.nom) + ' · ' + fd(f.fecha) + '</small></div>' +
-            '<div><b>' + eur(invoiceTotals(f).t) + '</b><button class="x" data-df="' + esc(f.id) + '" aria-label="Borrar factura">×</button></div></div>',
-        )
+        .map((f) => {
+          const rect = f.tipo && f.tipo !== 'F1';
+          const tag = f.anulada ? ' <span class="tag pend">Anulada (' + esc(f.anulada) + ')</span>' : rect ? ' <span class="tag">Rectificativa de ' + esc(f.rect.num) + '</span>' : '';
+          return '<div class="it" data-of="' + esc(f.id) + '"><div><b>' + esc(f.num) + '</b>' + tag + '<small>' + esc(f.cl.nom) + ' · ' + fd(f.fecha) + '</small></div>' +
+            '<div><b>' + eur(invoiceTotals(f).t) + '</b>' +
+            (f.anulada || rect ? '' : '<button class="small-btn sec" data-af="' + esc(f.id) + '">Anular</button>') + '</div></div>';
+        })
         .join('')
     : '<span class="mut">Todavía no has emitido facturas.</span>';
 }
 
-function createInvoice() {
-  const ids = $$('.pick:checked').map((x) => x.value);
-  if (!ids.length) {
-    toast('Marca al menos un servicio para facturar.');
-    return;
-  }
-  const client = $('#fc').value;
-  const nif = $('#cnif').value;
-  const dir = $('#cdir').value;
-  S.cli[client] = { nif, dir };
+/** Datos del emisor que se copian en cada factura (y ya no cambian). */
+const issuerSnapshot = (c) => ({ nom: c.nom || '', nif: c.nif || '', dir: c.dir || '', cp: c.cp || '', loc: c.loc || '', lic: c.lic || '', iban: c.iban || '', ivaMot: c.iva > 0 ? '' : c.ivaMot || '' });
 
-  const invoice = {
-    id: uid(),
-    num: nextInvoiceNumber(lastIssued(), S.fac),
-    fecha: today(),
-    iva: S.cfg.iva,
-    em: { ...S.cfg },
-    cl: { nom: client, nif, dir },
-    items: S.srv.filter((s) => ids.includes(s.id)).map((s) => ({ f: s.f, h: s.h, o: s.o, d: s.d, i: s.i, p: s.p, n: s.n })),
-  };
-  S.srv.forEach((s) => {
-    if (ids.includes(s.id)) s.fid = invoice.id;
-  });
-  S.fac.push(invoice);
-  save();
-  rerenderAll();
-  showInvoice(invoice);
+/** Añade la factura a la cadena con su huella (registro inalterable). */
+async function seal(invoice) {
+  invoice.gen = isoWithZone();
+  invoice.prev = lastHash(S.fac);
+  invoice.huella = await fingerprint(recordString(invoice, invoiceTotals(invoice), invoice.prev, invoice.gen));
 }
 
-function deleteInvoice(button) {
-  if (!confirmTap(button, '¿Borrar?', 'Toca otra vez para borrar la factura.')) return;
-  const f = S.fac.find((x) => x.id === button.dataset.df);
-  if (!f) return;
-  S.fac = S.fac.filter((x) => x !== f);
+let creating = false;
+async function createInvoice() {
+  if (creating) return;
+  const ids = $$('.pick:checked').map((x) => x.value);
+  const err = (t) => { $('#mkerr').textContent = t; };
+  if (!ids.length) return err('Marca al menos un servicio para facturar.');
+  const client = $('#fc').value;
+  const part = $('#cpart').checked;
+  const nif = part ? '' : $('#cnif').value.toUpperCase().replace(/[\s.-]/g, '');
+  const dir = $('#cdir').value.trim();
+  const cl = { nom: client, nif, dir, part };
+  const missing = [...issuerProblems(S.cfg), ...clientProblems(cl)];
+  if (missing.length) {
+    err('Para que la factura sea legal falta: ' + missing.join(', ') + '.' + (issuerProblems(S.cfg).length ? ' Tus datos están arriba, en «Mis datos de emisor».' : ''));
+    if (issuerProblems(S.cfg).length) $('#emisor').open = true;
+    return;
+  }
+  S.cli[client] = { nif, dir, part };
+  creating = true;
+  try {
+    const invoice = {
+      id: uid(),
+      tipo: 'F1',
+      num: nextInvoiceNumber(lastIssued(), S.fac.filter((f) => !f.tipo || f.tipo === 'F1')),
+      fecha: today(),
+      iva: S.cfg.iva,
+      em: issuerSnapshot(S.cfg),
+      cl,
+      items: S.srv.filter((s) => ids.includes(s.id)).map((s) => ({ f: s.f, h: s.h, o: s.o, d: s.d, i: s.i, p: s.p, n: s.n })),
+    };
+    await seal(invoice);
+    S.srv.forEach((s) => {
+      if (ids.includes(s.id)) s.fid = invoice.id;
+    });
+    S.fac.push(invoice);
+    save();
+    rerenderAll();
+    showInvoice(invoice);
+  } finally {
+    creating = false;
+  }
+}
+
+/** Anular = emitir una factura rectificativa con los importes en negativo (la original no se borra). */
+async function annulInvoice(button) {
+  if (!confirmTapTimed(button, '¿Anular?', 'Toca otra vez: se creará una factura rectificativa que la anula.', 8000)) return;
+  const f = S.fac.find((x) => x.id === button.dataset.af);
+  if (!f || f.anulada) return;
+  const rect = {
+    id: uid(),
+    tipo: 'R4',
+    num: nextRectNumber(S.fac),
+    fecha: today(),
+    iva: f.iva,
+    em: f.em && f.em.nif ? f.em : issuerSnapshot(S.cfg),
+    cl: f.cl,
+    rect: { num: f.num, fecha: f.fecha, motivo: 'Anulación total de la factura ' + f.num },
+    items: f.items.map((x) => ({ ...x, i: -x.i })),
+  };
+  await seal(rect);
+  f.anulada = rect.num;
   S.srv.forEach((s) => {
     if (s.fid === f.id) delete s.fid;
   });
+  S.fac.push(rect);
   save();
   rerenderAll();
-  toast('Factura borrada. Sus servicios vuelven a Sin facturar.');
+  toast('Factura ' + f.num + ' anulada con la rectificativa ' + rect.num + '. Sus servicios vuelven a «Sin facturar».');
+  showInvoice(rect);
+}
+
+/** Registro de facturas (para tu gestor o si Hacienda lo pide). */
+function exportRegister() {
+  const rows = S.fac.map((f) => {
+    const t = invoiceTotals(f);
+    return { numero: f.num, tipo: f.tipo || 'F1', fecha: f.fecha, cliente: f.cl.nom, nifCliente: f.cl.nif || '', base: t.b, iva: f.iva, cuota: t.v, total: t.t,
+      anuladaPor: f.anulada || '', rectificaA: f.rect ? f.rect.num : '', generada: f.gen || '', huellaAnterior: f.prev || '', huella: f.huella || '' };
+  });
+  const head = Object.keys(rows[0] || { numero: '' });
+  const csv = [head.join(';'), ...rows.map((r) => head.map((k) => '"' + String(r[k]).replace(/"/g, '""') + '"').join(';'))].join('\r\n');
+  downloadBlob(new Blob(['﻿' + csv], { type: 'text/csv' }), 'Registro-facturas-' + today() + '.csv');
+}
+
+async function checkChain() {
+  const bad = await verifyChain(S.fac, invoiceTotals);
+  const sealed = S.fac.filter((f) => f.huella).length;
+  toast(bad.length ? '⚠️ Estas facturas no cuadran con su huella: ' + bad.join(', ') : '🔒 Todo correcto: ' + sealed + ' facturas con huella, ninguna alterada.');
 }
 
 // ---------- hoja de factura ----------
@@ -209,9 +289,11 @@ function showInvoice(f) {
   currentInvoice = f;
   const totals = invoiceTotals(f);
   const iva = f.iva;
-  // Los datos actuales del emisor y del cliente prevalecen sobre los guardados.
-  const em = { ...f.em, ...S.cfg };
-  const cl = { ...f.cl, ...(S.cli[f.cl.nom] || {}) };
+  // Una factura emitida no cambia: se usan los datos guardados al emitirla
+  // (los actuales solo rellenan lo que faltara en facturas antiguas).
+  const em = { ...issuerSnapshot(S.cfg), ...Object.fromEntries(Object.entries(f.em || {}).filter(([, v]) => v !== '' && v != null)) };
+  const cl = { ...(S.cli[f.cl.nom] || {}), ...Object.fromEntries(Object.entries(f.cl).filter(([, v]) => v !== '' && v != null)) };
+  const rect = f.tipo && f.tipo !== 'F1';
   const lic = em.lic || '';
   const place = [em.cp ? 'CP ' + em.cp : '', em.loc].filter(Boolean).join(' · ');
 
@@ -234,16 +316,19 @@ function showInvoice(f) {
     (em.dir ? '<div>' + esc(em.dir) + '</div>' : '') +
     (place ? '<div>' + esc(place) + '</div>' : '') +
     '</div></div>' +
-    '<h3>Factura</h3>' +
+    '<h3>' + (rect ? 'Factura rectificativa' : 'Factura') + (f.anulada ? ' <span class="anulada">ANULADA por ' + esc(f.anulada) + '</span>' : '') + '</h3>' +
     '<div class="meta">' +
-    '<div class="box"><small>Cliente</small><b>' + esc(cl.nom) + '</b><br>NIF: ' + esc(cl.nif) + '<br>' + esc(cl.dir) + '</div>' +
-    '<div class="box"><small>Datos de la factura</small>Número: <b>' + esc(f.num) + '</b><br>Fecha de emisión: ' + fd(f.fecha) + '</div>' +
+    '<div class="box"><small>Cliente</small><b>' + esc(cl.nom) + '</b>' + (cl.nif ? '<br>NIF: ' + esc(cl.nif) : '') + (cl.dir ? '<br>' + esc(cl.dir) : '') + '</div>' +
+    '<div class="box"><small>Datos de la factura</small>Número: <b>' + esc(f.num) + '</b><br>Fecha de expedición: ' + fd(f.fecha) +
+    (rect ? '<br>Rectifica a la factura <b>' + esc(f.rect.num) + '</b> de ' + fd(f.rect.fecha) + '<br>Motivo: ' + esc(f.rect.motivo) : '') + '</div>' +
     '</div>' +
     '<table><tr><th>Fecha</th><th>Concepto</th><th class="r">Base</th><th class="r">IVA ' + esc(iva) + '%</th><th class="r">Total</th></tr>' + rows + '</table>' +
     '<div class="tot">' +
     '<div><span>Base imponible</span><span>' + eur(totals.b) + '</span></div>' +
     '<div><span>IVA (' + esc(iva) + '%)</span><span>' + eur(totals.v) + '</span></div>' +
     '<div class="g"><span>Total factura</span><span>' + eur(totals.t) + '</span></div></div>' +
+    (!(iva > 0) && em.ivaMot ? '<div class="legal-mention">' + esc(em.ivaMot) + '</div>' : '') +
+    (f.huella ? '<div class="legal-mention">Registro: ' + esc(f.gen) + ' · Huella ' + esc(f.huella.slice(0, 16)) + '…</div>' : '') +
     '<div class="ft"><div><div>' + esc(em.nom) + (lic ? ' · Licencia ' + esc(lic) : '') + (em.loc ? ' · ' + esc(em.loc) : '') + '</div>' +
     (em.iban ? '<div>Número de cuenta (IBAN): <b class="nw">' + esc(formatIban(em.iban)) + '</b></div>' : '') +
     '</div><span>Factura ' + esc(f.num) + '</span></div>';
@@ -451,9 +536,14 @@ export function initFacturas(rerender) {
 
   $('#fc').onchange = renderPending;
   $('#mk').onclick = createInvoice;
-  onClick('[data-df]', deleteInvoice);
+  onClick('[data-af]', annulInvoice);
+  $('#faon').onclick = () => { S.cfg.facOn = 1; save(); rerenderAll(); };
+  $('#fanoff').onclick = () => { S.cfg.facOn = 0; save(); rerenderAll(); toast('«Crear facturas» oculto. Tus facturas siguen guardadas.'); };
+  $('#faexp').onclick = exportRegister;
+  $('#fachk').onclick = checkChain;
+  $('#cpart').onchange = () => { $('#cnifbox').style.display = $('#cpart').checked ? 'none' : 'block'; };
   onClick('[data-of]', (el, e) => {
-    if (e.target.closest('[data-df]')) return; // el botón de borrar no abre la factura
+    if (e.target.closest('[data-af]')) return; // el botón de anular no abre la factura
     const f = S.fac.find((x) => x.id === el.dataset.of);
     if (f) showInvoice(f);
   });

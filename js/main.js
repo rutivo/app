@@ -2,11 +2,13 @@
 import { $, $$, toast } from './dom.js';
 import { TRIAL_ENABLED } from './config.js';
 import { checkLicense } from './license.js';
+import { checkLegal } from './legal.js';
 import { renderReminders, scheduleReminders } from './reminders.js';
 import { loadLocal, requestPersistentStorage } from './store.js';
 import { initTheme, renderThemeChoice } from './theme.js';
 import { initCaja, renderCaja } from './views/caja.js';
-import { initAccount, renderAccount } from './views/cuenta.js';
+import { accountsEnabled, initAccount, renderAccount } from './views/cuenta.js';
+import { cloudEnabled } from './cloud.js';
 import { initFacturas, renderBrand, renderFacturas, saveBackupFile } from './views/facturas.js';
 import { initGasolina, renderGasolina } from './views/gasolina.js';
 import { initHucha, renderHucha } from './views/hucha.js';
@@ -27,6 +29,7 @@ function render() {
   renderAccount();
   renderThemeChoice();
   renderReminders();
+  if (cloudEnabled() || !accountsEnabled()) setTimeout(checkLegal, 800); // con cuenta: cuando ya están sus datos
   scheduleReminders();
 }
 
