@@ -54,27 +54,45 @@ export function createVad({ chunkMs, silenceMs = 1100, maxMs = 15000, waitMs = 7
   };
 }
 
+/** El micro está abierto pero no llega sonido (en iPhone, tras hablar el asistente). */
+export class DeafMicError extends Error {
+  constructor() {
+    super('El micrófono no da sonido');
+    this.name = 'DeafMicError';
+  }
+}
+
 /**
  * Micrófono abierto mientras el asistente está abierto (no hay que volver a
- * pedir permiso ni «despertarlo» en cada frase).
+ * pedir permiso en cada frase). Si el sistema lo deja mudo (en iPhone pasa
+ * cuando el asistente habla), se vuelve a abrir solo.
  */
-export function createMic() {
+export function createMic({ deafMs = 1500, maxMs = 15000 } = {}) {
   let stream = null;
   let ctx = null;
   let source = null;
   let proc = null;
   let session = null;
+  let lastChunk = 0;
+
+  /** El audio se crea/activa sin esperar a nada: así ocurre dentro del toque (iPhone lo exige). */
+  function ensureCtx() {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!ctx || ctx.state === 'closed') ctx = new AC();
+    if (ctx.state !== 'running') ctx.resume().catch(() => {});
+  }
 
   async function open() {
+    ensureCtx();
     if (stream) return;
     stream = await navigator.mediaDevices.getUserMedia({
       audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 },
     });
-    const AC = window.AudioContext || window.webkitAudioContext;
-    ctx = new AC();
+    if (!ctx || ctx.state === 'closed') ensureCtx();
     source = ctx.createMediaStreamSource(stream);
     proc = ctx.createScriptProcessor(4096, 1, 1);
     proc.onaudioprocess = (e) => {
+      lastChunk = Date.now();
       if (!session) return;
       const d = e.inputBuffer.getChannelData(0);
       let s = 0;
@@ -89,37 +107,85 @@ export function createMic() {
     proc.connect(ctx.destination); // necesario en Safari para que procese
   }
 
-  function finish(ok) {
+  /** Cierra el micro sin tocar la frase que se esté grabando. */
+  function teardown() {
+    try { proc && proc.disconnect(); source && source.disconnect(); } catch { /* */ }
+    if (stream) stream.getTracks().forEach((t) => t.stop());
+    if (ctx) ctx.close().catch(() => {});
+    stream = ctx = source = proc = null;
+  }
+
+  /** ¿Se ha quedado mudo? (pista parada o silenciada por el sistema, o audio interrumpido) */
+  function stale() {
+    const track = stream && stream.getAudioTracks()[0];
+    return !track || track.readyState === 'ended' || track.muted || !ctx || ctx.state === 'closed' || ctx.state === 'interrupted';
+  }
+
+  async function wake() {
+    if (stream && stale()) teardown();
+    ensureCtx(); // antes de cualquier espera
+    await open();
+    if (ctx.state !== 'running') {
+      try { await ctx.resume(); } catch { /* se comprueba abajo, con el vigilante */ }
+    }
+  }
+
+  function finish(ok, error = null) {
     const s = session;
     if (!s) return;
     session = null;
+    clearInterval(s.watch);
+    if (error) return s.reject(error);
     const all = new Float32Array(s.chunks.reduce((n, c) => n + c.length, 0));
     let o = 0;
     for (const c of s.chunks) { all.set(c, o); o += c.length; }
-    s.resolve(ok && s.vad.speaking ? resample(all, ctx.sampleRate) : null);
+    s.resolve(ok && s.vad.speaking ? resample(all, ctx ? ctx.sampleRate : 48000) : null);
   }
 
   return {
     get isOpen() { return !!stream; },
     open,
-    /** Graba una frase. Devuelve el audio a 16 kHz, o null si no se oyó a nadie. */
+    /**
+     * Graba una frase. Devuelve el audio a 16 kHz, o null si no se oyó a nadie.
+     * Si el micro no da sonido ni reabriéndolo, falla con DeafMicError.
+     */
     async listen(onLevel = () => {}) {
-      await open();
-      if (ctx.state === 'suspended') await ctx.resume();
       if (session) finish(false);
-      return new Promise((resolve) => {
-        session = { chunks: [], resolve, onLevel, vad: createVad({ chunkMs: (4096 / ctx.sampleRate) * 1000 }) };
+      await wake();
+      return new Promise((resolve, reject) => {
+        const s = { chunks: [], resolve, reject, onLevel, vad: createVad({ chunkMs: (4096 / ctx.sampleRate) * 1000, maxMs }), started: Date.now(), retried: false, busy: false };
+        session = s;
+        // Vigilante: el detector de voz cuenta el tiempo con el sonido que llega;
+        // si no llega nada, aquí se nota, se reabre el micro y, si sigue mudo, se avisa.
+        s.watch = setInterval(async () => {
+          if (session !== s || s.busy) return;
+          const now = Date.now();
+          if (now - s.started > maxMs + 3000) return finish(true);
+          if (s.chunks.length || now - s.started < deafMs) return;
+          if (s.retried) return finish(false, new DeafMicError());
+          s.busy = true;
+          s.retried = true;
+          teardown();
+          try {
+            await wake();
+          } catch (err) {
+            s.busy = false;
+            return finish(false, err);
+          }
+          s.started = Date.now();
+          s.vad = createVad({ chunkMs: (4096 / ctx.sampleRate) * 1000, maxMs });
+          s.busy = false;
+        }, 250);
       });
     },
     /** «Ya he terminado» (tocar la bola mientras escucha). */
     stop() { if (session) finish(true); },
-    cancel() { if (session) { const s = session; session = null; s.resolve(null); } },
+    cancel() { if (session) { const s = session; session = null; clearInterval(s.watch); s.resolve(null); } },
     close() {
       this.cancel();
-      try { proc && proc.disconnect(); source && source.disconnect(); } catch { /* */ }
-      if (stream) stream.getTracks().forEach((t) => t.stop());
-      if (ctx) ctx.close().catch(() => {});
-      stream = ctx = source = proc = null;
+      teardown();
     },
+    /** Último momento en que llegó sonido (para pruebas). */
+    get lastChunk() { return lastChunk; },
   };
 }

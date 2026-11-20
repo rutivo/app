@@ -296,6 +296,12 @@ async function listenEar(auto = false) {
     } catch (err) {
       earBusy = false;
       convo = false;
+      if (ui) ui.root.style.setProperty('--lvl', '0');
+      if (err && err.name === 'DeafMicError') {
+        // El sistema dejó el micro mudo (en iPhone, tras hablar): un toque lo despierta
+        if (mic) { mic.close(); mic = null; }
+        return setState('idle', auto ? '👆 Toca la bola para seguir hablando' : 'El micro no da sonido. Toca la bola otra vez (si sigue, cierra y abre Rutivo).');
+      }
       if (err && err.name === 'NotAllowedError') return showKeyboard('No tengo permiso para el micrófono. Ajustes → Safari → Micrófono → Permitir (o «Preguntar») y vuelve a tocar la bola. Mientras, usa el 🎤 del teclado.');
       return showKeyboard('No puedo abrir el micrófono (¿lo usa otra app?). Usa el 🎤 del teclado.');
     }
