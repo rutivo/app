@@ -1,7 +1,7 @@
 // Pantalla "Facturas": datos del emisor, logo, emisión de facturas, PDF y copia de seguridad.
 import { $, $$, confirmTapTimed, disarm, downloadBlob, loadScript, onClick, saveFile, toast } from '../dom.js';
 import { COLORS, ICON_NAMES, ICONS, accentColor, iconSvg, logoSvg } from '../logo.js';
-import { clientProblems, fingerprint, isoWithZone, issuerProblems, lastHash, nextRectNumber, recordString, verifyChain } from '../facturaLegal.js';
+import { clientProblems, fingerprint, isoWithZone, issuerProblems, lastHash, nextRectNumber, recordString } from '../facturaLegal.js';
 import { baseOf, invoiceTotals, nextInvoiceNumber } from '../money.js';
 import { S, exportBackup, importBackup, markBackupDone, save } from '../store.js';
 import { esc, eur, fd, r2, slug, today, uid } from '../utils.js';
@@ -101,8 +101,6 @@ function renderIssuer() {
   $('#iva').value = S.cfg.iva;
   $('#ivamotbox').style.display = S.cfg.iva > 0 ? 'none' : 'block';
   $('#eul').value = lastIssued();
-  // Con facturas emitidas, el número de la última no se puede tocar (la numeración debe ser correlativa)
-  $('#eul').disabled = S.fac.length > 0;
   renderLogoEditor();
 }
 
@@ -145,9 +143,7 @@ function renderPending() {
 /** «Crear facturas» es un extra: activado si lo eliges o si ya tienes facturas. */
 export const invoicesOn = () => (S.cfg.facOn == null ? S.fac.length > 0 : !!S.cfg.facOn);
 
-const LEGAL_NOTE =
-  'ℹ️ Rutivo no envía tus facturas a Hacienda (Verifactu): todavía no es obligatorio (para autónomos, fecha oficial 1-7-2027). ' +
-  'Cada factura queda guardada con su número correlativo y una huella que impide alterarla. Si un cliente te pide factura, estás obligado a dársela; si no, hacerla aquí es opcional.';
+const LEGAL_NOTE = 'Rutivo te prepara la factura con tus datos. Revísala antes de enviarla: su contenido es responsabilidad de quien la emite.';
 
 function renderInvoices() {
   const on = invoicesOn();
@@ -172,7 +168,7 @@ function renderInvoices() {
           const tag = f.anulada ? ' <span class="tag pend">Anulada (' + esc(f.anulada) + ')</span>' : rect ? ' <span class="tag">Rectificativa de ' + esc(f.rect.num) + '</span>' : '';
           return '<div class="it" data-of="' + esc(f.id) + '"><div><b>' + esc(f.num) + '</b>' + tag + '<small>' + esc(f.cl.nom) + ' · ' + fd(f.fecha) + '</small></div>' +
             '<div><b>' + eur(invoiceTotals(f).t) + '</b>' +
-            (f.anulada || rect ? '' : '<button class="small-btn sec" data-af="' + esc(f.id) + '">Anular</button>') + '</div></div>';
+            '<button class="x" data-df="' + esc(f.id) + '" aria-label="Borrar factura">×</button></div></div>';
         })
         .join('')
     : '<span class="mut">Todavía no has emitido facturas.</span>';
@@ -199,12 +195,12 @@ async function createInvoice() {
   const nif = part ? '' : $('#cnif').value.toUpperCase().replace(/[\s.-]/g, '');
   const dir = $('#cdir').value.trim();
   const cl = { nom: client, nif, dir, part };
+  // Si falta algo, se avisa una vez; tocando otra vez se crea igualmente
   const missing = [...issuerProblems(S.cfg), ...clientProblems(cl)];
-  if (missing.length) {
-    err('Para que la factura sea legal falta: ' + missing.join(', ') + '.' + (issuerProblems(S.cfg).length ? ' Tus datos están arriba, en «Mis datos de emisor».' : ''));
-    if (issuerProblems(S.cfg).length) $('#emisor').open = true;
-    return;
+  if (missing.length && !confirmTapTimed($('#mk'), 'Crear igualmente', null, 8000)) {
+    return err('Ojo, falta: ' + missing.join(', ') + '. Puedes completarlo o tocar «Crear igualmente».');
   }
+  err('');
   S.cli[client] = { nif, dir, part };
   creating = true;
   try {
@@ -231,6 +227,20 @@ async function createInvoice() {
   }
 }
 
+function deleteInvoice(button) {
+  if (!confirmTapTimed(button, '¿Borrar?', 'Toca otra vez para borrar la factura.')) return;
+  const f = S.fac.find((x) => x.id === button.dataset.df);
+  if (!f) return;
+  S.fac = S.fac.filter((x) => x !== f);
+  S.fac.forEach((x) => { if (x.anulada === f.num) delete x.anulada; });
+  S.srv.forEach((s) => {
+    if (s.fid === f.id) delete s.fid;
+  });
+  save();
+  rerenderAll();
+  toast('Factura borrada. Sus servicios vuelven a «Sin facturar».');
+}
+
 /** Anular = emitir una factura rectificativa con los importes en negativo (la original no se borra). */
 async function annulInvoice(button) {
   if (!confirmTapTimed(button, '¿Anular?', 'Toca otra vez: se creará una factura rectificativa que la anula.', 8000)) return;
@@ -255,6 +265,7 @@ async function annulInvoice(button) {
   S.fac.push(rect);
   save();
   rerenderAll();
+  $('#invwrap').classList.remove('on');
   toast('Factura ' + f.num + ' anulada con la rectificativa ' + rect.num + '. Sus servicios vuelven a «Sin facturar».');
   showInvoice(rect);
 }
@@ -271,11 +282,6 @@ function exportRegister() {
   downloadBlob(new Blob(['﻿' + csv], { type: 'text/csv' }), 'Registro-facturas-' + today() + '.csv');
 }
 
-async function checkChain() {
-  const bad = await verifyChain(S.fac, invoiceTotals);
-  const sealed = S.fac.filter((f) => f.huella).length;
-  toast(bad.length ? '⚠️ Estas facturas no cuadran con su huella: ' + bad.join(', ') : '🔒 Todo correcto: ' + sealed + ' facturas con huella, ninguna alterada.');
-}
 
 // ---------- hoja de factura ----------
 
@@ -328,11 +334,13 @@ function showInvoice(f) {
     '<div><span>IVA (' + esc(iva) + '%)</span><span>' + eur(totals.v) + '</span></div>' +
     '<div class="g"><span>Total factura</span><span>' + eur(totals.t) + '</span></div></div>' +
     (!(iva > 0) && em.ivaMot ? '<div class="legal-mention">' + esc(em.ivaMot) + '</div>' : '') +
-    (f.huella ? '<div class="legal-mention">Registro: ' + esc(f.gen) + ' · Huella ' + esc(f.huella.slice(0, 16)) + '…</div>' : '') +
+
     '<div class="ft"><div><div>' + esc(em.nom) + (lic ? ' · Licencia ' + esc(lic) : '') + (em.loc ? ' · ' + esc(em.loc) : '') + '</div>' +
     (em.iban ? '<div>Número de cuenta (IBAN): <b class="nw">' + esc(formatIban(em.iban)) + '</b></div>' : '') +
     '</div><span>Factura ' + esc(f.num) + '</span></div>';
 
+  $('#invanul').hidden = !!(rect || f.anulada);
+  $('#invanul').dataset.af = f.id;
   $('#invwrap').classList.add('on');
   fitSheet();
 }
@@ -537,13 +545,14 @@ export function initFacturas(rerender) {
   $('#fc').onchange = renderPending;
   $('#mk').onclick = createInvoice;
   onClick('[data-af]', annulInvoice);
+  onClick('[data-df]', deleteInvoice);
   $('#faon').onclick = () => { S.cfg.facOn = 1; save(); rerenderAll(); };
   $('#fanoff').onclick = () => { S.cfg.facOn = 0; save(); rerenderAll(); toast('«Crear facturas» oculto. Tus facturas siguen guardadas.'); };
   $('#faexp').onclick = exportRegister;
-  $('#fachk').onclick = checkChain;
+  $('#invanul').onclick = () => annulInvoice($('#invanul'));
   $('#cpart').onchange = () => { $('#cnifbox').style.display = $('#cpart').checked ? 'none' : 'block'; };
   onClick('[data-of]', (el, e) => {
-    if (e.target.closest('[data-af]')) return; // el botón de anular no abre la factura
+    if (e.target.closest('[data-af],[data-df]')) return; // los botones no abren la factura
     const f = S.fac.find((x) => x.id === el.dataset.of);
     if (f) showInvoice(f);
   });

@@ -231,9 +231,7 @@
     <h2>Facturas emitidas</h2>
     <div class="card" id="lfac"></div>
     <div class="card">
-      <div class="mut">Las facturas emitidas no se pueden borrar ni cambiar (lo exige la ley). Para anular una, se hace una <b>factura rectificativa</b>.</div>
-      <button class="sec mt10" id="faexp" type="button">⬇️ Descargar registro de facturas</button>
-      <button class="sec" id="fachk" type="button">🔒 Comprobar que no se han alterado</button>
+      <button class="sec" id="faexp" type="button">⬇️ Descargar lista de facturas</button>
       <button class="sec" id="fanoff" type="button">Ocultar «Crear facturas»</button>
     </div>
     </div>
@@ -316,7 +314,7 @@
 </div>
 
 <div id="invwrap">
-  <div class="bar"><button class="sec" id="cl">Cerrar</button><button id="pr">Enviar / guardar PDF</button></div>
+  <div class="bar"><button class="sec" id="cl">Cerrar</button><button class="sec" id="invanul" type="button" hidden>Anular</button><button id="pr">Enviar / guardar PDF</button></div>
   <div class="sheet" id="sheet"></div>
 </div>
 
