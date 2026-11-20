@@ -68,3 +68,8 @@ Software propietario: prohibida su copia, modificación o distribución sin auto
   (facturas, sincronización entre móviles, PDF y seguridad).
 - `npm run test:rules`: reglas reales de Firestore con el emulador oficial
   (necesita Java y `firebase-tools`, `@firebase/rules-unit-testing` y `firebase`).
+- `npm run test:libs`: avisos de seguridad de las librerías que usa la app.
+
+**Al cambiar cualquier archivo de la app: `npm run version`.** La app se abre
+desde lo guardado en el móvil y solo se actualiza cuando cambia la versión de
+`sw.js` (una huella de todos los archivos). `npm test` falla si se olvida.
