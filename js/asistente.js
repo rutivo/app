@@ -63,11 +63,24 @@ export function fuzzyFix(t) {
   }).join(' ');
 }
 
+/**
+ * Con radio o gente hablando, el oído coge frases de fondo antes de la orden.
+ * Si antes de la orden (verbo o importe) hay mucha charla, se quita.
+ */
+export function trimChatter(text) {
+  const s = String(text || '').trim();
+  const m = s.match(/\b(ap[uú]nta|an[oó]ta|ingres|a punto|p[oó]n(me)?\b|m[eé]te(me)?\b|s[uú]ma(me)?\b|\d)/i);
+  if (!m) return s;
+  const before = s.slice(0, m.index).trim();
+  return before.split(/\s+/).length > 4 ? s.slice(m.index) : s;
+}
+
 /** Errores típicos del dictado y formas de decir importes. */
 function fixDictation(t) {
   t = fuzzyFix(t);
   return t
     .replace(/\ba (puntame|punta|puntalo|puntar|notame|nota|notar)\b/g, 'a$1')
+    .replace(/\ba punto (de |me |de me )?(?=\d)/g, 'apuntame ') // Whisper: «apúntame 15» → «a punto de 15»
     .replace(/\b(apunta|anota|ingresa|pon|mete|suma|guarda|registra) (me|melo|lo)\b/g, '$1$2')
     .replace(/\b(tarjetas|targeta|targetas)\b/g, 'tarjeta')
     .replace(/\b(efectivos|en mano|en metalico|cash|en billetes)\b/g, 'efectivo')

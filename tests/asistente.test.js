@@ -198,3 +198,29 @@ test('con ruido: palabras mal oídas, números colados y confirmación', () => {
   assert.equal(ask('apunta 20 euros', state, NOW, { confidence: 0.9 }).kind, 'action');
   assert.equal(ask('apunta 20 euros', state, NOW, { confidence: 0 }).kind, 'action'); // 0 = el iPhone no lo dice
 });
+
+test('micrófono propio: detector de voz con ruido de fondo', async () => {
+  const { createVad, resample } = await import('../js/microfono.js');
+  const v = createVad({ chunkMs: 100, silenceMs: 1000 });
+  const run = (levels) => levels.map((l) => v.push(l));
+  // Coche con ruido (0,02) → habla (0,15) → vuelve el ruido: acaba tras 1 s de «silencio»
+  const s = run([0.02, 0.022, 0.019, 0.021, 0.15, 0.16, 0.14, 0.15, 0.02, 0.021, 0.02, 0.019, 0.02, 0.021, 0.02, 0.02, 0.02, 0.02]);
+  assert.equal(s[5], 'speech');
+  assert.equal(s.at(-1), 'end');
+  // Solo ruido (aunque fuerte): no cuenta como voz y acaba por tiempo
+  const v2 = createVad({ chunkMs: 500, waitMs: 3000 });
+  const s2 = [0.08, 0.09, 0.085, 0.08, 0.09, 0.085].map((l) => v2.push(l));
+  assert.equal(s2.at(-1), 'timeout');
+  assert.equal(resample(new Float32Array(48000), 48000).length, 16000);
+});
+
+test('lo que oye Whisper: «a punto de 15 euros…» es «apúntame 15 euros…»', () => {
+  assert.deepEqual(ask('A punto de 15 euros como gasto en tarjeta.', state, NOW).action.item, { f: '2026-11-19', t: 'out', p: 'tarjeta', i: 15, c: 'Gasto' });
+});
+
+import { trimChatter } from '../js/asistente.js';
+test('trimChatter quita la charla de fondo antes de la orden', () => {
+  assert.equal(trimChatter('Hoy estamos en la radio hablando del parque de 15 euros como gasto'), '15 euros como gasto');
+  assert.equal(trimChatter('vale pues mira apúntame 20 euros'), 'vale pues mira apúntame 20 euros');
+  assert.equal(trimChatter('cuánto he ganado hoy'), 'cuánto he ganado hoy');
+});

@@ -1,8 +1,10 @@
 // Asistente de voz de Rutivo, al estilo Siri: pantalla completa, bola que escucha,
 // lo que dices en grande y la respuesta hablada. Todo se calcula en el móvil.
-import { ask, weatherText } from '../asistente.js';
+import { ask, trimChatter, weatherText } from '../asistente.js';
 import { readFlag, writeFlag } from '../dom.js';
 import { cachedStatus, etaLine } from '../flight.js';
+import { createMic } from '../microfono.js';
+import { earSupported, prepareEar, transcribe } from '../oido.js';
 import { S, save } from '../store.js';
 import { esc, uid } from '../utils.js';
 import { driverName } from '../welcome.js';
@@ -18,6 +20,14 @@ let rerenderAll = () => {};
 let ui = null;
 
 const voiceOn = () => readFlag(VOICE_KEY) !== '0';
+// Oído propio (micro de Rutivo + Whisper dentro del móvil). Si no se puede, el reconocimiento del navegador o el teclado.
+const EAR_KEY = 'asisOido';
+const useEar = () => earSupported() && readFlag(EAR_KEY) !== '0';
+let mic = null;
+let earReady = false;
+let earLoading = null;
+let earBusy = false;
+let convo = false; // conversación por voz: tras contestar, vuelve a escuchar solo
 // Modo dictado: si el micro de la app no capta nada en este móvil, se usa el 🎤 del teclado (siempre funciona)
 const DICT_KEY = 'asisDictado';
 // En iPhone, por defecto el dictado del teclado: tras hablar Rutivo, el micro web deja de oír (fallo de iOS)
@@ -46,8 +56,13 @@ function pickVoice() {
     es.find((v) => /es[-_]ES/i.test(v.lang)) || es[0] || null;
 }
 
+/** «No se le olvida escuchar»: en una conversación por voz, tras contestar vuelve a escuchar. */
+function keepListening() {
+  if (convo && ui && useEar() && !earBusy) setTimeout(() => { if (convo && ui && !earBusy) listenEar(true); }, 300);
+}
+
 function speak(text) {
-  if (!voiceOn() || !window.speechSynthesis || !text) return setState('idle');
+  if (!voiceOn() || !window.speechSynthesis || !text) { setState('idle'); keepListening(); return; }
   try {
     speechSynthesis.cancel();
     const u = new SpeechSynthesisUtterance(text);
@@ -55,8 +70,8 @@ function speak(text) {
     const v = pickVoice();
     if (v) u.voice = v;
     u.rate = 1.03;
-    u.onend = () => setState('idle');
-    u.onerror = () => setState('idle');
+    u.onend = () => { setState('idle'); keepListening(); };
+    u.onerror = () => { setState('idle'); keepListening(); };
     setState('speaking');
     speechSynthesis.speak(u);
   } catch {
@@ -198,7 +213,66 @@ async function weather(entry, r) {
   }
 }
 
-// ---------- oído ----------
+// ---------- oído propio (micro de Rutivo + Whisper) ----------
+
+function earProgress(p) {
+  if (earReady || !ui || !p.total || p.total < 5e6) return;
+  const pct = Math.round((p.loaded / p.total) * 100);
+  if (ui.root.dataset.state !== 'listening') setState('thinking', '⬇️ Descargando el oído de Rutivo… ' + pct + ' % (solo la primera vez)');
+}
+
+/** Escucha con el micro propio. `auto`: viene de la conversación (sin toque). */
+async function listenEar(auto = false) {
+  if (earBusy) {
+    // Tocar la bola mientras escucha = «ya he terminado»
+    if (mic && ui && ui.root.dataset.state === 'listening') mic.stop();
+    return;
+  }
+  earBusy = true;
+  try {
+    mic = mic || createMic();
+    if (!earLoading) {
+      earLoading = prepareEar(earProgress).then(() => { earReady = true; });
+      earLoading.catch(() => { earLoading = null; });
+    }
+    setState('listening', earReady ? 'Te escucho…' : 'Te escucho… (la primera vez preparo el oído de Rutivo)');
+    let audio;
+    try {
+      audio = await mic.listen((rms, speaking) => {
+        if (!ui) return;
+        ui.root.style.setProperty('--lvl', Math.min(1, rms * 9).toFixed(2));
+        if (speaking && ui.status.textContent.startsWith('Te escucho')) ui.status.textContent = '🗣️ Te oigo… (toca la bola si has terminado)';
+      });
+    } catch (err) {
+      earBusy = false;
+      convo = false;
+      if (err && err.name === 'NotAllowedError') return showKeyboard('No tengo permiso para el micrófono. Ajustes → Safari → Micrófono → Permitir (o «Preguntar») y vuelve a tocar la bola. Mientras, usa el 🎤 del teclado.');
+      return showKeyboard('No puedo abrir el micrófono (¿lo usa otra app?). Usa el 🎤 del teclado.');
+    }
+    if (ui) ui.root.style.setProperty('--lvl', '0');
+    if (!ui) { earBusy = false; return; }
+    if (!audio) {
+      earBusy = false;
+      convo = false; // si en la conversación ya no dices nada, deja de escuchar
+      return setState('idle', auto ? LABELS.idle : 'No te he oído. Toca la bola y habla cerca del móvil.');
+    }
+    setState('thinking', earReady ? 'Entendiendo…' : '⬇️ Preparando el oído de Rutivo (solo la primera vez)…');
+    await earLoading;
+    const text = await transcribe(audio);
+    earBusy = false;
+    if (!ui) return;
+    if (!text) { convo = false; return setState('idle', 'No te he entendido. Toca la bola y repítelo.'); }
+    convo = true;
+    const clean = trimChatter(text);
+    handle(clean, [], clean !== text ? 0.4 : undefined); // si había charla de fondo, pide confirmar
+  } catch {
+    earBusy = false;
+    convo = false;
+    if (ui) showKeyboard('No he podido preparar el oído de Rutivo (¿sin internet la primera vez?). De momento usa el 🎤 del teclado.');
+  }
+}
+
+// ---------- oído del navegador (si no hay oído propio) ----------
 
 let rec = null;
 let misses = 0; // escuchas seguidas sin oír nada
@@ -246,6 +320,7 @@ function useDictation(why) {
 function listen() {
   unlockVoice();
   try { speechSynthesis.cancel(); } catch { /* */ }
+  if (useEar()) return listenEar();
   if (dictation()) return showKeyboard('Toca el 🎤 del teclado y habla. Se envía solo cuando terminas.');
   // Tocar mientras escucha = parar. Si una escucha anterior se quedó colgada, se descarta y se empieza otra.
   if (rec && recLive && ui && ui.root.dataset.state === 'listening') { finishListening(); return; }
@@ -369,7 +444,7 @@ export function openAssistant() {
     if (el.matches('[data-asyes]')) { unlockVoice(); return handle('sí'); }
     if (el.matches('[data-asno]')) { unlockVoice(); return handle('no'); }
     if (el.matches('[data-skb]')) { if (ui.form.hidden) showKeyboard(); else ui.form.hidden = true; return; }
-    if (el.matches('[data-asq]')) { unlockVoice(); return handle(el.dataset.asq); }
+    if (el.matches('[data-asq]')) { unlockVoice(); convo = false; return handle(el.dataset.asq); }
     if (el.matches('[data-asundo]')) { undoAt(+el.dataset.asundo); paint(); }
   });
   const send = () => {
@@ -382,6 +457,7 @@ export function openAssistant() {
   ui.form.onsubmit = (e) => {
     e.preventDefault();
     unlockVoice();
+    convo = false;
     send();
   };
   // El dictado del teclado va escribiendo; cuando deja de escribir 1,8 s, se envía solo
@@ -393,7 +469,7 @@ export function openAssistant() {
     autoSend = setTimeout(send, 1800);
   });
   ui.input.addEventListener('focus', unlockVoice);
-  if (dictation()) root.classList.add('dict');
+  if (!useEar() && dictation()) root.classList.add('dict');
   paint();
   setState('idle');
   listen(); // al abrir ya escucha (el toque en el botón cuenta como permiso)
@@ -401,6 +477,9 @@ export function openAssistant() {
 
 export function closeAssistant() {
   stopListening();
+  convo = false;
+  if (mic) { mic.close(); mic = null; }
+  earBusy = false;
   try { speechSynthesis.cancel(); } catch { /* */ }
   if (ui) ui.root.remove();
   ui = null;
