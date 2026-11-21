@@ -5,7 +5,8 @@ const { serveApp } = require('./firebase-falso.cjs');
 
 const res = [];
 const ok = (n, c, extra = '') => { res.push(!!c); console.log((c ? 'PASS ' : 'FAIL ') + n + (extra ? ' — ' + extra : '')); };
-const hoy = (() => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); })();
+// «Hoy» en la hora de la app (Madrid): a medianoche el servidor de pruebas (UTC) aún va por el día anterior
+const hoy = new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Madrid' });
 const DATA = {
   mov: [{ id: 'm1', f: hoy, t: 'in', p: 'efectivo', i: 55, c: 'Carrera estación' }],
   srv: [{ id: 's1', f: '2026-11-19', h: '10:00', cl: 'Viajes Costa S.L.', o: 'Aeropuerto', d: 'Marbella', i: 95, p: 'tarjeta' }],
