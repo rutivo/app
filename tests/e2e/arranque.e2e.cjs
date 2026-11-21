@@ -136,13 +136,17 @@ function newerVersion(dir, title) {
     await open();
 
     // ---------- 3. Versión nueva, al abrir: se aplica sola ----------
+    // El reconocedor de voz (Whisper) guarda su modelo en su propia caché: no debe borrarse al actualizar
+    await page.evaluate(async () => { const c = await caches.open('transformers-cache'); await c.put('/modelo-prueba', new Response('x'.repeat(1000))); });
     root = v2;
     await page.goto(url, { waitUntil: 'commit' });
     await page.waitForFunction(() => document.title === 'Rutivo v2', null, { timeout: 30000 }).catch(() => {});
     ok('5 · versión nueva publicada: al abrir se aplica sola (se recarga una vez)', (await page.title()) === 'Rutivo v2', await page.title());
     await appReady();
     ok('6 · los datos siguen ahí tras actualizar', /55/.test(await page.evaluate(() => document.body.innerText)) && JSON.parse(await page.evaluate(() => localStorage.getItem('cajaTransfer'))).mov.length === 1);
-    ok('7 · solo queda la caché de la versión actual', (await caches_()).length === 1);
+    const k7 = await caches_();
+    ok('7 · de la app solo queda la versión actual', k7.filter((k) => k.startsWith('rutivo-') || k.startsWith('gestor-transfer-')).length === 1, k7.join(','));
+    ok('7b · el reconocedor de voz NO se borra al actualizar (antes había que bajar 77 MB otra vez)', k7.includes('transformers-cache') && !!(await page.evaluate(async () => (await caches.open('transformers-cache')).match('/modelo-prueba'))));
 
     // ---------- 4. Versión publicada a medias: no se instala ----------
     await page.waitForTimeout(13000); // ya no está «recién abierta»
@@ -151,7 +155,7 @@ function newerVersion(dir, title) {
     fs.appendFileSync(path.join(v3, 'js', 'dom.js'), '\n// v3\n'); execFileSync('node', [path.join(v3, 'scripts', 'version-sw.mjs')]);
     await updateAndSettle();
     await page.waitForTimeout(500);
-    const keysHalf = await caches_();
+    const keysHalf = (await caches_()).filter((k) => k.startsWith('rutivo-'));
     ok('8 · publicación a medias (un archivo de otra versión): NO se instala, sigue la anterior', (await page.title()) === 'Rutivo v2' && keysHalf.length === 1 && !(await page.$('#upd')), keysHalf.join(','));
 
     // ---------- 5. Ya completa, con la app en uso: aviso, sin cortar ----------

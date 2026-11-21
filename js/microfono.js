@@ -57,22 +57,31 @@ export function createVad({ chunkMs, silenceMs = 1100, maxMs = 15000, waitMs = 7
 // ---------- un solo micro para toda la app ----------
 // En iPhone, cada vez que se pide el micro de nuevo puede volver a salir
 // «rutivo.github.io quiere acceder al micrófono». Por eso se pide UNA vez y lo
-// comparten «Oye Rutivo», manos libres y el asistente. Si nadie lo usa durante
-// unos minutos, se apaga (para no dejar el micro abierto sin necesidad).
-const IDLE_MS = 3 * 60 * 1000;
+// comparten «Oye Rutivo», manos libres y el asistente, y con la app abierta NO
+// se apaga nunca. Solo se apaga si la app pasa mucho rato en segundo plano
+// (para no dejar el micro abierto sin que se vea); al volver se reutiliza si
+// sigue vivo, y si el sistema lo cortó se pide de nuevo.
+const HIDDEN_MS = 15 * 60 * 1000;
 let shared = null;
 let users = 0;
-let idleTimer = null;
+let hiddenTimer = null;
 let pending = null;
 
 const live = (s) => !!s && s.getAudioTracks().some((t) => t.readyState === 'live');
+const stopShared = () => { if (shared) { shared.getTracks().forEach((t) => t.stop()); shared = null; } };
+
+if (typeof document !== 'undefined') {
+  document.addEventListener('visibilitychange', () => {
+    clearTimeout(hiddenTimer);
+    if (document.visibilityState === 'hidden') hiddenTimer = setTimeout(stopShared, HIDDEN_MS);
+  });
+}
 
 /** El micro compartido (lo pide solo si no hay uno funcionando). `fresh`: pedir uno nuevo. */
 export async function acquireStream(fresh = false) {
-  clearTimeout(idleTimer);
   users++;
   try {
-    if (fresh && shared) { shared.getTracks().forEach((t) => t.stop()); shared = null; }
+    if (fresh) stopShared();
     if (live(shared)) return shared;
     if (!pending) {
       pending = navigator.mediaDevices.getUserMedia({
@@ -87,15 +96,13 @@ export async function acquireStream(fresh = false) {
   }
 }
 
-/** Deja de usar el micro compartido; si nadie lo usa en un rato, se apaga. */
+/** Deja de usar el micro compartido (sigue abierto para la próxima vez: sin volver a pedir permiso). */
 export function releaseStream() {
   users = Math.max(0, users - 1);
-  if (users) return;
-  clearTimeout(idleTimer);
-  idleTimer = setTimeout(() => {
-    if (!users && shared) { shared.getTracks().forEach((t) => t.stop()); shared = null; }
-  }, IDLE_MS);
 }
+
+/** ¿Hay micro abierto y funcionando? (para pruebas) */
+export const sharedLive = () => live(shared);
 
 /** El micro está abierto pero no llega sonido (en iPhone, tras hablar el asistente). */
 export class DeafMicError extends Error {

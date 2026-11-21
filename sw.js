@@ -9,7 +9,7 @@
 //
 // VERSION es la huella de todos los archivos de FILES: si cambia cualquiera,
 // hay que regenerarla con `npm run version` (las pruebas fallan si no).
-const VERSION = 'ed49462cfcd7';
+const VERSION = 'fadb3d480f66';
 const CACHE = 'rutivo-' + VERSION;
 const FILES = [
   './',
@@ -112,8 +112,11 @@ self.addEventListener('install', (e) => {
 });
 
 self.addEventListener('activate', (e) => {
-  // Se borran las versiones anteriores (y las cachés del sistema antiguo, «gestor-transfer-vN»)
-  e.waitUntil(caches.keys().then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k)))).then(() => self.clients.claim()));
+  // Se borran SOLO las versiones anteriores de la app («rutivo-…» y las antiguas «gestor-transfer-vN»).
+  // Lo demás se respeta: p. ej. el reconocedor de voz (~77 MB, «transformers-cache»),
+  // que antes se borraba en cada actualización y había que volver a descargar.
+  const ours = (k) => k !== CACHE && (k.startsWith('rutivo-') || k.startsWith('gestor-transfer-'));
+  e.waitUntil(caches.keys().then((keys) => Promise.all(keys.filter(ours).map((k) => caches.delete(k)))).then(() => self.clients.claim()));
 });
 
 // Solo se guardan los archivos de la app y las librerías (con su versión en la
