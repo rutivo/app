@@ -135,7 +135,7 @@ const sortId = (l) => [...l].sort((a, b) => a.id.localeCompare(b.id));
     const lh = await local(H.page);
     ok('F1 · otro usuario no ve ninguna factura ni movimiento del primero', !lh || ((lh.fac || []).length === 0 && (lh.mov || []).length === 0));
     const peek = await H.page.evaluate(async () => {
-      const fs = await import('https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js');
+      const fs = await import('/__sdk_falso/firebase-firestore.js');
       try { await fs.getDocs(fs.collection({}, 'users', 'u1', 'data')); return 'LEÍDO'; } catch (e) { return e.code; }
     });
     ok('F2 · si intenta leer los datos del otro usuario directamente, se le deniega', peek === 'permission-denied', peek);

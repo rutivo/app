@@ -53,7 +53,8 @@ Qué protege la app, cómo, y qué hay que revisar en cada servicio.
 ## Endurecimiento (noviembre 2026)
 
 - **Política de seguridad (CSP) por versión exacta:** solo se ejecuta código de la
-  app y de `firebasejs/10.14.1` y `tesseract.js@5.1.1` (no de todo jsDelivr/gstatic).
+  app y de `tesseract.js@5.1.1` (no de todo jsDelivr). Firebase (10.14.1) va dentro de la app,
+  en `vendor/firebasejs-10.14.1/` (del paquete oficial de npm; vigilado con SHA-256).
   `base-uri 'none'`, `upgrade-insecure-requests`, conexiones a Google limitadas a
   Firestore, Identity Toolkit y Secure Token.
 - **Fuente propia** (Manrope, licencia OFL) en `fonts/`: sin llamadas a Google Fonts
@@ -115,7 +116,7 @@ Para activarlo (cuando se quiera; conviene en fase 2):
 3. En `js/config.js` poner `APP_CHECK_SITE_KEY = '<clave>'`.
 4. Añadir a la CSP de `index.html`:
    - `script-src`: `https://www.google.com/recaptcha/` `https://www.gstatic.com/recaptcha/`
-     y `https://www.gstatic.com/firebasejs/10.14.1/` (ya está)
+     (Firebase ya va dentro de la app: no hace falta añadirlo)
    - `frame-src`: `https://www.google.com/recaptcha/` `https://recaptcha.google.com/recaptcha/`
    - `connect-src`: `https://content-firebaseappcheck.googleapis.com` `https://www.google.com/recaptcha/`
 5. Publicar, comprobar en Firebase → App Check → *Métricas* que las peticiones

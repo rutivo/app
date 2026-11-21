@@ -20,10 +20,11 @@ for (const f of readdirSync(join(root, 'vendor'))) {
   if ((m = f.match(/^jspdf-(\d+\.\d+\.\d+)/))) add('jspdf', m[1], 'vendor/' + f);
   if ((m = f.match(/^html2canvas-(\d+\.\d+\.\d+)/))) add('html2canvas', m[1], 'vendor/' + f);
   if ((m = f.match(/^leaflet-(\d+\.\d+\.\d+)\.js$/))) add('leaflet', m[1], 'vendor/' + f);
+  if ((m = f.match(/^firebasejs-(\d+\.\d+\.\d+)$/))) add('firebase', m[1], 'vendor/' + f);
 }
 // Librerías que se descargan de un CDN (versión fija en el código)
 const grab = (file, re, name) => { const m = read(file).match(re); add(name, m && m[1], file); };
-grab('js/config.js', /firebasejs\/(\d+\.\d+\.\d+)/, 'firebase');
+grab('js/config.js', /firebasejs[\/-](\d+\.\d+\.\d+)/, 'firebase');
 grab('js/ocr.js', /tesseract\.js@(\d+\.\d+\.\d+)/, 'tesseract.js');
 grab('js/oidoWorker.js', /@huggingface\/transformers@(\d+\.\d+\.\d+)/, '@huggingface/transformers');
 

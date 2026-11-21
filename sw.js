@@ -9,7 +9,7 @@
 //
 // VERSION es la huella de todos los archivos de FILES: si cambia cualquiera,
 // hay que regenerarla con `npm run version` (las pruebas fallan si no).
-const VERSION = 'e46a766606c9';
+const VERSION = '95c23b3d2916';
 const CACHE = 'rutivo-' + VERSION;
 const FILES = [
   './',
@@ -123,7 +123,7 @@ self.addEventListener('activate', (e) => {
 
 // Solo se guardan los archivos de la app y las librerías (con su versión en la
 // dirección: no cambian); los mapas y las consultas siempre van a la red.
-const KEEP = [self.location.origin, 'https://cdn.jsdelivr.net/npm', 'https://www.gstatic.com/firebasejs'];
+const KEEP = [self.location.origin, 'https://cdn.jsdelivr.net/npm'];
 
 async function fromCache(req) {
   const c = await caches.open(CACHE);

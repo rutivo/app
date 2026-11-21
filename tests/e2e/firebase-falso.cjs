@@ -9,7 +9,7 @@ const fs = require('fs');
 const path = require('path');
 
 const ROOT = path.resolve(__dirname, '..', '..');
-const SDK = 'https://www.gstatic.com/firebasejs/10.14.1/';
+const SDK = '/__sdk_falso/'; // mismo origen que la app (la CSP ya no deja cargar Firebase de fuera)
 const API = 'https://firestore.googleapis.com/__falso/';
 
 const APP_JS = 'export const initializeApp = (c) => ({ c });';
@@ -140,9 +140,9 @@ async function device(browser, app, store, { uid = 'u1', local = null, owner = t
   await ctx.route('**/*', (r) => {
     const u = new URL(r.request().url());
     if (u.pathname.endsWith('/js/config.js')) {
-      return r.fulfill({ contentType: 'text/javascript', body: "export const FIREBASE_CONFIG={apiKey:'prueba',projectId:'prueba',authDomain:'prueba.test',appId:'1'};export const TRIAL_ENABLED=false;export const FIREBASE_SDK='" + SDK.slice(0, -1) + "';export const FLIGHT_API='';export const PUSH_PUBLIC_KEY='';export const APP_CHECK_SITE_KEY='';" });
+      return r.fulfill({ contentType: 'text/javascript', body: "export const FIREBASE_CONFIG={apiKey:'prueba',projectId:'prueba',authDomain:'prueba.test',appId:'1'};export const TRIAL_ENABLED=false;export const FIREBASE_SDK=new URL('" + SDK.slice(0, -1) + "', location.href).href;export const FLIGHT_API='';export const PUSH_PUBLIC_KEY='';export const APP_CHECK_SITE_KEY='';" });
     }
-    if (r.request().url().startsWith(SDK)) {
+    if (u.pathname.startsWith(SDK)) {
       const name = u.pathname.split('/').pop();
       const body = name === 'firebase-app.js' ? APP_JS : name === 'firebase-auth.js' ? AUTH_JS : FS_JS;
       return r.fulfill({ contentType: 'text/javascript', headers: { 'access-control-allow-origin': '*' }, body });

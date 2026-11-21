@@ -33,7 +33,9 @@ export const APP_CHECK_SITE_KEY = '';
 // Con null, el panel del vuelo solo muestra la ruta y el enlace a Flightradar24.
 export const FLIGHT_API = 'https://rutivo-vuelos.pokeboostmlg.workers.dev';
 
-export const FIREBASE_SDK = 'https://www.gstatic.com/firebasejs/10.14.1';
+// Firebase va DENTRO de la app (vendor/, versión fija, vigilada con SHA-256 en las pruebas):
+// así no se descarga código de fuera que alguien pudiera cambiar por el camino.
+export const FIREBASE_SDK = new URL('../vendor/firebasejs-10.14.1', import.meta.url).href;
 
 // Clave PÚBLICA de las notificaciones (Web Push). La privada está solo en Cloudflare.
 export const PUSH_PUBLIC_KEY = 'BNm82hdTr_BgkIe4--gxDuMuDa6IcKIb8LN5TCeKnTHhPiM2gHVCocZO9C1eVej948Ug02380ieiSiCEMsvJJuY';

@@ -8,6 +8,10 @@ import { claudeStore } from '../backend/claude.js';
 import { clearSyncConflicts, connect, disconnectAndWipe, flush, hasUnsavedChanges, localOwner, status, stopSync, syncConflicts } from '../cloud.js';
 import { FIREBASE_CONFIG } from '../config.js';
 import { $, confirmTapTimed, toast } from '../dom.js';
+import { disablePush } from '../push.js';
+
+/** Quita los avisos pendientes del servidor (llevan nombres de pasajeros). Sin esperar más de 4 s. */
+const dropAlerts = () => Promise.race([disablePush().catch(() => {}), new Promise((r) => setTimeout(r, 4000))]);
 import { S, hasLocalData } from '../store.js';
 import { esc } from '../utils.js';
 import { legalLinks, rememberAccepted } from '../legal.js';
@@ -251,6 +255,7 @@ async function deleteMyAccount(button) {
     error(fb.authErrorMessage(err));
     return;
   }
+  await dropAlerts(); // los avisos con la app cerrada también se borran del servidor
   disconnectAndWipe();
   toast('Cuenta borrada.');
   setTimeout(() => location.reload(), 1200);
@@ -268,6 +273,7 @@ async function signOut(button) {
     toast('No se pudo cerrar sesión. Revisa la conexión.');
     return;
   }
+  await dropAlerts(); // al salir se borran los datos del móvil: también sus avisos pendientes
   disconnectAndWipe();
   location.reload();
 }
