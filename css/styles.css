@@ -1087,16 +1087,18 @@ a.row-btn .chev { text-decoration: none; }
 .siri-mic { display: none; margin-left: 6px; font-size: 11px; font-weight: 800; letter-spacing: .3px; color: #ff6b6b; vertical-align: middle; }
 .siri[data-state="listening"] .siri-mic { display: inline; animation: micBlink 1.2s ease-in-out infinite; }
 @keyframes micBlink { 50% { opacity: .35; } }
-/* Ondas de tu voz (siguen el volumen del micro) */
-.siri-wave { display: flex; align-items: center; justify-content: center; gap: 5px; height: 44px; margin-top: 6px; opacity: 0; transition: opacity .2s; }
-.siri[data-state="listening"] .siri-wave { opacity: 1; }
-.siri-wave i { width: 5px; border-radius: 3px; background: linear-gradient(180deg, #2fd3ff, #b06ef3); height: calc(6px + var(--lvl, 0) * 38px * var(--k, .5));
+/* Escuchando: solo la barra de sonido (sin las auroras), siguiendo tu voz */
+.siri-wave { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; gap: 5px; pointer-events: none; }
+.siri[data-state="listening"] .siri-wave { display: flex; }
+.siri[data-state="listening"] .siri-orb i { display: none; }
+.siri[data-state="listening"] .siri-orb { transform: none; }
+.siri-wave b { width: 6px; border-radius: 3px; background: linear-gradient(180deg, #2fd3ff, #b06ef3); height: calc(8px + var(--lvl, 0) * 64px * var(--k, .5));
   transition: height .08s; animation: waveJit 0.9s ease-in-out infinite; }
-.siri-wave i:nth-child(1), .siri-wave i:nth-child(9) { --k: .3; }
-.siri-wave i:nth-child(2), .siri-wave i:nth-child(8) { --k: .55; animation-delay: -.2s; }
-.siri-wave i:nth-child(3), .siri-wave i:nth-child(7) { --k: .8; animation-delay: -.4s; }
-.siri-wave i:nth-child(4), .siri-wave i:nth-child(6) { --k: .95; animation-delay: -.6s; }
-.siri-wave i:nth-child(5) { --k: 1; animation-delay: -.1s; }
+.siri-wave b:nth-child(1), .siri-wave b:nth-child(9) { --k: .3; }
+.siri-wave b:nth-child(2), .siri-wave b:nth-child(8) { --k: .55; animation-delay: -.2s; }
+.siri-wave b:nth-child(3), .siri-wave b:nth-child(7) { --k: .8; animation-delay: -.4s; }
+.siri-wave b:nth-child(4), .siri-wave b:nth-child(6) { --k: .95; animation-delay: -.6s; }
+.siri-wave b:nth-child(5) { --k: 1; animation-delay: -.1s; }
 @keyframes waveJit { 50% { transform: scaleY(.6); } }
 /* Pensando: anillo que gira alrededor de la bola */
 .siri-orb::after { content: ''; position: absolute; inset: -4px; border-radius: 50%; opacity: 0; pointer-events: none;
@@ -1111,6 +1113,6 @@ a.row-btn .chev { text-decoration: none; }
 .siri-stop { visibility: hidden; color: #fff; }
 .siri[data-state="listening"] .siri-stop, .siri[data-state="thinking"] .siri-stop, .siri[data-state="speaking"] .siri-stop { visibility: visible; background: rgba(255, 90, 90, .25); }
 @media (prefers-reduced-motion: reduce) {
-  .siri-orb i, .siri-wave i, .siri-mic, .siri-orb::after, .siri-orb::before { animation: none !important; }
+  .siri-orb i, .siri-wave b, .siri-mic, .siri-orb::after, .siri-orb::before { animation: none !important; }
 }
 @media (max-width: 360px) { .siri-orb { width: 88px; height: 88px; } .siri-msg { font-size: 16px; } }

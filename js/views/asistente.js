@@ -19,7 +19,7 @@ import { driverName } from '../welcome.js';
 
 const VOICE_KEY = 'asisVoz';
 // Al dar una orden se hacen pausas («apúntame… treinta… en efectivo»): no cortar antes de tiempo
-const COMMAND_MIC = { silenceMs: 1400, shortMs: 600 };
+const COMMAND_MIC = { silenceMs: 1400, shortMs: 600, follow: true };
 const SUGGEST = ['¿Cuánto llevo hoy?', '¿Qué tengo mañana?', '¿Qué tiempo hace?', '¿Quién me debe?', 'Apunta 50 € en efectivo', '¿Cuánto gané este mes?', '¿Qué puedo decirte?'];
 const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 const isIOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
@@ -554,9 +554,8 @@ export function openAssistant(cmd) {
     '<button type="button" class="siri-wake" data-strain></button>' +
     '<div class="siri-heard"></div>' +
     '<button type="button" class="siri-retry" data-sretry>🎙️ Usar el micro de la app</button>' +
-    '<div class="siri-wave" aria-hidden="true">' + '<i></i>'.repeat(9) + '</div>' +
     '<div class="siri-bottom"><button type="button" class="siri-kb" data-skb aria-label="Escribir">⌨️</button>' +
-    '<button type="button" class="siri-orb" data-sorb aria-label="Hablar"><i></i><i></i><i></i></button>' +
+    '<button type="button" class="siri-orb" data-sorb aria-label="Hablar"><i></i><i></i><i></i><span class="siri-wave" aria-hidden="true">' + '<b></b>'.repeat(9) + '</span></button>' +
     '<button type="button" class="siri-kb siri-stop" data-sstop aria-label="Parar">⏹</button></div>';
   document.body.appendChild(root);
   ui = { root, chat: root.querySelector('.siri-chat'), live: root.querySelector('.siri-live'), status: root.querySelector('.siri-status'),

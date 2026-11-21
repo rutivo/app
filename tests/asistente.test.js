@@ -343,7 +343,7 @@ test('micro: no corta la frase por una pausa ni si empiezas a hablar nada más a
   const { createVad } = await import('../js/microfono.js');
   const ck = (4096 / 48000) * 1000;
   const seg = (lvl, ms) => Array(Math.round(ms / ck)).fill(lvl);
-  const endOf = (levels, opts) => { const v = createVad({ chunkMs: ck, silenceMs: 1400, shortMs: 600, ...opts }); let end = null; levels.forEach((l, i) => { if (v.push(l) === 'end' && end === null) end = (i + 1) * ck; }); return end; };
+  const endOf = (levels, opts) => { const v = createVad({ chunkMs: ck, silenceMs: 1400, shortMs: 600, follow: true, ...opts }); let end = null; levels.forEach((l, i) => { if (v.push(l) === 'end' && end === null) end = (i + 1) * ck; }); return end; };
   // «Ingresa… (pausa de 1,3 s pensando) …treinta en efectivo» (la captura: solo oyó «ingresas.»)
   const pausa = [...seg(0.01, 300), ...seg(0.08, 500), ...seg(0.012, 1300), ...seg(0.07, 900)];
   assert.ok(endOf([...pausa, ...seg(0.01, 3000)]) > pausa.length * ck, 'no corta en la pausa');
@@ -357,4 +357,15 @@ test('micro: no corta la frase por una pausa ni si empiezas a hablar nada más a
   const coche = [...seg(0.04, 600), ...seg(0.15, 500), ...seg(0.09, 300), ...seg(0.14, 700)];
   const e = endOf([...coche, ...seg(0.04, 3000)]);
   assert.ok(e && e > coche.length * ck && e < coche.length * ck + 2200, String(e));
+});
+
+test('micro: aunque al callarte suba el ruido de fondo, la frase termina (antes se quedaba escuchando 15 s)', async () => {
+  const { createVad } = await import('../js/microfono.js');
+  const ck = (4096 / 48000) * 1000;
+  // Silencio total al abrir, «Oye Rutivo» y después un ruido suave constante (el iPhone sube la ganancia al callarte)
+  const voz = [0, 0, 0.088, 0.197, 0.232, 0.235, 0.121, 0.104, 0.238, 0.114, 0.025, 0.001, 0];
+  const seq = [...Array(6).fill(0.001), ...voz, ...Array(80).fill(0.029)];
+  const v = createVad({ chunkMs: ck, silenceMs: 1400, shortMs: 600, follow: true });
+  const i = seq.map((l) => v.push(l)).indexOf('end');
+  assert.ok(i > 0 && i * ck < (6 + voz.length) * ck + 3500, 'termina ' + Math.round(i * ck) + ' ms');
 });

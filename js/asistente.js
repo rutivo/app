@@ -17,6 +17,7 @@ export function normalize(text) {
     .toLowerCase()
     .normalize('NFD')
     .replace(/[̀-ͯ]/g, '')
+    .replace(/(\d)\.(\d{3})(?!\d)/g, '$1$2') // «1.200 euros» → 1200
     .replace(/(\d)\s*(?:€|eur\b)/g, '$1 euros')
     .replace(/[¿?¡!.,;:"«»()]/g, (c, i, s) => (c === ',' && /\d/.test(s[i - 1] || '') && /\d/.test(s[i + 1] || '') ? '.' : ' '))
     .replace(/\s+/g, ' ')
@@ -117,6 +118,7 @@ function fixDictation(t) {
     .replace(/\b(efectivos|en mano|en metalico|cash|en billetes)\b/g, 'efectivo')
     .replace(/\b(\d+) (?:euros? )?con (\d{1,2})\b/g, (m, e, c) => e + '.' + c.padEnd(2, '0') + ' euros')
     .replace(/\b(\d+) (?:euros? )?y medio\b/g, '$1.50 euros')
+    .replace(/\b(\d+) euros? (\d{2})\b(?= (en|con|por)\b|$)/g, (m, e, c) => e + '.' + c + ' euros') // «doce euros cincuenta»
     .replace(/\beuros euros\b/g, 'euros')
     .replace(/\s+/g, ' ')
     .trim();
@@ -247,17 +249,22 @@ const reply = (text, speech, extra = {}) => ({ kind: 'answer', text, speech: spe
  */
 // Verbos de "apuntar", con o sin pronombre: apúntame, ingrésame, ponme, mételo…
 const WRITE_VERB = /^(apunta|apuntar|anota|anotar|anade|anadir|pon|poner|mete|meter|registra|registrar|suma|sumar|guarda|guardar|ingresa|ingrese|ingresar|ingres|cobra|carga|cargar|agrega|agregar|incluye|incluir)(me|lo|la|le|melo|mela|selo)?( |$)/;
-const WRITE_PHRASE = /^(me han pagado|me pagaron|me ha pagado|he cobrado|cobre|cobrado|he hecho (una carrera|un servicio|un viaje)( de)?|he gastado|gaste|he pagado|pague|he echado|eche|he puesto|he repostado|reposte)( |$)/;
+const WRITE_PHRASE = /^(me han pagado|me pagaron|me ha pagado|me han dejado|me dejaron|he cobrado|cobre|cobrado|acabo de cobrar|acabo de hacer|he hecho (una carrera|un servicio|un viaje|un traslado)( de)?|he hecho|he gastado|gaste|he pagado|pague|acabo de pagar|he echado|eche|he puesto|he repostado|reposte|repostado|ahorra|ahorrame)( |$)/;
 const QUESTION = /^(cuanto|cuantos|cuantas|cuando|que|quien|quienes|como|cual|cuales|donde|dime|sabes|resumen|dame)( |$)/;
 
 /** ¿Es una orden de apuntar dinero? */
 const WRITE_ANY = /\b(apunt|anot|ingres|registr|anad|agreg)[a-z]*\b|\b(ponme|pon|meteme|mete|sumame|guardame|cobra|cobrado|cobre|pagado|pague|gaste|gastado|echado|eche|reposte|repostado)\b|\bcomo (ingreso|gasto)\b/;
 
+const STATEMENT = /\b(efectivo|metalico|tarjeta|datafono|bizum|transferencia|visa|propina|peaje|parking|gasolina|gasoil|diesel|taller|lavado|seguro|carrera|servicio|traslado|viaje|transfer|cobro|entrada|salida|gasto|ingreso|euros|hucha)\b/;
+const ASKING = /\b(cuanto|cuanta|cuantos|cuantas|que tal|dime|muestrame|ensename|cual|cuales|resumen|llevo (de|en)|tengo)\b/;
+
 export function isWrite(t) {
   if (QUESTION.test(t)) return false;
   if (WRITE_VERB.test(t) || WRITE_PHRASE.test(t)) return true;
   if (WRITE_ANY.test(t) && amountOf(t) !== null) return true; // "para apuntar 12 euros…", "12 euros como ingreso"
-  if (/^(un |una )?(gasto|ingreso|carrera|cobro|servicio|viaje) (de )?\d/.test(t)) return true;
+  if (/^(un |una )?(nuevo |nueva |otro |otra )?(gasto|ingreso|carrera|cobro|servicio|viaje|traslado|transfer|entrada|salida|propina|peaje|parking|lavado|taller|gasolina|gasoil|diesel) (de )?\d/.test(t)) return true;
+  // Una frase (no pregunta) con importe y algo de dinero: «peaje de 6 euros con tarjeta», «gasolina 45 con tarjeta»
+  if (amountOf(t) !== null && STATEMENT.test(t) && !ASKING.test(t)) return true;
   // Solo importe y forma de pago: "50 euros en efectivo", "30 con tarjeta"
   return /^\d+(\.\d+)? ?(euros?|pavos)?( (en|con|por) (el |la )?(efectivo|tarjeta|metalico|bizum|datafono|visa|transferencia|tpv))?$/.test(t);
 }
@@ -287,6 +294,7 @@ const NOT_CONCEPT = [
   /\b(y )?(el resto|lo demas|lo otro)\b/g,
   /\b(la mitad( en cada uno| y la mitad)?|mitad y mitad|a medias|a partes iguales)\b/g,
   /\b(anade|anademe|anadir|agrega|agregame|agregar|registra|registrame|registrar|incluye|incluyeme|apuntalo|anotalo|guardalo)\b/g,
+  /\b(acabo de (cobrar|pagar|hacer)|me (han|ha) dejado|me dejaron|he hecho|nuevo|nueva|entrada|salida|ahorra|ahorrame)\b/g,
   /\b\d+(\.\d+)?\s*(litros?)\b/g,
   /\b(quiero|quisiera|necesito|puedes|podrias|me puedes) (que )?(me )?/g,
   /\b(apuntame|apunta|apuntalo|apuntar|apuntes|apuntas|anotame|anota|anotar|ingresame|ingresa|ingresar|ponme|pon|meteme|mete|sumame|suma|registra|guarda|guardame)\b/g,
@@ -453,7 +461,7 @@ function answer(t, state, now, helpers) {
     return reply('Claro. ¿De cuánto? Dímelo así: «30 euros en efectivo» o «12 con tarjeta».', 'Claro. ¿De cuánto?', { pending: 'apunta' + (/(gasto|gaste|pague|pagado|gasolina|peaje|parking)/.test(t) ? ' gasto' : '') });
   }
   if (isWrite(t) && amount) {
-    if (has(t, 'hucha', 'huchas')) {
+    if (has(t, 'hucha', 'huchas') || /^ahorra(me)?( |$)/.test(t)) {
       const hs = huchasOf(state.cfg);
       const h = hs.find((x) => has(t, clean(x.n).split(' ').pop())) || hs[0];
       return { kind: 'action', action: { list: 'huc', item: { f: day, i: r2(amount), h: h.id } },
@@ -461,7 +469,7 @@ function answer(t, state, now, helpers) {
     }
     const cat = EXPENSES.find(([re]) => re.test(t));
     const forcedIn = /como (ingreso|cobro|carrera)|me (han|ha) pagado|me pagaron|propina|he cobrado|cobre/.test(t);
-    const expense = !forcedIn && (!!cat || /gasto|gaste|gastado|pagado|pague|como gasto/.test(t));
+    const expense = !forcedIn && (!!cat || /gasto|gaste|gastado|pagado|pague|como gasto|\bsalida de\b/.test(t));
     const fuel = false;
     const income = INCOMES.find(([re]) => re.test(t));
     const said = conceptOf(helpers.original || t, state);
@@ -681,7 +689,7 @@ function answer(t, state, now, helpers) {
   }
 
   // --- Resumen del día (o del periodo) ---
-  if (/(resumen|balance|como (ha ido|va) (el dia|hoy|la jornada)|como me ha ido)/.test(t)) {
+  if (/(resumen|balance|como (ha ido|va) (el dia|hoy|la jornada)|como me ha ido|que tal (el dia|hoy|la jornada|va el dia))/.test(t)) {
     const p = periodOf(t, day, 'hoy');
     const list = state.mov.filter((x) => inRange(x.f, p));
     const m = money(state, p);

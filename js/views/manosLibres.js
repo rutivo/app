@@ -12,7 +12,7 @@ import { amend, execute, undo as undoDone } from '../vozAcciones.js';
 
 const VOICE_KEY = 'asisVoz';
 // Al dar una orden se hacen pausas («apúntame… treinta… en efectivo»): no cortar antes de tiempo
-const COMMAND_MIC = { silenceMs: 1400, shortMs: 600 };
+const COMMAND_MIC = { silenceMs: 1400, shortMs: 600, follow: true };
 let rerender = () => {};
 let openFull = () => {};
 let busy = false;
