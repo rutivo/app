@@ -24,10 +24,10 @@ export const FIREBASE_CONFIG = {
 };
 */
 
-// App Check de Firebase (solo la app real puede usar tu Firebase). Vacío = apagado.
-// Para activarlo: ver SEGURIDAD.md («App Check»). No lo actives sin añadir antes
-// las líneas de reCAPTCHA a la política de seguridad (CSP) de index.html.
-export const APP_CHECK_SITE_KEY = '';
+// App Check de Firebase (solo la app real puede usar tu Firebase), con reCAPTCHA v3
+// (gratuito). Es la clave PÚBLICA del sitio (la secreta está solo en Firebase).
+// Vacío = apagado. Ver SEGURIDAD.md («App Check»).
+export const APP_CHECK_SITE_KEY = '6LfW5isuAAAAAO98df1QtT1Sc77iZgKVvSIon5Q8';
 
 // Dirección del intermediario de vuelos (Cloudflare Worker, ver worker/).
 // Con null, el panel del vuelo solo muestra la ruta y el enlace a Flightradar24.

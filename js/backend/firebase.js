@@ -20,8 +20,14 @@ async function load() {
   // app real podrá usar Firebase. Para activarlo ver SEGURIDAD.md (clave reCAPTCHA
   // Enterprise + líneas de la CSP + «Aplicar» en la consola de Firebase).
   if (APP_CHECK_SITE_KEY) {
-    const ac = await import(FIREBASE_SDK + '/firebase-app-check.js');
-    ac.initializeAppCheck(firebaseApp, { provider: new ac.ReCaptchaEnterpriseProvider(APP_CHECK_SITE_KEY), isTokenAutoRefreshEnabled: true });
+    // Si App Check no puede arrancar (sin conexión, reCAPTCHA bloqueado…), la app sigue igual:
+    // mientras no se pulse «Aplicar» en Firebase, Firestore funciona sin el token.
+    try {
+      const ac = await import(FIREBASE_SDK + '/firebase-app-check.js');
+      ac.initializeAppCheck(firebaseApp, { provider: new ac.ReCaptchaV3Provider(APP_CHECK_SITE_KEY), isTokenAutoRefreshEnabled: true });
+    } catch {
+      /* sin App Check esta vez */
+    }
   }
   const authInstance = auth.getAuth(firebaseApp);
   authInstance.languageCode = 'es';

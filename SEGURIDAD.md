@@ -108,19 +108,18 @@ Clave «Browser key (auto created by Firebase)» del proyecto `rutivo-a8890`:
   *Cloud Firestore API* (y *Firebase App Check API* cuando se active App Check).
 - Comprobar después que entrar, sincronizar y borrar cuenta siguen funcionando.
 
-### 5. App Check (preparado en el código, APAGADO)
-Para activarlo (cuando se quiera; conviene en fase 2):
-1. Google Cloud → reCAPTCHA → crear clave **reCAPTCHA Enterprise** (tipo web,
-   dominio `rutivo.github.io`).
-2. Firebase → App Check → registrar la app web con esa clave.
-3. En `js/config.js` poner `APP_CHECK_SITE_KEY = '<clave>'`.
-4. Añadir a la CSP de `index.html`:
-   - `script-src`: `https://www.google.com/recaptcha/` `https://www.gstatic.com/recaptcha/`
-     (Firebase ya va dentro de la app: no hace falta añadirlo)
-   - `frame-src`: `https://www.google.com/recaptcha/` `https://recaptcha.google.com/recaptcha/`
-   - `connect-src`: `https://content-firebaseappcheck.googleapis.com` `https://www.google.com/recaptcha/`
-5. Publicar, comprobar en Firebase → App Check → *Métricas* que las peticiones
-   llegan «verificadas», y solo entonces pulsar **Aplicar** en Cloud Firestore.
+### 5. App Check (con reCAPTCHA v3, gratuito; clave del sitio puesta en `js/config.js`)
+El proyecto está en el plan gratuito (sin facturación): por eso se usa reCAPTCHA v3
+(no Enterprise, que pide facturación).
+1. www.google.com/recaptcha/admin → clave **v3** para el dominio `rutivo.github.io`.
+2. Firebase → App Check → Apps → app web → **reCAPTCHA** → pegar la **clave secreta** (solo ahí).
+3. La **clave del sitio** (pública) va en `js/config.js` → `APP_CHECK_SITE_KEY`. La CSP de
+   `index.html` ya permite `www.google.com/recaptcha/`, `www.gstatic.com/recaptcha/`,
+   `recaptcha.google.com/recaptcha/` y `content-firebaseappcheck.googleapis.com`.
+4. Publicar y mirar unos días en Firebase → App Check → **Métricas** que las peticiones
+   llegan «verificadas». Solo entonces pulsar **Aplicar** en Cloud Firestore.
+5. Si App Check falla al arrancar (sin conexión, reCAPTCHA bloqueado), la app sigue
+   funcionando: mientras no se pulse «Aplicar», Firestore no lo exige.
 
 ### Comprobado en el código
 - **Aislamiento entre usuarios**: las reglas reales (`firestore.rules`) probadas
