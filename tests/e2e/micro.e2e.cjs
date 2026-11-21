@@ -55,17 +55,17 @@ const ok = (n, c, extra = '') => { res.push(!!c); console.log((c ? 'PASS ' : 'FA
     ok('4 · en segundo plano un rato corto (5 min): al volver sigue activo, sin pedirlo otra vez', m.live && m.pedidos === 1, JSON.stringify(m));
     await hide('hidden'); await page.clock.runFor(16 * 60e3);
     m = await mic();
-    ok('5 · en segundo plano mucho rato (16 min): se apaga (no queda abierto sin verse)', !m.live, JSON.stringify(m));
+    ok('5 · en segundo plano mucho rato (16 min): la app ya NO lo apaga', m.live, JSON.stringify(m));
     await hide('visible');
     await use();
     m = await mic();
-    ok('6 · al volver y usarlo, se abre de nuevo', m.live && m.pedidos === 2, JSON.stringify(m));
+    ok('6 · al volver y usarlo, sigue el mismo micro: no se vuelve a pedir el permiso', m.live && m.pedidos === 1, JSON.stringify(m));
     // El sistema corta el micro (llamada, otra app…): se vuelve a abrir solo al usarlo
     await page.evaluate(async () => { const s = await navigator.mediaDevices.enumerateDevices(); return s.length; });
     await page.evaluate(async () => { const { acquireStream, releaseStream } = await import('/js/microfono.js'); const s = await acquireStream(); s.getTracks().forEach((t) => t.stop()); releaseStream(); });
     await use();
     m = await mic();
-    ok('7 · si el sistema corta el micro, al usarlo se vuelve a abrir', m.live && m.pedidos === 3, JSON.stringify(m));
+    ok('7 · si el sistema corta el micro, al usarlo se vuelve a abrir', m.live && m.pedidos === 2, JSON.stringify(m));
     ok('8 · sin errores', !errs.length, errs.join(' | '));
     await ctx.close();
 

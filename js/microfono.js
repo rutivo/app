@@ -57,26 +57,18 @@ export function createVad({ chunkMs, silenceMs = 1100, maxMs = 15000, waitMs = 7
 // ---------- un solo micro para toda la app ----------
 // En iPhone, cada vez que se pide el micro de nuevo puede volver a salir
 // «rutivo.github.io quiere acceder al micrófono». Por eso se pide UNA vez y lo
-// comparten «Oye Rutivo», manos libres y el asistente, y con la app abierta NO
-// se apaga nunca. Solo se apaga si la app pasa mucho rato en segundo plano
-// (para no dejar el micro abierto sin que se vea); al volver se reutiliza si
-// sigue vivo, y si el sistema lo cortó se pide de nuevo.
-const HIDDEN_MS = 15 * 60 * 1000;
+// comparten «Oye Rutivo», manos libres y el asistente. La app no lo apaga nunca
+// (ni con la app en segundo plano): así no hay que volver a pedirlo. Solo se
+// pierde si lo corta el sistema (llamada, otra app, el iPhone al salir de la
+// app…); entonces se pide de nuevo al usarlo.
 let shared = null;
 let users = 0;
-let hiddenTimer = null;
 let pending = null;
 
 // «Vivo» = funcionando de verdad: en iPhone el sistema puede dejarlo abierto pero silenciado (muted)
 const live = (s) => !!s && s.getAudioTracks().some((t) => t.readyState === 'live' && !t.muted);
 const stopShared = () => { if (shared) { shared.getTracks().forEach((t) => t.stop()); shared = null; } };
 
-if (typeof document !== 'undefined') {
-  document.addEventListener('visibilitychange', () => {
-    clearTimeout(hiddenTimer);
-    if (document.visibilityState === 'hidden') hiddenTimer = setTimeout(stopShared, HIDDEN_MS);
-  });
-}
 
 /** El micro compartido (lo pide solo si no hay uno funcionando). `fresh`: pedir uno nuevo. */
 export async function acquireStream(fresh = false) {
