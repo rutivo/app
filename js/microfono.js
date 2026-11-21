@@ -101,6 +101,18 @@ export function playAndRecord() {
   } catch { /* navegador sin esta opción */ }
 }
 
+const IOS = typeof navigator !== 'undefined' && (/iP(hone|ad|od)/.test(navigator.userAgent || '') || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
+/**
+ * Cómo se pide el micro. En iPhone, sin el modo «llamada» (cancelación de eco):
+ * con él, el iPhone baja muchísimo la voz de Rutivo (o la manda al auricular).
+ * Rutivo nunca escucha mientras habla, así que no hace falta.
+ */
+export function micConstraints(ios = IOS) {
+  return ios
+    ? { echoCancellation: false, noiseSuppression: false, autoGainControl: true, channelCount: 1 }
+    : { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 };
+}
+
 /** El micro compartido (lo pide solo si no hay uno funcionando). `fresh`: pedir uno nuevo. */
 export async function acquireStream(fresh = false) {
   users++;
@@ -109,9 +121,7 @@ export async function acquireStream(fresh = false) {
     if (fresh) stopShared();
     if (live(shared)) return shared;
     if (!pending) {
-      pending = navigator.mediaDevices.getUserMedia({
-        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 },
-      }).finally(() => { pending = null; });
+      pending = navigator.mediaDevices.getUserMedia({ audio: micConstraints() }).finally(() => { pending = null; });
     }
     shared = await pending;
     return shared;

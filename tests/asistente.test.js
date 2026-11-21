@@ -369,3 +369,9 @@ test('micro: aunque al callarte suba el ruido de fondo, la frase termina (antes 
   const i = seq.map((l) => v.push(l)).indexOf('end');
   assert.ok(i > 0 && i * ck < (6 + voz.length) * ck + 3500, 'termina ' + Math.round(i * ck) + ' ms');
 });
+
+test('micro en iPhone sin modo «llamada» (si no, la voz de Rutivo sale muy baja)', async () => {
+  const { micConstraints } = await import('../js/microfono.js');
+  assert.equal(micConstraints(true).echoCancellation, false);
+  assert.equal(micConstraints(false).echoCancellation, true);
+});

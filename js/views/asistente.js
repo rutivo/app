@@ -87,6 +87,7 @@ function speak(text) {
     const v = pickVoice();
     if (v) u.voice = v;
     u.rate = 1.03;
+    u.volume = 1; // siempre a tope (el volumen real lo pone el botón del móvil)
     // Si el sistema no deja hablar (iPhone sin un toque antes) o no avisa al terminar, no quedarse colgado
     let done = false;
     const finish = () => { if (done) return; done = true; clearTimeout(guard); setState('idle'); keepListening(); };

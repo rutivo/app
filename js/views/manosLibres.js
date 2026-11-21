@@ -61,6 +61,7 @@ function say(text) {
       const v = pickVoice();
       if (v) u.voice = v;
       u.rate = 1.03;
+      u.volume = 1; // siempre a tope (el volumen real lo pone el botón del móvil)
       u.onend = finish;
       u.onerror = finish;
       guard = setTimeout(() => { if (!speechSynthesis.speaking) finish(); }, 1500);
