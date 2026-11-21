@@ -67,7 +67,8 @@ let users = 0;
 let hiddenTimer = null;
 let pending = null;
 
-const live = (s) => !!s && s.getAudioTracks().some((t) => t.readyState === 'live');
+// «Vivo» = funcionando de verdad: en iPhone el sistema puede dejarlo abierto pero silenciado (muted)
+const live = (s) => !!s && s.getAudioTracks().some((t) => t.readyState === 'live' && !t.muted);
 const stopShared = () => { if (shared) { shared.getTracks().forEach((t) => t.stop()); shared = null; } };
 
 if (typeof document !== 'undefined') {
@@ -149,6 +150,7 @@ export function createMic({ deafMs = 1500, maxMs = 15000 } = {}) {
       let s = 0;
       for (let i = 0; i < d.length; i++) s += d[i] * d[i];
       const rms = Math.sqrt(s / d.length);
+      if (rms > 1e-6) session.sound = true; // un micro de verdad siempre capta algo (aunque sea ruido)
       session.chunks.push(new Float32Array(d));
       session.onLevel(rms, session.vad.speaking);
       const state = session.vad.push(rms);
@@ -212,7 +214,8 @@ export function createMic({ deafMs = 1500, maxMs = 15000 } = {}) {
           if (session !== s || s.busy) return;
           const now = Date.now();
           if (now - s.started > maxMs + 3000) return finish(true);
-          if (s.chunks.length || now - s.started < deafMs) return;
+          // Mudo: no llega audio, o llega pero es silencio absoluto (iPhone, tras hablar el asistente o volver de segundo plano)
+          if (s.sound || now - s.started < deafMs) return;
           if (s.retried) return finish(false, new DeafMicError());
           s.busy = true;
           s.retried = true;
@@ -225,6 +228,7 @@ export function createMic({ deafMs = 1500, maxMs = 15000 } = {}) {
             return finish(false, err);
           }
           s.started = Date.now();
+          s.chunks = [];
           s.vad = createVad({ chunkMs: (4096 / ctx.sampleRate) * 1000, maxMs });
           s.busy = false;
         }, 250);

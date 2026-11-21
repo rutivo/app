@@ -44,6 +44,7 @@ export function wakeMatch(text) {
 
 let onWake = () => {};
 let onState = () => {};
+let onProgress = () => {};
 let mic = null;
 let running = false;
 let paused = false;
@@ -59,18 +60,26 @@ async function loop() {
   running = true;
   setState('listening');
   try {
-    await prepareEar();
+    // La primera vez (o si se borró) se descarga el reconocedor: se enseña cómo va
+    await prepareEar((p) => onProgress(p));
+    onProgress(null);
     mic = mic || createMic({ maxMs: MAX_S * 1000 + 1000 }); // lo que llega al tope es radio o charla: se descarta
+    let deaf = 0;
     while (!paused && wakeEnabled() && document.visibilityState === 'visible') {
       let audio;
       try {
         audio = await mic.listen();
+        deaf = 0;
       } catch (err) {
-        // Sin permiso, o el sistema dejó el micro mudo: hace falta un toque
         if (mic) mic.close();
         mic = null;
-        setState(err && err.name === 'NotAllowedError' ? 'denied' : 'tap');
-        return;
+        // Sin permiso: no se insiste
+        if (err && err.name === 'NotAllowedError') { setState('denied'); return; }
+        // Micro mudo: se reintenta solo unas veces (con un respiro); si sigue, hace falta un toque
+        if (++deaf > 3) { setState('tap'); return; }
+        await new Promise((r) => setTimeout(r, 1500 * deaf));
+        mic = createMic({ maxMs: MAX_S * 1000 + 1000 });
+        continue;
       }
       if (paused || !audio) continue;
       const secs = audio.length / 16000;
@@ -91,6 +100,7 @@ async function loop() {
       }
     }
   } catch {
+    onProgress(null);
     setState('tap');
     return;
   } finally {
@@ -124,10 +134,12 @@ export function resumeWake() {
 /**
  * Prepara «Oye Rutivo». `wake(rest)` abre el asistente; `stateChanged(estado)`
  * pinta el icono: 'listening' | 'tap' | 'denied' | 'paused' | 'off'.
+ * `progress({loaded, total} | null)`: descarga del reconocedor (null = terminada).
  */
-export async function initWake(wake, stateChanged = () => {}) {
+export async function initWake(wake, stateChanged = () => {}, progress = () => {}) {
   onWake = wake;
   onState = stateChanged;
+  onProgress = progress;
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') startWake();
     else if (mic) { mic.cancel(); mic.close(); mic = null; } // en segundo plano el sistema lo corta igual

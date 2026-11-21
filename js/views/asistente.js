@@ -582,9 +582,22 @@ export function initAssistant(rerender) {
   // «Oye Rutivo»: el icono enseña si está escuchando (anillo) o si necesita un toque
   // Manos libres: «Oye Rutivo» habla contigo sin abrir esta pantalla
   initHandsFree(rerender, (text) => openAssistant(text));
+  // Mientras se descarga el reconocedor de voz (la primera vez, ~77 MB), se ve cuánto falta
+  const files = new Map();
+  let pill = null;
+  const progress = (p) => {
+    if (!p) { files.clear(); if (pill) { pill.remove(); pill = null; } return; }
+    if (p.file && p.total) files.set(p.file, [p.loaded || 0, p.total]);
+    let got = 0;
+    let all = 0;
+    for (const [l, t] of files.values()) { got += l; all += t; }
+    if (!all || got >= all) return;
+    if (!pill) { pill = document.createElement('div'); pill.className = 'ear-dl'; document.body.appendChild(pill); }
+    pill.textContent = '⬇️ Preparando «Oye Rutivo»… ' + Math.floor((got / all) * 100) + '% (solo la primera vez)';
+  };
   initWake((rest) => handsFree(rest), (state) => {
     b.dataset.wake = state;
     b.title = state === 'listening' ? 'Di «Oye Rutivo»' : state === 'tap' ? 'Toca para hablar (y activar «Oye Rutivo»)' : 'Hablar con Rutivo';
-  });
+  }, progress);
   if (window.speechSynthesis) try { speechSynthesis.getVoices(); } catch { /* */ }
 }

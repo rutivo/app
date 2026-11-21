@@ -68,6 +68,48 @@ const ok = (n, c, extra = '') => { res.push(!!c); console.log((c ? 'PASS ' : 'FA
     ok('7 · si el sistema corta el micro, al usarlo se vuelve a abrir', m.live && m.pedidos === 3, JSON.stringify(m));
     ok('8 · sin errores', !errs.length, errs.join(' | '));
     await ctx.close();
+
+    // ---------- Micro «mudo»: abierto pero solo llega silencio (iPhone tras hablar el asistente o volver) ----------
+    const ctx2 = await browser.newContext({ locale: 'es-ES', permissions: ['microphone'] });
+    await ctx2.route('**/*', (r) => {
+      const u = new URL(r.request().url());
+      if (u.pathname.endsWith('/js/config.js')) return r.fulfill({ contentType: 'text/javascript', body: "export const FIREBASE_CONFIG=null;export const FIREBASE_SDK='';export const FLIGHT_API='';export const PUSH_PUBLIC_KEY='';export const APP_CHECK_SITE_KEY='';" });
+      return u.hostname === '127.0.0.1' ? r.continue() : r.abort();
+    });
+    const p2 = await ctx2.newPage();
+    const errs2 = [];
+    p2.on('pageerror', (e) => errs2.push(e.message));
+    await p2.addInitScript(() => {
+      for (const [k, v] of [['tipInstall', '1'], ['legalAcepta', '1'], ['lastBackup', String(Date.now())], ['oyeRutivo', '0']]) localStorage.setItem(k, v);
+      const real = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
+      window.__pedidos = 0;
+      window.__mudos = 1; // cuántas veces seguidas el sistema da un micro mudo
+      navigator.mediaDevices.getUserMedia = async (c) => {
+        window.__pedidos++;
+        if (window.__mudos-- > 0) { const ac = new AudioContext(); return ac.createMediaStreamDestination().stream; } // solo silencio absoluto
+        return real(c);
+      };
+    });
+    await p2.goto(app.url);
+    await p2.waitForTimeout(1000);
+    const listenOnce = () => p2.evaluate(async () => {
+      const { createMic } = await import('/js/microfono.js');
+      const m = createMic({ maxMs: 4000 });
+      const t = Date.now();
+      try {
+        const audio = await Promise.race([m.listen(), new Promise((_, rej) => setTimeout(() => rej(new Error('colgado')), 20000))]);
+        return { ok: true, secs: (Date.now() - t) / 1000, pedidos: window.__pedidos, audio: !!audio };
+      } catch (e) {
+        return { ok: false, err: e.name || e.message, secs: (Date.now() - t) / 1000, pedidos: window.__pedidos };
+      } finally { m.close(); }
+    });
+    let r = await listenOnce();
+    ok('9 · micro mudo: se nota y se abre otro solo; sigue escuchando (antes: escuchaba silencio para siempre)', r.ok && r.pedidos === 2, JSON.stringify(r));
+    await p2.evaluate(async () => { const { acquireStream, releaseStream } = await import('/js/microfono.js'); (await acquireStream()).getTracks().forEach((t) => t.stop()); releaseStream(); window.__mudos = 5; });
+    r = await listenOnce();
+    ok('10 · si sigue mudo: avisa (no se queda colgado escuchando silencio)', !r.ok && r.err === 'DeafMicError' && r.secs < 10, JSON.stringify(r));
+    ok('11 · sin errores', !errs2.length, errs2.join(' | '));
+    await ctx2.close();
   } finally {
     await browser.close();
     app.server.close();
