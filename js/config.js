@@ -24,8 +24,8 @@ export const FIREBASE_CONFIG = {
 };
 */
 
-// App Check de Firebase (solo la app real puede usar tu Firebase), con reCAPTCHA v3
-// (gratuito). Es la clave PÚBLICA del sitio (la secreta está solo en Firebase).
+// App Check de Firebase (solo la app real puede usar tu Firebase), registrada en
+// Firebase con Fraud Defense (reCAPTCHA Enterprise). Es la clave PÚBLICA del sitio.
 // Vacío = apagado. Ver SEGURIDAD.md («App Check»).
 export const APP_CHECK_SITE_KEY = '6LfW5isuAAAAAO98df1QtT1Sc77iZgKVvSIon5Q8';
 

@@ -24,7 +24,7 @@ async function load() {
     // mientras no se pulse «Aplicar» en Firebase, Firestore funciona sin el token.
     try {
       const ac = await import(FIREBASE_SDK + '/firebase-app-check.js');
-      ac.initializeAppCheck(firebaseApp, { provider: new ac.ReCaptchaV3Provider(APP_CHECK_SITE_KEY), isTokenAutoRefreshEnabled: true });
+      ac.initializeAppCheck(firebaseApp, { provider: new ac.ReCaptchaEnterpriseProvider(APP_CHECK_SITE_KEY), isTokenAutoRefreshEnabled: true });
     } catch {
       /* sin App Check esta vez */
     }

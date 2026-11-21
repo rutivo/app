@@ -108,17 +108,17 @@ Clave «Browser key (auto created by Firebase)» del proyecto `rutivo-a8890`:
   *Cloud Firestore API* (y *Firebase App Check API* cuando se active App Check).
 - Comprobar después que entrar, sincronizar y borrar cuenta siguen funcionando.
 
-### 5. App Check (con reCAPTCHA v3, gratuito; clave del sitio puesta en `js/config.js`)
-El proyecto está en el plan gratuito (sin facturación): por eso se usa reCAPTCHA v3
-(no Enterprise, que pide facturación).
-1. www.google.com/recaptcha/admin → clave **v3** para el dominio `rutivo.github.io`.
-2. Firebase → App Check → Apps → app web → **reCAPTCHA** → pegar la **clave secreta** (solo ahí).
-3. La **clave del sitio** (pública) va en `js/config.js` → `APP_CHECK_SITE_KEY`. La CSP de
-   `index.html` ya permite `www.google.com/recaptcha/`, `www.gstatic.com/recaptcha/`,
-   `recaptcha.google.com/recaptcha/` y `content-firebaseappcheck.googleapis.com`.
-4. Publicar y mirar unos días en Firebase → App Check → **Métricas** que las peticiones
+### 5. App Check (Fraud Defense / reCAPTCHA Enterprise; registrada el 21/11/2026)
+1. Clave de sitio creada en www.google.com/recaptcha/admin (dominio `rutivo.github.io`).
+   Firebase ya no deja registrar apps nuevas con reCAPTCHA «Classic» (v3): la misma clave
+   se registró en Firebase → App Check → Apps → **Fraud Defense** (estado «Registrada»).
+2. La clave del sitio (pública) está en `js/config.js` → `APP_CHECK_SITE_KEY`; el código
+   usa `ReCaptchaEnterpriseProvider`. La CSP de `index.html` ya permite
+   `www.google.com/recaptcha/`, `www.gstatic.com/recaptcha/`, `recaptcha.google.com/recaptcha/`
+   y `content-firebaseappcheck.googleapis.com`.
+3. Publicar y mirar unos días en Firebase → App Check → **Métricas** que las peticiones
    llegan «verificadas». Solo entonces pulsar **Aplicar** en Cloud Firestore.
-5. Si App Check falla al arrancar (sin conexión, reCAPTCHA bloqueado), la app sigue
+4. Si App Check falla al arrancar (sin conexión, reCAPTCHA bloqueado), la app sigue
    funcionando: mientras no se pulse «Aplicar», Firestore no lo exige.
 
 ### Comprobado en el código
