@@ -1116,3 +1116,7 @@ a.row-btn .chev { text-decoration: none; }
   .siri-orb i, .siri-wave b, .siri-mic, .siri-orb::after, .siri-orb::before { animation: none !important; }
 }
 @media (max-width: 360px) { .siri-orb { width: 88px; height: 88px; } .siri-msg { font-size: 16px; } }
+
+/* Fecha y hora en iPhone: Safari les pone un ancho mínimo propio y en dos columnas se pisaban */
+input[type="date"], input[type="time"] { -webkit-appearance: none; appearance: none; display: block; width: 100%; min-width: 0; max-width: 100%; min-height: 48px; box-sizing: border-box; }
+input[type="date"]::-webkit-date-and-time-value, input[type="time"]::-webkit-date-and-time-value { text-align: left; margin: 0; }
