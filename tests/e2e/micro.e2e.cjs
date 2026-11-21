@@ -110,6 +110,49 @@ const ok = (n, c, extra = '') => { res.push(!!c); console.log((c ? 'PASS ' : 'FA
     ok('10 · si sigue mudo: avisa (no se queda colgado escuchando silencio)', !r.ok && r.err === 'DeafMicError' && r.secs < 10, JSON.stringify(r));
     ok('11 · sin errores', !errs2.length, errs2.join(' | '));
     await ctx2.close();
+
+    // ---------- Como en iPhone: el audio solo arranca si se activa DENTRO de un toque ----------
+    // «Oye Rutivo» escucha sin que toques nada; el asistente se abre con un toque.
+    const ctx3 = await browser.newContext({ locale: 'es-ES', permissions: ['microphone'] });
+    await ctx3.route('**/*', (r) => {
+      const u = new URL(r.request().url());
+      if (u.pathname.endsWith('/js/config.js')) return r.fulfill({ contentType: 'text/javascript', body: "export const FIREBASE_CONFIG=null;export const FIREBASE_SDK='';export const FLIGHT_API='';export const PUSH_PUBLIC_KEY='';export const APP_CHECK_SITE_KEY='';" });
+      return u.hostname === '127.0.0.1' ? r.continue() : r.abort();
+    });
+    const p3 = await ctx3.newPage();
+    const errs3 = [];
+    p3.on('pageerror', (e) => errs3.push(e.message));
+    await p3.addInitScript(() => {
+      for (const [k, v] of [['tipInstall', '1'], ['legalAcepta', '1'], ['lastBackup', String(Date.now())], ['oyeRutivo', '0']]) localStorage.setItem(k, v);
+      // Regla de Safari en iPhone: el audio solo se pone en marcha dentro de un toque
+      let inGesture = false;
+      for (const ev of ['pointerdown', 'touchend', 'click', 'keydown']) window.addEventListener(ev, () => { inGesture = true; setTimeout(() => { inGesture = false; }, 0); }, { capture: true });
+      const Real = window.AudioContext;
+      window.AudioContext = class extends Real {
+        constructor(...a) { super(...a); if (!inGesture) super.suspend(); }
+        resume() { return inGesture ? super.resume() : new Promise(() => {}); } // sin toque, nunca arranca
+      };
+    });
+    await p3.goto(app.url);
+    await p3.waitForTimeout(800);
+    const hear = () => p3.evaluate(async () => {
+      const { createMic } = await import('/js/microfono.js');
+      const m = createMic({ maxMs: 3000 });
+      try {
+        await Promise.race([m.listen(), new Promise((_, rej) => setTimeout(() => rej(new Error('colgado')), 15000))]);
+        return 'oye';
+      } catch (e) { return 'no oye (' + (e.name || e.message) + ')'; } finally { m.close(); }
+    });
+    let h = await hear();
+    ok('12 · sin haber tocado nunca la app, el iPhone no deja: avisa (no se cuelga)', h.startsWith('no oye (DeafMicError'), h);
+    await p3.mouse.click(200, 400); // un toque cualquiera en la app
+    await p3.waitForTimeout(1200);
+    h = await hear(); // «Oye Rutivo» escuchando él solo, fuera del toque
+    ok('13 · tras un toque cualquiera, «Oye Rutivo» oye sin tocar nada más (antes: solo dentro del asistente)', h === 'oye', h);
+    h = await hear();
+    ok('14 · y sigue oyendo después (cerrar y abrir el micro no lo vuelve a bloquear)', h === 'oye', h);
+    ok('15 · sin errores', !errs3.length, errs3.join(' | '));
+    await ctx3.close();
   } finally {
     await browser.close();
     app.server.close();

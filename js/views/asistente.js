@@ -595,8 +595,16 @@ export function initAssistant(rerender) {
     if (!pill) { pill = document.createElement('div'); pill.className = 'ear-dl'; document.body.appendChild(pill); }
     pill.textContent = '⬇️ Preparando «Oye Rutivo»… ' + Math.floor((got / all) * 100) + '% (solo la primera vez)';
   };
+  let hint = null;
   initWake((rest) => handsFree(rest), (state) => {
     b.dataset.wake = state;
+    // Si el iPhone necesita un toque para dejar escuchar, se dice (antes no se veía nada)
+    if (state === 'tap' && !hint && !pill) {
+      hint = document.createElement('div');
+      hint.className = 'ear-dl';
+      hint.textContent = '👆 Toca la pantalla para que «Oye Rutivo» te escuche';
+      document.body.appendChild(hint);
+    } else if (state !== 'tap' && hint) { hint.remove(); hint = null; }
     b.title = state === 'listening' ? 'Di «Oye Rutivo»' : state === 'tap' ? 'Toca para hablar (y activar «Oye Rutivo»)' : 'Hablar con Rutivo';
   }, progress);
   if (window.speechSynthesis) try { speechSynthesis.getVoices(); } catch { /* */ }

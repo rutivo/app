@@ -105,6 +105,32 @@ export function releaseStream() {
 /** ¿Hay micro abierto y funcionando? (para pruebas) */
 export const sharedLive = () => live(shared);
 
+// ---------- un solo «audio» para toda la app ----------
+// En iPhone el audio solo arranca si se activa DENTRO de un toque. El asistente
+// se abre con un toque (funciona), pero «Oye Rutivo» arranca solo, sin toque, y
+// su audio se quedaba en pausa: el punto naranja encendido y sin oír nada.
+// Por eso hay UN audio compartido que se desbloquea con cualquier toque en la
+// app y se queda en marcha: así «Oye Rutivo» puede escuchar sin tocar nada.
+let sharedCtx = null;
+
+/** El audio compartido (lo crea si hace falta) e intenta ponerlo en marcha. */
+export function audioCtx() {
+  const AC = window.AudioContext || window.webkitAudioContext;
+  if (!sharedCtx || sharedCtx.state === 'closed') sharedCtx = new AC();
+  if (sharedCtx.state !== 'running') sharedCtx.resume().catch(() => {});
+  return sharedCtx;
+}
+export const audioRunning = () => !!sharedCtx && sharedCtx.state === 'running';
+
+if (typeof document !== 'undefined') {
+  // Cualquier toque en la app desbloquea el audio (dentro del propio toque, como exige iPhone)
+  const unlock = () => { if (!audioRunning() && (window.AudioContext || window.webkitAudioContext)) audioCtx(); };
+  for (const ev of ['pointerdown', 'touchend', 'click', 'keydown']) document.addEventListener(ev, unlock, { capture: true, passive: true });
+}
+
+/** Espera a que una promesa se cumpla, como mucho `ms` (en iPhone resume() sin toque no acaba nunca). */
+const within = (promise, ms) => Promise.race([promise, new Promise((r) => setTimeout(r, ms))]);
+
 /** El micro está abierto pero no llega sonido (en iPhone, tras hablar el asistente). */
 export class DeafMicError extends Error {
   constructor() {
@@ -126,11 +152,9 @@ export function createMic({ deafMs = 1500, maxMs = 15000 } = {}) {
   let session = null;
   let lastChunk = 0;
 
-  /** El audio se crea/activa sin esperar a nada: así ocurre dentro del toque (iPhone lo exige). */
+  /** El audio compartido: se activa sin esperar a nada (si esto ocurre dentro de un toque, iPhone lo deja arrancar). */
   function ensureCtx() {
-    const AC = window.AudioContext || window.webkitAudioContext;
-    if (!ctx || ctx.state === 'closed') ctx = new AC();
-    if (ctx.state !== 'running') ctx.resume().catch(() => {});
+    ctx = audioCtx();
   }
 
   let needFresh = false; // tras quedarse mudo: pedir un micro nuevo
@@ -164,7 +188,7 @@ export function createMic({ deafMs = 1500, maxMs = 15000 } = {}) {
   function teardown() {
     try { proc && proc.disconnect(); source && source.disconnect(); } catch { /* */ }
     if (stream) releaseStream(); // el micro sigue abierto para los demás (y para no volver a preguntar)
-    if (ctx) ctx.close().catch(() => {});
+    // El audio compartido NO se cierra: así no hace falta otro toque para volver a escuchar
     stream = ctx = source = proc = null;
   }
 
@@ -179,7 +203,7 @@ export function createMic({ deafMs = 1500, maxMs = 15000 } = {}) {
     ensureCtx(); // antes de cualquier espera
     await open();
     if (ctx.state !== 'running') {
-      try { await ctx.resume(); } catch { /* se comprueba abajo, con el vigilante */ }
+      try { await within(ctx.resume(), 600); } catch { /* se comprueba abajo, con el vigilante */ }
     }
   }
 
