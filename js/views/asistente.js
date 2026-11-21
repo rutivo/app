@@ -4,7 +4,7 @@
 import { ask, trimChatter, weatherText } from '../asistente.js';
 import { readFlag, writeFlag } from '../dom.js';
 import { cachedStatus, etaLine } from '../flight.js';
-import { initWake, pauseWake, resumeWake, wakeEnabled } from '../despertar.js';
+import { initWake, pauseWake, resumeWake, wakeEnabled, wakeLog } from '../despertar.js';
 import { createMic } from '../microfono.js';
 import { cancelHandsFree, handsFree, initHandsFree } from './manosLibres.js';
 import { leavePlanOf, scheduleReminders } from '../reminders.js';
@@ -497,6 +497,7 @@ export function openAssistant(cmd) {
     '<form class="siri-form" hidden><input autocomplete="off" enterkeyhint="send" placeholder="Escribe o dicta con el 🎤 del teclado"><button aria-label="Enviar">➤</button></form>' +
     '<div class="siri-status"></div>' +
     '<button type="button" class="siri-wake" data-swake></button>' +
+    '<div class="siri-heard"></div>' +
     '<button type="button" class="siri-retry" data-sretry>🎙️ Usar el micro de la app</button>' +
     '<div class="siri-bottom"><button type="button" class="siri-kb" data-skb aria-label="Escribir">⌨️</button>' +
     '<button type="button" class="siri-orb" data-sorb aria-label="Hablar"><i></i><i></i><i></i></button>' +
@@ -509,6 +510,9 @@ export function openAssistant(cmd) {
   const wakeBtn = root.querySelector('[data-swake]');
   const paintWake = () => { wakeBtn.textContent = wakeEnabled() ? '👂 «Oye Rutivo» activado' : '👂 Activar «Oye Rutivo»'; wakeBtn.classList.toggle('on', wakeEnabled()); };
   paintWake();
+  // Lo último que oyó «Oye Rutivo» fuera de esta pantalla (para saber qué entiende si no responde)
+  const heardTexts = wakeLog().filter((h) => h.text).slice(-3).map((h) => '«' + h.text.trim().slice(0, 60) + '»');
+  root.querySelector('.siri-heard').textContent = heardTexts.length ? '👂 Lo último que oí fuera: ' + heardTexts.join(' · ') : '';
   root.addEventListener('click', (e) => {
     const el = e.target.closest('button');
     if (!el) return;

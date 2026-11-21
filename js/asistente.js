@@ -103,6 +103,16 @@ function fixDictation(t) {
     .replace(/\ba punto (de |me |de me )?(?=\d)/g, 'apuntame ') // Whisper: «apúntame 15» → «a punto de 15»
     .replace(/\b(apunta|anota|ingresa|pon|mete|suma|guarda|registra) (me|melo|lo)\b/g, '$1$2')
     .replace(/\b(tarjetas|targeta|targetas)\b/g, 'tarjeta')
+    // Como se habla: «cobrao», «pagao», «echao» → cobrado, pagado, echado
+    .replace(/\b(cobr|pag|gast|ech|apunt|repost|ingres|lav|aparc|anot|gan|sac)ao\b/g, '$1ado')
+    // «pavos», «euritos»… → euros
+    .replace(/\b(pavos|pavo|euritos|eurillos|eurazos|lereles)\b/g, 'euros')
+    // «grábame 10», «apúntate 10», «apúntamelo» → apúntame
+    .replace(/\b(grabame|graba|grabalo|apuntate|apuntamelo|anotamelo|anotate)\b/g, 'apuntame')
+    // «me han dado 20», «he sacado 30» (de una carrera) → me han pagado
+    .replace(/^(me han dado|me ha dado|me dieron|me dio|he sacado|saque|he ganado) (?=\d)/, 'me han pagado ')
+    .replace(/\b(apple pay|google pay|samsung pay|con el reloj|paypal|con la visa)\b/g, 'tarjeta')
+    .replace(/\b(en suelto|contante|en contante|en billete)\b/g, 'efectivo')
     .replace(/\b(efectivos|en mano|en metalico|cash|en billetes)\b/g, 'efectivo')
     .replace(/\b(\d+) (?:euros? )?con (\d{1,2})\b/g, (m, e, c) => e + '.' + c.padEnd(2, '0') + ' euros')
     .replace(/\b(\d+) (?:euros? )?y medio\b/g, '$1.50 euros')
@@ -252,13 +262,14 @@ export function isWrite(t) {
 }
 
 const EXPENSES = [
-  [/gasolina|gasoil|diesel|combustible|reposta|repostado|reposte|echado|eche/, 'Gasolina'], [/peaje|autopista|ap ?7/, 'Peaje'],
-  [/parking|aparcamiento|aparcar/, 'Parking'], [/lavado|lavar|lavadero/, 'Lavado'], [/\bitv\b/, 'ITV'],
-  [/taller|mecanico|revision|aceite|neumatico|rueda|frenos|bateria/, 'Taller'], [/comida|almuerzo|desayuno|cena|cafe|bocadillo|menu/, 'Comida'],
+  [/gasolina|gasoil|gasoleo|diesel|combustible|reposta|repostado|reposte|repostaje|echado|eche/, 'Gasolina'], [/peaje|autopista|ap ?7/, 'Peaje'],
+  [/parking|aparcamiento|aparcar|garaje|cochera|parquimetro|zona azul/, 'Parking'], [/lavado|lavar|lavadero|lavacoches|tunel de lavado|aspirado/, 'Lavado'], [/\bitv\b/, 'ITV'],
+  [/taller|mecanico|revision|aceite|neumatico|rueda|frenos|bateria|pinchazo|chapa|pintura|embrague|filtro/, 'Taller'], [/comida|almuerzo|desayuno|cena|cafe|bocadillo|menu|merienda|tapa|pincho|refresco|bebida|\bagua\b/, 'Comida'],
+  [/gestor|gestoria|asesoria|asesor/, 'Gestoría'],
   [/seguro/, 'Seguro'], [/multa/, 'Multa'], [/movil|telefono|tarifa de datos/, 'Teléfono'], [/autonomos|cuota|licencia|emisora/, 'Cuotas'],
   [/recambio|pieza|accesorio/, 'Recambios'], [/limpieza|ambientador/, 'Limpieza'],
 ];
-const INCOMES = [[/propina/, 'Propina'], [/transfer/, 'Transfer'], [/aeropuerto/, 'Carrera aeropuerto'], [/servicio/, 'Servicio']];
+const INCOMES = [[/propina/, 'Propina'], [/transfer/, 'Transfer'], [/aeropuerto/, 'Carrera aeropuerto'], [/servicio/, 'Servicio'], [/suplemento/, 'Suplemento'], [/\bespera\b/, 'Espera']];
 
 const CONCEPT_FIX = { cadera: 'carrera', caderas: 'carreras', caldera: 'carrera', calderas: 'carreras', carera: 'carrera', carreta: 'carrera', carrea: 'carrera', carrena: 'carrera',
   casolina: 'gasolina', gasolinas: 'gasolina', parkin: 'parking', parquin: 'parking', peage: 'peaje', propinas: 'propina', lavao: 'lavado' };

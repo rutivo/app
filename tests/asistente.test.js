@@ -271,3 +271,46 @@ test('«¿qué palabras sabes?»: lo aprendido de tus apuntes', () => {
   const st = { mov: [{ c: 'Carrera 1' }, { c: 'Carrera 1' }, { c: 'Peaje AP-7' }], srv: [], gas: [], huc: [], jor: [], fac: [], prv: [], cli: {}, cfg: {} };
   assert.match(ask('¿qué palabras sabes?', st, NOW).text, /Carrera 1 · Peaje AP-7/);
 });
+
+test('más vocabulario: como se habla en la calle', () => {
+  const act = (q) => { const r = ask(q, state, NOW); return r.action ? r.action.item : null; };
+  // Andaluz: «cobrao», «pagao», «echao»
+  let it = act('he cobrao 20 euros en efectivo');
+  assert.ok(it && it.t === 'in' && it.i === 20 && it.p === 'efectivo', JSON.stringify(it));
+  it = act('he pagao 6 de parking con tarjeta');
+  assert.ok(it && it.t === 'out' && it.i === 6 && it.p === 'tarjeta' && /parking/i.test(it.c), JSON.stringify(it));
+  it = act('he echao 40 de gasoil');
+  assert.ok(it && it.t === 'out' && it.i === 40, JSON.stringify(it));
+  // «pavos», «euritos»
+  it = act('apúntame 15 pavos en efectivo');
+  assert.ok(it && it.i === 15 && it.t === 'in', JSON.stringify(it));
+  it = act('mete 3 euritos de propina');
+  assert.ok(it && it.i === 3 && /propina/i.test(it.c), JSON.stringify(it));
+  // «me han dado», «he sacado»
+  it = act('me han dado 25 de una carrera');
+  assert.ok(it && it.t === 'in' && it.i === 25, JSON.stringify(it));
+  it = act('he sacado 30 en el aeropuerto');
+  assert.ok(it && it.t === 'in' && it.i === 30, JSON.stringify(it));
+  // «grábame», «apúntamelo»
+  it = act('grábame 12 con tarjeta');
+  assert.ok(it && it.i === 12 && it.p === 'tarjeta', JSON.stringify(it));
+  // Formas de pago nuevas
+  for (const q of ['apúntame 18 con apple pay', 'apúntame 18 con google pay', 'apúntame 18 con el reloj', 'apúntame 18 con la visa']) {
+    it = act(q);
+    assert.ok(it && it.p === 'tarjeta', q + ' ' + JSON.stringify(it));
+  }
+  // Gastos nuevos
+  // Sin decir «pagué»: por la palabra sabe que es un GASTO (y el concepto queda tal como lo dices)
+  for (const [q, c] of [['apúntame 2 de zona azul', /zona azul/i], ['apúntame 30 del pinchazo', /pinchazo/i], ['apúntame 1,50 de agua', /agua/i],
+    ['apúntame 60 de la gestoría', /gestor/i], ['apúntame 5 del garaje', /garaje/i], ['apúntame 8 del túnel de lavado', /lavado/i],
+    ['apúntame 45 de gasóleo', /gas/i], ['apúntame 3 de una tapa', /tapa/i]]) {
+    it = act(q);
+    assert.ok(it && it.t === 'out' && c.test(it.c), q + ' ' + JSON.stringify(it));
+  }
+  // Ingresos nuevos
+  it = act('apúntame 10 de suplemento');
+  assert.ok(it && it.t === 'in' && /suplemento/i.test(it.c), JSON.stringify(it));
+  // Las preguntas siguen siendo preguntas
+  assert.equal(ask('¿cuánto he ganado hoy?', state, NOW).action, undefined);
+  assert.equal(ask('cuanto he sacado este mes', state, NOW).action, undefined);
+});

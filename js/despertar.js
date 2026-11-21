@@ -19,8 +19,30 @@ export function setWakeEnabled(on) {
 }
 
 const norm = (w) => w.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]/g, '');
-const NAME = /^(rutivo|rutibo|rutiva|rutivos|rutino|rotivo|routivo|ruptivo|rutigo|rutivio|rutifo|rutivu|ruto|rutio|ruti)$/;
-const CALL = /^(o+y+e+s?|oie|olle|oy|hoy|hey|ey|eh|ei|o|el|e|y|a|ah)$/; // «Hoy el Rutivo…» (lo que a veces oye Whisper)
+// Formas en que el reconocedor suele oír «Rutivo» (además, vale cualquier palabra muy parecida: ver isName)
+const NAME = /^(rutivo|rutibo|rutiva|rutivos|rutino|rotivo|routivo|ruptivo|rutigo|rutivio|rutifo|rutivu|ruto|rutio|ruti|rutiv|rutiba|rotibo|rudivo|ruvivo|rutivio|brutivo|grutivo|rutibos|rutiboo|rutibu|reutivo|ritivo|rativo|rutibio)$/;
+// Palabras normales parecidas a «Rutivo» que NO lo son
+const NOT_NAME = new Set(['ruido', 'ruidos', 'ruta', 'rutas', 'rutina', 'rutinas', 'rico', 'rica', 'rio', 'rojo', 'roja', 'rubia', 'ritmo', 'rito', 'rotativo', 'motivo', 'motivos', 'activo', 'nativo', 'festivo', 'cultivo', 'relativo', 'positivo', 'olivo', 'rutilo']);
+/** Distancia de edición (cuántas letras cambian), corta: solo para palabras cortas */
+function dist(a, b) {
+  if (Math.abs(a.length - b.length) > 2) return 9;
+  let prev = Array.from({ length: b.length + 1 }, (_, j) => j);
+  for (let i = 1; i <= a.length; i++) {
+    const cur = [i];
+    for (let j = 1; j <= b.length; j++) cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    prev = cur;
+  }
+  return prev[b.length];
+}
+/** ¿Es «Rutivo» (o como lo suele oír el reconocedor)? */
+function isName(w) {
+  if (!w || NOT_NAME.has(w)) return false;
+  if (NAME.test(w)) return true;
+  // Muy parecida a «rutivo»: empieza por r (o br/gr/tr, que a veces se cuela) y cambia como mucho 2 letras
+  return w.length >= 5 && w.length <= 8 && /^(r|br|gr|tr)[aeiou]/.test(w) && dist(w.replace(/^[bgt](?=r)/, ''), 'rutivo') <= 2;
+}
+// Lo que se dice antes de «Rutivo» para llamarlo (y lo que a veces oye el reconocedor: «Hoy el Rutivo…»)
+const CALL = /^(o+y+e+s?|oie|olle|oy|hoy|hey|ey|eh|ei|o|el|e|y|a|ah|hola|ola|oiga|oigan|oyeme|escucha|escuchame|venga|vamos|vale|buenas|buenos|dias|tu|che|mira|bueno|pues)$/;
 
 /**
  * ¿Es una llamada a Rutivo? Devuelve {rest} con lo que se dijo después
@@ -28,14 +50,17 @@ const CALL = /^(o+y+e+s?|oie|olle|oy|hoy|hey|ey|eh|ei|o|el|e|y|a|ah)$/; // «Hoy
  */
 export function wakeMatch(text) {
   const words = String(text || '').trim().split(/\s+/).filter(Boolean);
-  for (let i = 0; i < Math.min(words.length, 4); i++) {
+  for (let i = 0; i < Math.min(words.length, 5); i++) {
     let w = norm(words[i]);
     let used = 1;
-    if (!NAME.test(w) && i + 1 < words.length && NAME.test(w + norm(words[i + 1]))) { w += norm(words[i + 1]); used = 2; } // «Ruti vo»
-    if (!NAME.test(w)) continue;
-    // «Rutivo» solo vale al principio o detrás de «oye/hey…»
+    // Todo junto: «Oyerutivo», «Heyrutivo»
+    const glued = w.match(/^(oye|oie|olle|hey|ey|hola|ola)(r.+)$/);
+    if (glued && isName(glued[2])) w = glued[2];
+    else if (!isName(w) && i + 1 < words.length && isName(w + norm(words[i + 1]))) { w += norm(words[i + 1]); used = 2; } // «Ruti vo»
+    if (!isName(w)) continue;
+    // «Rutivo» solo vale al principio o detrás de «oye/hey/hola…» (no en mitad de una conversación)
     const before = words.slice(0, i).map(norm).filter(Boolean);
-    if (before.length > 2 || !before.every((b) => CALL.test(b))) continue;
+    if (before.length > 3 || !before.every((b) => CALL.test(b))) continue;
     const rest = words.slice(i + used).join(' ').replace(/^[\s,.:;!¡?¿-]+/, '').trim();
     return { rest };
   }
