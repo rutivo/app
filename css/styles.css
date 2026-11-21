@@ -1046,7 +1046,7 @@ body:has(input:focus, textarea:focus, select:focus) .asis-fab { opacity: 0; poin
 #toast { bottom: calc(96px + env(safe-area-inset-bottom, 0px)); border-radius: 16px; }
 .avatar-btn { background: var(--sec-bg) !important; border: 1px solid var(--card-line) !important; box-shadow: none !important; color: var(--ink) !important; }
 .siri-wake { display: block; margin: 4px auto 0; background: rgba(255,255,255,.07) !important; border: 1px solid rgba(255,255,255,.12); color: #c9d6ee; border-radius: 999px; padding: 7px 14px; font-size: 13px; font-weight: 700; width: auto; box-shadow: none !important; }
-.siri-heard { margin: 6px auto 0; max-width: 92%; text-align: center; font-size: 12px; color: #9fb0d4; line-height: 1.35; }
+.siri-heard { margin: 6px auto 0; max-width: 92%; text-align: center; font-size: 12px; color: #9fb0d4; line-height: 1.35; white-space: pre-line; }
 .siri-heard:empty { display: none; }
 .siri-wake.on { color: #b9a8ff; border-color: rgba(150, 120, 255, .5); }
 .siri-sug button { box-shadow: none !important; }

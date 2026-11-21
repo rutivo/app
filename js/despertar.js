@@ -6,7 +6,7 @@
 // radio, aire) la frase nunca «termina», así que los trozos largos también se analizan.
 import { readFlag, writeFlag } from './dom.js';
 import { createMic, resample } from './microfono.js';
-import { calibrate, detectIn, templateOf, templateSamples, trimSilence } from './kws.js';
+import { calibrate, detectIn, dtwPrefix, templateOf, templateSamples, trimSilence } from './kws.js';
 import { earSupported, prepareEar, transcribe } from './oido.js';
 
 const KEY = 'oyeRutivo';
@@ -97,24 +97,81 @@ export async function trainWake(step = () => {}, n = 3) {
   const m = createMic({ maxMs: 4500, silenceMs: 600 });
   const t = [];
   try {
-    for (let tries = 0; t.length < n && tries < n + 4; tries++) {
+    for (let tries = 0; t.length < n && tries < n + 6; tries++) {
       step(t.length, 'escucha');
       const audio = await m.listen();
-      // Con el motor en marcha la grabación no «termina» sola: se recorta alrededor de tu voz
+      // Con el motor en marcha la grabación no «termina» sola: se recorta alrededor de tu voz.
+      // «Oye Rutivo» dura algo menos de 2 s: si sale más largo o más corto, la toma está mal cortada.
       const voice = audio ? trimSilence(audio) : null;
       const secs = voice ? voice.length / 16000 : 0;
       if (!voice || secs < 0.4 || secs > 2.8) { step(t.length, 'otra'); continue; }
       const tpl = templateOf(voice);
       if (tpl.length < 25) { step(t.length, 'otra'); continue; }
       t.push(tpl);
+      // Una toma que no se parece a las demás (cortada, con un golpe…) estropearía el detector: se repite
+      if (t.length === n) {
+        const mean = t.map((a, i) => t.filter((_, j) => j !== i).reduce((acc, b) => acc + dtwPrefix(a, b).d, 0) / (n - 1));
+        const worst = mean.indexOf(Math.max(...mean));
+        if (mean[worst] > 0.85) { t.splice(worst, 1); step(t.length, 'otra'); continue; }
+      }
       step(t.length, 'ok');
     }
   } finally {
     m.close();
   }
-  if (t.length < n) return false;
-  try { localStorage.setItem(MODEL_KEY, JSON.stringify({ t, thr: calibrate(t), at: Date.now() })); } catch { return false; }
+  if (t.length < n) { m.close(); return false; }
+  // Prueba: una vez más, para medir cuánto se parece DE VERDAD tu voz en este móvil (micro, coche…)
+  // y poner el límite con eso (las voces reales varían más que las de prueba).
+  let ok = null;
+  const m2 = createMic({ maxMs: 4500, silenceMs: 600 });
+  try {
+    for (let tries = 0; ok === null && tries < 3; tries++) {
+      step(n, 'prueba');
+      const audio = await m2.listen();
+      const voice = audio ? trimSilence(audio) : null;
+      if (!voice || voice.length < 0.4 * 16000 || voice.length > 2.8 * 16000) { step(n, 'otra'); continue; }
+      const r = detectIn({ t, thr: 9 }, voice, 20);
+      if (r.d > 1.15) { step(n, 'otra'); continue; } // no era «Oye Rutivo» (o mucho ruido)
+      ok = r.d;
+    }
+  } finally {
+    m2.close();
+  }
+  const thr = Math.min(0.95, Math.max(calibrate(t), ok === null ? 0 : ok * 1.12));
+  try { localStorage.setItem(MODEL_KEY, JSON.stringify({ t, thr, ok, at: Date.now() })); } catch { return false; }
+  step(n + 1, 'ok');
   return true;
+}
+
+// ---------- lo que ve el detector (para ajustarse solo y para enseñarlo) ----------
+let lastSeen = { d: Infinity, at: 0 };
+let lastWakeFast = false; // el último «Oye Rutivo» lo detectó el detector rápido
+const THR_MAX = 0.95;
+
+/** Cambia el límite guardado (se ajusta solo con lo que pasa de verdad). */
+function setThr(fn) {
+  const m = wakeModel();
+  if (!m) return;
+  const floor = m.ok ? Math.min(0.9, m.ok * 1.02) : 0.6; // nunca más estricto que tu toma de prueba
+  const thr = Math.min(THR_MAX, Math.max(floor, fn(m.thr)));
+  try { localStorage.setItem(MODEL_KEY, JSON.stringify({ ...m, thr })); } catch { /* nada */ }
+}
+
+/**
+ * Tras contestar «Dime…», no dijiste nada que se entendiera: probablemente fue una
+ * falsa alarma del detector rápido → se vuelve un poco más estricto.
+ */
+export function wakeNoCommand() {
+  if (!lastWakeFast) return;
+  lastWakeFast = false;
+  setThr((t) => t - 0.02);
+}
+
+/** Para enseñar en el asistente: parecido más alto oído hace poco y el límite. */
+export function wakeStats() {
+  const m = wakeModel();
+  if (!m) return null;
+  return { thr: m.thr, ok: m.ok, last: Date.now() - lastSeen.at < 15000 ? lastSeen.d : null };
 }
 
 const NEAR = 0.15; // «casi»: hasta 0,15 por encima del umbral, lo confirma el reconocedor completo
@@ -160,10 +217,12 @@ function streamWatcher(model, found) {
     const total16 = Math.round((total * 16000) / rate);
     if (!found.hit) {
       if (win.length < len * 0.6) return false;
+      const thr = model.thr;
       const r = detectIn(model, win, Math.max(0, Math.round((win.length - len * 0.6) / 160)));
+      if (!lastSeen.at || r.d < lastSeen.d || Date.now() - lastSeen.at > 4000) lastSeen = { d: r.d, at: Date.now() };
       if (!r.match) {
         // Casi: se guarda el trozo por si el reconocedor completo confirma que era «Oye Rutivo» (y se aprende)
-        if (r.d <= model.thr + NEAR && (!found.near || r.d < found.near.d)) {
+        if (r.d <= thr + NEAR && (!found.near || r.d < found.near.d)) {
           found.near = { d: r.d, phrase: win.slice(Math.max(0, r.endSample - Math.round(len * 1.3)), r.endSample) };
         }
         return false;
@@ -228,7 +287,11 @@ async function analyze() {
       const m = wakeMatch(text);
       if (m && !paused && !woke) {
         // El detector rápido casi lo tenía: aprende este ejemplo (tu voz, tu coche) para la próxima
-        if (near && learn(near.phrase)) heard[heard.length - 1].learned = true;
+        if (near && learn(near.phrase)) {
+          heard[heard.length - 1].learned = true;
+          setThr((t) => Math.max(t, near.d * 1.03)); // tu voz real se parece «así»: el límite llega hasta ahí
+        }
+        lastWakeFast = false;
         woke = true;
         queue = [];
         pauseWake(); // para el micro de la escucha de fondo (el asistente usa el suyo)
@@ -275,6 +338,7 @@ async function loop() {
       // Detectado con tu voz: contesta ya. Si dijiste la orden seguida, se entiende lo de después.
       if (found.hit && !woke) {
         woke = true;
+        lastWakeFast = true;
         queue = [];
         if (heard.length > 20) heard.shift();
         heard.push({ secs: audio.length / 16000, text: '«Oye Rutivo» (tu voz)' + (found.only ? '' : ' + orden') });

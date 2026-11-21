@@ -3,7 +3,7 @@
 // te escucha, apunta, te lo confirma en voz alta y vuelve a esperar. Sin abrir
 // ninguna pantalla (para usarlo conduciendo); solo un globo pequeño informativo.
 import { ask, normalize, stripFillers, trimChatter } from '../asistente.js';
-import { resumeWake, wakeMatch } from '../despertar.js';
+import { resumeWake, wakeMatch, wakeNoCommand } from '../despertar.js';
 import { readFlag } from '../dom.js';
 import { createMic } from '../microfono.js';
 import { transcribe } from '../oido.js';
@@ -180,6 +180,7 @@ export async function handsFree(first = '') {
         if (cancelled) break;
         if (!heard) {
           if (misses++ < 1) { show('🤔 No te he oído', 'speaking'); await say('No te he oído. ¿En qué puedo ayudarte?'); continue; }
+          wakeNoCommand(); // no dijiste nada: quizá saltó solo (el detector se vuelve un poco más estricto)
           show('👋 Cuando quieras, di «Oye Rutivo»', 'done');
           await say('Vale. Cuando quieras, dime Oye Rutivo.');
           break;

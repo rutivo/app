@@ -79,7 +79,7 @@ async function context(browser) {
     await page.goto(app.url);
     const trained = await page.evaluate(async () => { const { trainWake } = await import('/js/despertar.js'); const steps = []; const ok = await trainWake((i, st) => steps.push(st + i)); return { ok, steps }; });
     model = await page.evaluate(() => JSON.parse(localStorage.getItem('oyeHuella') || 'null'));
-    ok('0 · entrenar en el taxi (motor en marcha): «Di Oye Rutivo» 3 veces por el micro → queda guardado', trained.ok && model && model.t.length === 3, JSON.stringify(trained.steps) + ' umbral ' + (model ? model.thr.toFixed(2) : '-'));
+    ok('0 · entrenar en el taxi (motor en marcha): 3 veces + 1 de prueba por el micro → queda guardado con el límite medido', trained.ok && model && model.t.length === 3 && typeof model.ok === 'number', JSON.stringify(trained.steps) + ' · prueba ' + (model && model.ok != null ? model.ok.toFixed(2) : '-') + ' · límite ' + (model ? model.thr.toFixed(2) : '-'));
     await b.close();
   }
   if (!model) { app.server.close(); console.log(res.filter(Boolean).length + '/' + res.length + ' passed'); process.exit(1); }

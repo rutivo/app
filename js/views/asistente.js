@@ -4,7 +4,7 @@
 import { ask, trimChatter, weatherText } from '../asistente.js';
 import { readFlag, writeFlag } from '../dom.js';
 import { cachedStatus, etaLine } from '../flight.js';
-import { initWake, pauseWake, resumeWake, trainWake, wakeEnabled, wakeLog, wakeModel } from '../despertar.js';
+import { initWake, pauseWake, resumeWake, trainWake, wakeEnabled, wakeLog, wakeModel, wakeStats } from '../despertar.js';
 import { createMic } from '../microfono.js';
 import { cancelHandsFree, handsFree, initHandsFree } from './manosLibres.js';
 import { leavePlanOf, scheduleReminders } from '../reminders.js';
@@ -519,7 +519,10 @@ export function openAssistant(cmd) {
   paintTrain();
   // Lo último que oyó «Oye Rutivo» fuera de esta pantalla (para saber qué entiende si no responde)
   const heardTexts = wakeLog().filter((h) => h.text).slice(-3).map((h) => '«' + h.text.trim().slice(0, 60) + '»');
-  root.querySelector('.siri-heard').textContent = heardTexts.length ? '👂 Lo último que oí fuera: ' + heardTexts.join(' · ') : '';
+  const st = wakeStats();
+  const num = (v) => (v == null || !Number.isFinite(v) ? '—' : v.toFixed(2).replace('.', ','));
+  root.querySelector('.siri-heard').textContent = (heardTexts.length ? '👂 Lo último que oí fuera: ' + heardTexts.join(' · ') : '') +
+    (st ? (heardTexts.length ? '\n' : '') + '🎯 Detector: lo más parecido hace poco ' + num(st.last) + ' · contesta si baja de ' + num(st.thr) + (st.ok != null ? ' · tu prueba ' + num(st.ok) : '') : '');
   root.addEventListener('click', (e) => {
     const el = e.target.closest('button');
     if (!el) return;
@@ -538,8 +541,9 @@ export function openAssistant(cmd) {
       trainWake((i, st) => {
         if (!ui) return;
         if (st === 'escucha') setState('listening', '🎯 Di «Oye Rutivo» ' + (say[i] || '') + ' (' + (i + 1) + ' de 3)');
+        else if (st === 'prueba') setState('listening', '🎯 Ahora dilo una vez más, para comprobar cómo te oye este móvil');
         else if (st === 'otra') setState('idle', '🤔 No te he oído bien. Dilo otra vez, normal, como lo dirías en el coche.');
-        else setState('idle', '✔ ' + i + ' de 3');
+        else if (i <= 3) setState('idle', '✔ ' + i + ' de 3');
       }).then((ok) => {
         trainBtn.disabled = false;
         paintTrain();
