@@ -5,6 +5,7 @@ import { S, save } from '../store.js';
 import { kmOf } from '../trips.js';
 import { cap, esc, eur, monthName, quarterOf, r2, sum, today, uid } from '../utils.js';
 import { sendQuarterToAccountant } from './gestor.js';
+import { renderCharts } from './graficas.js';
 import { renderJornada } from './jornada.js';
 import { renderUpcoming } from './proximos.js';
 import { renderTips } from './tips.js';
@@ -83,6 +84,7 @@ export function renderCaja() {
   renderTips();
   renderUpcoming();
   renderMonths();
+  renderCharts();
   renderQuarter();
   renderJornada();
 

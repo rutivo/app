@@ -1120,3 +1120,36 @@ a.row-btn .chev { text-decoration: none; }
 /* Fecha y hora en iPhone: Safari les pone un ancho mínimo propio y en dos columnas se pisaban */
 input[type="date"], input[type="time"] { -webkit-appearance: none; appearance: none; display: block; width: 100%; min-width: 0; max-width: 100%; min-height: 48px; box-sizing: border-box; }
 input[type="date"]::-webkit-date-and-time-value, input[type="time"]::-webkit-date-and-time-value { text-align: left; margin: 0; }
+
+/* ---------- Gráficas de la Caja ---------- */
+:root { --ch-pos: #1d5fe0; --ch-neg: #c8432b; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --ch-pos: #5b8cff; --ch-neg: #ea5c44; } }
+:root[data-theme="dark"], :root[data-theme="elegante"] { --ch-pos: #5b8cff; --ch-neg: #ea5c44; }
+.ch-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 6px; }
+.ch-seg { gap: 4px; }
+.ch-seg button { width: auto; margin: 0; padding: 6px 12px; font-size: 13px; border-radius: 999px; background: transparent; color: var(--mut); border: 1px solid var(--line); box-shadow: none; }
+.ch-seg button.on { background: var(--ch-pos); color: #fff; border-color: var(--ch-pos); }
+.ch-read { font-size: 14px; margin: 8px 0 4px; min-height: 20px; line-height: 1.4; }
+.ch { margin-top: 4px; }
+.ch-plot { position: relative; display: flex; height: 122px; margin-top: 18px; }
+.ch-z { position: absolute; left: 0; right: 0; border-top: 1px solid var(--line); pointer-events: none; }
+.ch-col { position: relative; flex: 1; height: 100%; margin: 0; padding: 0; background: transparent; border: 0; box-shadow: none; border-radius: 6px; min-width: 0; }
+.ch-col:focus-visible { outline: 2px solid var(--ch-pos); }
+.ch-col.on { background: color-mix(in srgb, var(--ch-pos) 12%, transparent); }
+.ch-bar { position: absolute; left: 50%; transform: translateX(-50%); width: min(22px, 60%); background: var(--ch-pos); border-radius: 4px 4px 0 0; min-height: 2px; }
+.ch-bar.neg { background: var(--ch-neg); border-radius: 0 0 4px 4px; }
+.ch-bar.part { opacity: .55; }
+.ch-top { position: absolute; left: 50%; transform: translateX(-50%); font-size: 11px; font-weight: 700; color: var(--ink); white-space: nowrap; }
+.ch-x { display: flex; margin-top: 4px; }
+.ch-x span { flex: 1; text-align: center; font-size: 11px; color: var(--mut); white-space: nowrap; overflow: hidden; }
+.ch-note { font-size: 12px; margin-top: 6px; }
+.ch-h { display: grid; gap: 8px; margin-top: 8px; }
+.ch-hr { display: grid; grid-template-columns: minmax(70px, 34%) 1fr auto; align-items: center; gap: 8px; font-size: 14px; }
+.ch-hn { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ch-ht { height: 10px; }
+.ch-ht i { display: block; height: 100%; background: var(--ch-neg); border-radius: 0 4px 4px 0; }
+.ch-tab { margin-top: 6px; font-size: 13px; }
+.ch-tab summary { color: var(--mut); cursor: pointer; }
+.ch-tab table { width: 100%; border-collapse: collapse; margin-top: 6px; }
+.ch-tab th, .ch-tab td { text-align: right; padding: 4px 2px; border-bottom: 1px solid var(--line); }
+.ch-tab th:first-child, .ch-tab td:first-child { text-align: left; }
