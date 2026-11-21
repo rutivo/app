@@ -181,6 +181,8 @@ export function createMic({ deafMs = 1500, maxMs = 15000, silenceMs = 1100 } = {
       if (rms > 1e-6) session.sound = true; // un micro de verdad siempre capta algo (aunque sea ruido)
       session.chunks.push(new Float32Array(d));
       session.onLevel(rms, session.vad.speaking);
+      // Escucha continua: quien escucha puede pedir terminar ya (p. ej. ya oyó «Oye Rutivo»)
+      if (session.onChunk && session.onChunk(session.chunks, ctx.sampleRate)) { session.forced = true; return finish(true); }
       const state = session.vad.push(rms);
       if (state === 'end' || state === 'timeout') finish(state === 'end');
     };
@@ -221,7 +223,7 @@ export function createMic({ deafMs = 1500, maxMs = 15000, silenceMs = 1100 } = {
     const all = new Float32Array(s.chunks.reduce((n, c) => n + c.length, 0));
     let o = 0;
     for (const c of s.chunks) { all.set(c, o); o += c.length; }
-    s.resolve(ok && s.vad.speaking ? resample(all, ctx ? ctx.sampleRate : 48000) : null);
+    s.resolve(ok && (s.vad.speaking || s.forced) ? resample(all, ctx ? ctx.sampleRate : 48000) : null);
   }
 
   return {
@@ -231,11 +233,11 @@ export function createMic({ deafMs = 1500, maxMs = 15000, silenceMs = 1100 } = {
      * Graba una frase. Devuelve el audio a 16 kHz, o null si no se oyó a nadie.
      * Si el micro no da sonido ni reabriéndolo, falla con DeafMicError.
      */
-    async listen(onLevel = () => {}) {
+    async listen(onLevel = () => {}, onChunk = null) {
       if (session) finish(false);
       await wake();
       return new Promise((resolve, reject) => {
-        const s = { chunks: [], resolve, reject, onLevel, vad: createVad({ chunkMs: (4096 / ctx.sampleRate) * 1000, maxMs, silenceMs }), started: Date.now(), retried: false, busy: false };
+        const s = { chunks: [], resolve, reject, onLevel, onChunk, forced: false, vad: createVad({ chunkMs: (4096 / ctx.sampleRate) * 1000, maxMs, silenceMs }), started: Date.now(), retried: false, busy: false };
         session = s;
         capturing++;
         // Vigilante: el detector de voz cuenta el tiempo con el sonido que llega;

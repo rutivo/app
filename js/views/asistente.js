@@ -4,7 +4,7 @@
 import { ask, trimChatter, weatherText } from '../asistente.js';
 import { readFlag, writeFlag } from '../dom.js';
 import { cachedStatus, etaLine } from '../flight.js';
-import { initWake, pauseWake, resumeWake, wakeEnabled, wakeLog } from '../despertar.js';
+import { initWake, pauseWake, resumeWake, trainWake, wakeEnabled, wakeLog, wakeModel } from '../despertar.js';
 import { createMic } from '../microfono.js';
 import { cancelHandsFree, handsFree, initHandsFree } from './manosLibres.js';
 import { leavePlanOf, scheduleReminders } from '../reminders.js';
@@ -497,6 +497,7 @@ export function openAssistant(cmd) {
     '<form class="siri-form" hidden><input autocomplete="off" enterkeyhint="send" placeholder="Escribe o dicta con el 🎤 del teclado"><button aria-label="Enviar">➤</button></form>' +
     '<div class="siri-status"></div>' +
     '<button type="button" class="siri-wake" data-swake></button>' +
+    '<button type="button" class="siri-wake" data-strain></button>' +
     '<div class="siri-heard"></div>' +
     '<button type="button" class="siri-retry" data-sretry>🎙️ Usar el micro de la app</button>' +
     '<div class="siri-bottom"><button type="button" class="siri-kb" data-skb aria-label="Escribir">⌨️</button>' +
@@ -510,6 +511,12 @@ export function openAssistant(cmd) {
   const wakeBtn = root.querySelector('[data-swake]');
   const paintWake = () => { wakeBtn.textContent = wakeEnabled() ? '👂 «Oye Rutivo» activado' : '👂 Activar «Oye Rutivo»'; wakeBtn.classList.toggle('on', wakeEnabled()); };
   paintWake();
+  const trainBtn = root.querySelector('[data-strain]');
+  const paintTrain = () => {
+    trainBtn.textContent = wakeModel() ? '🎯 «Oye Rutivo» con tu voz ✓ · Volver a entrenar' : '🎯 Entrena «Oye Rutivo» con tu voz (contesta en 1 s)';
+    trainBtn.classList.toggle('on', !!wakeModel());
+  };
+  paintTrain();
   // Lo último que oyó «Oye Rutivo» fuera de esta pantalla (para saber qué entiende si no responde)
   const heardTexts = wakeLog().filter((h) => h.text).slice(-3).map((h) => '«' + h.text.trim().slice(0, 60) + '»');
   root.querySelector('.siri-heard').textContent = heardTexts.length ? '👂 Lo último que oí fuera: ' + heardTexts.join(' · ') : '';
@@ -521,6 +528,24 @@ export function openAssistant(cmd) {
       writeFlag('oyeRutivo', wakeEnabled() ? '0' : '1');
       paintWake();
       return setState('idle', wakeEnabled() ? 'Listo: con la app abierta, di «Oye Rutivo» y te escucho.' : '«Oye Rutivo» desactivado. Toca el icono para hablar.');
+    }
+    if (el.matches('[data-strain]')) {
+      if (trainBtn.disabled) return;
+      stopListening();
+      convo = false;
+      trainBtn.disabled = true;
+      const say = ['', 'otra vez', 'una última vez'];
+      trainWake((i, st) => {
+        if (!ui) return;
+        if (st === 'escucha') setState('listening', '🎯 Di «Oye Rutivo» ' + (say[i] || '') + ' (' + (i + 1) + ' de 3)');
+        else if (st === 'otra') setState('idle', '🤔 No te he oído bien. Dilo otra vez, normal, como lo dirías en el coche.');
+        else setState('idle', '✔ ' + i + ' de 3');
+      }).then((ok) => {
+        trainBtn.disabled = false;
+        paintTrain();
+        if (ui) setState('idle', ok ? '✅ Listo. Con la app abierta, di «Oye Rutivo» y te contesto al momento.' : 'No se pudo entrenar. Prueba otra vez en un sitio con menos ruido.');
+      }, () => { trainBtn.disabled = false; if (ui) setState('idle', 'No se pudo usar el micro. Toca otra vez.'); });
+      return;
     }
     if (el.matches('[data-svoz]')) { writeFlag(VOICE_KEY, voiceOn() ? '0' : '1'); paintVoz(); try { speechSynthesis.cancel(); } catch { /* */ } return setState('idle'); }
     if (el.matches('[data-sorb]')) return listen(); // escuchar; si ya escucha, «he terminado»; si habla, se calla y te escucha

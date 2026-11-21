@@ -5,7 +5,8 @@
 // Se escucha en trozos de hasta unos segundos: con ruido de fondo constante (motor,
 // radio, aire) la frase nunca «termina», así que los trozos largos también se analizan.
 import { readFlag, writeFlag } from './dom.js';
-import { createMic } from './microfono.js';
+import { createMic, resample } from './microfono.js';
+import { calibrate, detectIn, templateOf, templateSamples, trimSilence } from './kws.js';
 import { earSupported, prepareEar, transcribe } from './oido.js';
 
 const KEY = 'oyeRutivo';
@@ -73,6 +74,117 @@ export function wakeMatch(text) {
   return null;
 }
 
+// ---------- «Oye Rutivo» con tu voz (respuesta en ~1 s; ver kws.js) ----------
+const MODEL_KEY = 'oyeHuella';
+/** Huellas de tu «Oye Rutivo» (o null si aún no lo has entrenado). */
+export function wakeModel() {
+  try {
+    const m = JSON.parse(localStorage.getItem(MODEL_KEY) || 'null');
+    return m && Array.isArray(m.t) && m.t.length && typeof m.thr === 'number' ? m : null;
+  } catch {
+    return null;
+  }
+}
+export function forgetWakeModel() {
+  try { localStorage.removeItem(MODEL_KEY); } catch { /* nada */ }
+}
+/**
+ * Entrena con tu voz: graba `n` veces «Oye Rutivo». `step(i, estado)` cuenta cómo va
+ * ('escucha' | 'ok' | 'otra'). Devuelve true si quedó guardado.
+ */
+export async function trainWake(step = () => {}, n = 3) {
+  pauseWake();
+  const m = createMic({ maxMs: 4500, silenceMs: 600 });
+  const t = [];
+  try {
+    for (let tries = 0; t.length < n && tries < n + 4; tries++) {
+      step(t.length, 'escucha');
+      const audio = await m.listen();
+      // Con el motor en marcha la grabación no «termina» sola: se recorta alrededor de tu voz
+      const voice = audio ? trimSilence(audio) : null;
+      const secs = voice ? voice.length / 16000 : 0;
+      if (!voice || secs < 0.4 || secs > 2.8) { step(t.length, 'otra'); continue; }
+      const tpl = templateOf(voice);
+      if (tpl.length < 25) { step(t.length, 'otra'); continue; }
+      t.push(tpl);
+      step(t.length, 'ok');
+    }
+  } finally {
+    m.close();
+  }
+  if (t.length < n) return false;
+  try { localStorage.setItem(MODEL_KEY, JSON.stringify({ t, thr: calibrate(t), at: Date.now() })); } catch { return false; }
+  return true;
+}
+
+const NEAR = 0.15; // «casi»: hasta 0,15 por encima del umbral, lo confirma el reconocedor completo
+const MAX_LEARNED = 4; // ejemplos aprendidos solos (además de los 3 del entreno)
+
+/** Aprende de un «Oye Rutivo» que el detector rápido casi no reconoció (confirmado por el reconocedor completo). */
+function learn(phrase) {
+  const m = wakeModel();
+  if (!m || !phrase) return false;
+  const tpl = templateOf(phrase);
+  if (tpl.length < 25) return false;
+  const base = m.t.slice(0, 3);
+  const learned = m.t.slice(3).concat([tpl]).slice(-MAX_LEARNED);
+  try { localStorage.setItem(MODEL_KEY, JSON.stringify({ ...m, t: base.concat(learned), learned: (m.learned || 0) + 1 })); } catch { return false; }
+  return true;
+}
+
+const STEP_CHUNKS = 3; // mira cada ~0,25 s
+const WINDOW_S = 2.6; // los últimos 2,6 s
+const AFTER_S = 0.45; // tras «Oye Rutivo», si callas 0,45 s contesta; si sigues hablando, espera a la orden
+
+/**
+ * Mientras se graba: ¿acabas de decir «Oye Rutivo»? Si después callas, se para
+ * enseguida (contesta en ~1 s aunque haya ruido de fondo). Si sigues hablando
+ * («Oye Rutivo, apúntame 20…»), se deja grabar la orden entera.
+ */
+function streamWatcher(model, found) {
+  let calls = 0;
+  const len = templateSamples(model);
+  return (chunks, rate) => {
+    if (++calls % STEP_CHUNKS) return false;
+    let total = 0;
+    for (const c of chunks) total += c.length;
+    const need = Math.round(WINDOW_S * rate);
+    const raw = new Float32Array(Math.min(total, need));
+    for (let i = chunks.length - 1, o = raw.length; i >= 0 && o > 0; i--) {
+      const c = chunks[i];
+      const take = Math.min(c.length, o);
+      raw.set(c.subarray(c.length - take), o - take);
+      o -= take;
+    }
+    const win = resample(raw, rate);
+    const total16 = Math.round((total * 16000) / rate);
+    if (!found.hit) {
+      if (win.length < len * 0.6) return false;
+      const r = detectIn(model, win, Math.max(0, Math.round((win.length - len * 0.6) / 160)));
+      if (!r.match) {
+        // Casi: se guarda el trozo por si el reconocedor completo confirma que era «Oye Rutivo» (y se aprende)
+        if (r.d <= model.thr + NEAR && (!found.near || r.d < found.near.d)) {
+          found.near = { d: r.d, phrase: win.slice(Math.max(0, r.endSample - Math.round(len * 1.3)), r.endSample) };
+        }
+        return false;
+      }
+      let e = 0;
+      for (let i = Math.max(0, r.endSample - len); i < r.endSample; i++) e += win[i] * win[i];
+      found.hit = { end: total16 - (win.length - r.endSample), rms: Math.sqrt(e / Math.max(1, len)), d: r.d };
+      return false;
+    }
+    const after = total16 - found.hit.end;
+    if (after < AFTER_S * 16000) return false;
+    // ¿Sigues hablando? (la voz suena bastante más que el ruido de fondo)
+    const tail = win.subarray(Math.max(0, win.length - Math.round(AFTER_S * 16000)));
+    let e = 0;
+    for (const v of tail) e += v * v;
+    const level = Math.sqrt(e / Math.max(1, tail.length));
+    if (level < found.hit.rms * 0.35) { found.only = true; return true; } // solo «Oye Rutivo»: contesta ya
+    return false; // sigue hablando: que acabe la frase (la orden)
+  };
+}
+
 let onWake = () => {};
 let onState = () => {};
 let onProgress = () => {};
@@ -103,7 +215,7 @@ async function analyze() {
   analyzing = true;
   try {
     while (queue.length && !paused && !woke) {
-      const audio = queue.shift();
+      const { audio, near } = queue.shift();
       const secs = audio.length / 16000;
       let text = '';
       try {
@@ -115,6 +227,8 @@ async function analyze() {
       heard.push({ secs, text });
       const m = wakeMatch(text);
       if (m && !paused && !woke) {
+        // El detector rápido casi lo tenía: aprende este ejemplo (tu voz, tu coche) para la próxima
+        if (near && learn(near.phrase)) heard[heard.length - 1].learned = true;
         woke = true;
         queue = [];
         pauseWake(); // para el micro de la escucha de fondo (el asistente usa el suyo)
@@ -141,8 +255,10 @@ async function loop() {
     let deaf = 0;
     while (!paused && !woke && wakeEnabled() && document.visibilityState === 'visible') {
       let audio;
+      const model = wakeModel();
+      const found = {};
       try {
-        audio = await mic.listen();
+        audio = await mic.listen(() => {}, model ? streamWatcher(model, found) : null);
         deaf = 0;
       } catch (err) {
         if (mic) mic.close();
@@ -156,6 +272,20 @@ async function loop() {
         continue;
       }
       if (paused || woke || !audio) continue;
+      // Detectado con tu voz: contesta ya. Si dijiste la orden seguida, se entiende lo de después.
+      if (found.hit && !woke) {
+        woke = true;
+        queue = [];
+        if (heard.length > 20) heard.shift();
+        heard.push({ secs: audio.length / 16000, text: '«Oye Rutivo» (tu voz)' + (found.only ? '' : ' + orden') });
+        const rest = found.only ? null : audio.subarray(Math.min(audio.length, found.hit.end));
+        pauseWake();
+        if (!rest || rest.length < 0.6 * 16000) { onWake(''); return; }
+        let text = '';
+        try { text = await transcribe(rest); } catch { text = ''; }
+        onWake(String(text || '').trim());
+        return;
+      }
       const secs = audio.length / 16000;
       if (secs < MIN_S) {
         if (heard.length > 20) heard.shift();
@@ -163,7 +293,7 @@ async function loop() {
         continue;
       }
       // A la cola y a seguir escuchando enseguida (sin esperar a entenderlo)
-      queue.push(audio);
+      queue.push({ audio, near: found.near || null });
       if (queue.length > 2) queue.shift(); // si se acumulan, mandan las más recientes
       analyze();
     }
