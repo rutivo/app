@@ -6,6 +6,10 @@ import { clientProblems, fingerprint, isoWithZone, issuerProblems, lastHash, nex
 import { baseOf, invoiceTotals, nextInvoiceNumber } from '../money.js';
 import { S, exportBackup, importBackup, markBackupDone, save } from '../store.js';
 import { csvCell, esc, eur, fd, r2, slug, today, uid } from '../utils.js';
+import { isEn } from '../i18n.js';
+
+/** Factura bilingüe con la app en inglés: «Factura / Invoice» (en España debe poder leerse en castellano). */
+const bi = (es, en) => (isEn() ? es + ' / ' + en : es);
 
 const HTML2CANVAS = 'vendor/html2canvas-1.4.1.min.js';
 const JSPDF = 'vendor/jspdf-4.2.1.umd.min.js';
@@ -320,8 +324,8 @@ function showInvoice(f) {
       const base = baseOf(item.i, iva);
       return (
         '<tr><td>' + fd(item.f) + '</td>' +
-        '<td><b>Servicio Transfer' + (lic ? ' ' + esc(lic) : '') + ' – ' + esc(item.d) + '</b><br>' +
-        '<small>Recogida en ' + esc(item.o) + (item.h ? ', ' + esc(item.h) + ' h' : '') + (item.n ? ' · ' + esc(item.n) : '') + '</small></td>' +
+        '<td><b>' + bi('Servicio Transfer', 'Transfer service') + (lic ? ' ' + esc(lic) : '') + ' – ' + esc(item.d) + '</b><br>' +
+        '<small>' + bi('Recogida en', 'Pickup at') + ' ' + esc(item.o) + (item.h ? ', ' + esc(item.h) + ' h' : '') + (item.n ? ' · ' + esc(item.n) : '') + '</small></td>' +
         '<td class="r">' + eur(base) + '</td><td class="r">' + eur(r2(item.i - base)) + '</td><td class="r">' + eur(item.i) + '</td></tr>'
       );
     })
@@ -330,26 +334,26 @@ function showInvoice(f) {
   $('#sheet').innerHTML =
     '<div class="hd">' + logoSvg(170, '#14202b') +
     '<div class="em"><div><b>' + esc(em.nom) + '</b></div>' +
-    '<div><small>NIF</small> ' + esc(em.nif) + (lic ? ' · <small>Licencia</small> <span class="nw">' + esc(lic) + '</span>' : '') + '</div>' +
+    '<div><small>' + bi('NIF', 'Tax ID') + '</small> ' + esc(em.nif) + (lic ? ' · <small>' + bi('Licencia', 'Licence') + '</small> <span class="nw">' + esc(lic) + '</span>' : '') + '</div>' +
     (em.dir ? '<div>' + esc(em.dir) + '</div>' : '') +
     (place ? '<div>' + esc(place) + '</div>' : '') +
     '</div></div>' +
-    '<h3>' + (rect ? 'Factura rectificativa' : 'Factura') + (f.anulada ? ' <span class="anulada">ANULADA por ' + esc(f.anulada) + '</span>' : '') + '</h3>' +
+    '<h3>' + (rect ? bi('Factura rectificativa', 'Corrective invoice') : bi('Factura', 'Invoice')) + (f.anulada ? ' <span class="anulada">' + bi('ANULADA por', 'CANCELLED by') + ' ' + esc(f.anulada) + '</span>' : '') + '</h3>' +
     '<div class="meta">' +
-    '<div class="box"><small>Cliente</small><b>' + esc(cl.nom) + '</b>' + (cl.nif ? '<br>NIF: ' + esc(cl.nif) : '') + (cl.dir ? '<br>' + esc(cl.dir) : '') + '</div>' +
-    '<div class="box"><small>Datos de la factura</small>Número: <b>' + esc(f.num) + '</b><br>Fecha de expedición: ' + fd(f.fecha) +
-    (rect ? '<br>Rectifica a la factura <b>' + esc(f.rect.num) + '</b> de ' + fd(f.rect.fecha) + '<br>Motivo: ' + esc(f.rect.motivo) : '') + '</div>' +
+    '<div class="box"><small>' + bi('Cliente', 'Client') + '</small><b>' + esc(cl.nom) + '</b>' + (cl.nif ? '<br>' + bi('NIF', 'Tax ID') + ': ' + esc(cl.nif) : '') + (cl.dir ? '<br>' + esc(cl.dir) : '') + '</div>' +
+    '<div class="box"><small>' + bi('Datos de la factura', 'Invoice details') + '</small>' + bi('Número', 'No.') + ': <b>' + esc(f.num) + '</b><br>' + bi('Fecha de expedición', 'Issue date') + ': ' + fd(f.fecha) +
+    (rect ? '<br>' + bi('Rectifica a la factura', 'Corrects invoice') + ' <b>' + esc(f.rect.num) + '</b> ' + bi('de', 'of') + ' ' + fd(f.rect.fecha) + '<br>' + bi('Motivo', 'Reason') + ': ' + esc(f.rect.motivo) : '') + '</div>' +
     '</div>' +
-    '<table><tr><th>Fecha</th><th>Concepto</th><th class="r">Base</th><th class="r">IVA ' + esc(iva) + '%</th><th class="r">Total</th></tr>' + rows + '</table>' +
+    '<table><tr><th>' + bi('Fecha', 'Date') + '</th><th>' + bi('Concepto', 'Description') + '</th><th class="r">Base</th><th class="r">' + bi('IVA', 'VAT') + ' ' + esc(iva) + '%</th><th class="r">Total</th></tr>' + rows + '</table>' +
     '<div class="tot">' +
-    '<div><span>Base imponible</span><span>' + eur(totals.b) + '</span></div>' +
-    '<div><span>IVA (' + esc(iva) + '%)</span><span>' + eur(totals.v) + '</span></div>' +
-    '<div class="g"><span>Total factura</span><span>' + eur(totals.t) + '</span></div></div>' +
+    '<div><span>' + bi('Base imponible', 'Tax base') + '</span><span>' + eur(totals.b) + '</span></div>' +
+    '<div><span>' + bi('IVA', 'VAT') + ' (' + esc(iva) + '%)</span><span>' + eur(totals.v) + '</span></div>' +
+    '<div class="g"><span>' + bi('Total factura', 'Invoice total') + '</span><span>' + eur(totals.t) + '</span></div></div>' +
     (!(iva > 0) && em.ivaMot ? '<div class="legal-mention">' + esc(em.ivaMot) + '</div>' : '') +
 
-    '<div class="ft"><div><div>' + esc(em.nom) + (lic ? ' · Licencia ' + esc(lic) : '') + (em.loc ? ' · ' + esc(em.loc) : '') + '</div>' +
-    (em.iban ? '<div>Número de cuenta (IBAN): <b class="nw">' + esc(formatIban(em.iban)) + '</b></div>' : '') +
-    '</div><span>Factura ' + esc(f.num) + '</span></div>';
+    '<div class="ft"><div><div>' + esc(em.nom) + (lic ? ' · ' + bi('Licencia', 'Licence') + ' ' + esc(lic) : '') + (em.loc ? ' · ' + esc(em.loc) : '') + '</div>' +
+    (em.iban ? '<div>' + bi('Número de cuenta (IBAN)', 'Bank account (IBAN)') + ': <b class="nw">' + esc(formatIban(em.iban)) + '</b></div>' : '') +
+    '</div><span>' + bi('Factura', 'Invoice') + ' ' + esc(f.num) + '</span></div>';
 
   $('#invanul').hidden = !!(rect || f.anulada);
   $('#invanul').dataset.af = f.id;

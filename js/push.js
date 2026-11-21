@@ -1,6 +1,7 @@
 // Notificaciones con la app cerrada (Web Push). El móvil se suscribe y manda la
 // lista de avisos al servidor de Rutivo (worker/avisos.js), que los envía a su hora.
 // En iPhone solo funciona con Rutivo añadido a la pantalla de inicio (iOS 16.4+).
+import { tr } from './i18n.js';
 import { FLIGHT_API, PUSH_PUBLIC_KEY } from './config.js';
 import { readFlag, writeFlag } from './dom.js';
 
@@ -54,7 +55,11 @@ const tz = () => {
 };
 
 /** Pide permiso, suscribe el móvil y manda un aviso de prueba. Lanza error si no se puede. */
+/** Textos de los avisos en el idioma de la app. */
+const inLang = (alarms) => alarms.map((a) => ({ ...a, title: tr(a.title), body: tr(a.body) }));
+
 export async function enablePush(alarms = []) {
+  alarms = inLang(alarms);
   if (Notification.permission !== 'granted' && (await Notification.requestPermission()) !== 'granted') throw new Error('permiso');
   const sub = await subscription(true);
   const res = await post({ sub: sub.toJSON(), alarms, tz: tz(), test: true });
@@ -74,6 +79,7 @@ export async function pushActive() {
 
 /** Manda la lista de avisos al servidor (solo si ha cambiado o hace 30 min). */
 export async function syncAlarms(alarms) {
+  alarms = inLang(alarms);
   if (!(await pushActive())) return false;
   const h = JSON.stringify(alarms);
   let last = {};

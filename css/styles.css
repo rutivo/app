@@ -1078,3 +1078,6 @@ a.row-btn, a.row-btn:visited { text-decoration: none; color: inherit; }
 a.row-btn .chev { text-decoration: none; }
 /* Avisos de sincronización */
 .warn-card { border-left: 4px solid var(--out) !important; }
+
+/* Idioma: banderas en el selector */
+.theme-swatch.flag { display: inline-flex; align-items: center; justify-content: center; font-size: 22px; background: var(--sec-bg); }

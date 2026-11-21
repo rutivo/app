@@ -5,6 +5,7 @@ import { checkLegal } from './legal.js';
 import { renderReminders, scheduleReminders } from './reminders.js';
 import { loadLocal, migratePhotos, requestPersistentStorage } from './store.js';
 import { initUpdates } from './actualizar.js';
+import { initI18n, initLangChoice } from './i18n.js';
 import { initTheme, renderThemeChoice } from './theme.js';
 import { initCaja, renderCaja } from './views/caja.js';
 import { accountsEnabled, initAccount, renderAccount } from './views/cuenta.js';
@@ -89,6 +90,8 @@ function drawFavicon() {
 }
 
 initTheme();
+initI18n(); // en inglés, traduce la pantalla (y todo lo que vaya apareciendo)
+initLangChoice();
 loadLocal();
 initTabs();
 drawFavicon();

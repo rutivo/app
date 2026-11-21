@@ -1,4 +1,5 @@
 // PDF con todas las facturas de gasolina de un periodo: resumen + un ticket por página.
+import { tr } from '../i18n.js';
 import { downloadPhoto } from '../cloud.js';
 import { loadScript } from '../dom.js';
 import { fuelBetween } from '../fuelPack.js';
@@ -33,7 +34,7 @@ export async function fuelPdf(from, to, progress = () => {}) {
     pdf.setFont('helvetica', opts.bold ? 'bold' : 'normal');
     pdf.setFontSize(opts.size || 10);
     pdf.setTextColor(opts.color || 20);
-    pdf.text(t, x, y, opts.align ? { align: opts.align } : undefined);
+    pdf.text(tr(t), x, y, opts.align ? { align: opts.align } : undefined);
   };
 
   // Portada con la lista

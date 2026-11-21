@@ -2,6 +2,7 @@
 // - Con los avisos del servidor activados (Web Push), llegan aunque la app esté
 //   cerrada, y el «Sal ya» se mueve solo si el vuelo se retrasa.
 // - Si el móvil no puede, funcionan con la app abierta o recién cerrada.
+import { tr } from './i18n.js';
 import { $, toast } from './dom.js';
 import { cachedStatus } from './flight.js';
 import { disablePush, enablePush, isIOS, pushActive, pushSupport, syncAlarms } from './push.js';
@@ -34,6 +35,8 @@ const writeFired = (o) => {
 };
 
 async function notify(tag, title, body) {
+  title = tr(title);
+  body = tr(body);
   try {
     if ('serviceWorker' in navigator) {
       const reg = await navigator.serviceWorker.getRegistration();
