@@ -11,6 +11,8 @@ import { S } from '../store.js';
 import { amend, execute, undo as undoDone } from '../vozAcciones.js';
 
 const VOICE_KEY = 'asisVoz';
+// Al dar una orden se hacen pausas («apúntame… treinta… en efectivo»): no cortar antes de tiempo
+const COMMAND_MIC = { silenceMs: 1400, shortMs: 600 };
 let rerender = () => {};
 let openFull = () => {};
 let busy = false;
@@ -138,7 +140,7 @@ function undoLast() {
 // ---------- conversación ----------
 
 async function hear() {
-  mic = mic || createMic();
+  mic = mic || createMic(COMMAND_MIC);
   const audio = await mic.listen((rms) => { if (bubble) bubble.style.setProperty('--lvl', Math.min(1, rms * 9).toFixed(2)); });
   if (bubble) bubble.style.setProperty('--lvl', '0');
   if (!audio || cancelled) return '';

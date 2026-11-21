@@ -23,29 +23,38 @@ export function resample(data, from, to = RATE) {
  * Detector de voz por energía con suelo de ruido que se adapta (radio, motor…).
  * Recibe el nivel (RMS) de cada trozo y dice cuándo empieza y acaba la frase.
  */
-export function createVad({ chunkMs, silenceMs = 1100, maxMs = 15000, waitMs = 7000 } = {}) {
+export function createVad({ chunkMs, silenceMs = 1100, maxMs = 15000, waitMs = 7000, shortMs = 0 } = {}) {
   let floor = null;
   let speaking = false;
   let heard = 0;
+  let voiced = 0; // tiempo total con voz (para saber si solo se dijo una palabra)
   let quiet = 0;
   let t = 0;
   return {
     /** Devuelve 'wait' | 'speech' | 'end' | 'timeout' */
     push(rms) {
       t += chunkMs;
+      // Ruido de fondo: sale de los momentos tranquilos (si empezaste a hablar
+      // nada más abrirse el micro, baja en cuanto haces la primera pausa)
       if (floor === null) floor = rms;
-      const threshold = Math.max(0.012, floor * 2.6);
-      if (rms > threshold) {
+      const on = Math.max(0.012, floor * 2.6); // para empezar a contar como voz
+      const off = Math.max(0.009, floor * 1.7); // ya hablando: las palabras más bajas también son voz
+      if (rms > (speaking ? off : on)) {
         heard += chunkMs;
+        voiced += chunkMs;
         quiet = 0;
         if (heard >= 120) speaking = true; // al menos 0,12 s de voz: no es un golpe suelto
       } else {
         quiet += chunkMs;
         if (!speaking) heard = Math.max(0, heard - chunkMs);
-        // El suelo de ruido sigue al ruido de fondo, despacio
-        floor = floor * 0.95 + rms * 0.05;
       }
-      if (speaking && quiet >= silenceMs) return 'end';
+      // El ruido de fondo baja rápido (silencio de verdad) y sube despacio (ruido que aumenta)
+      if (rms < floor) floor = floor * 0.7 + rms * 0.3;
+      else if (!speaking && rms <= on) floor = floor * 0.85 + rms * 0.15; // antes de hablar: aprende el ruido del coche
+      else if (rms < off) floor = floor * 0.97 + rms * 0.03;
+      // Si solo has dicho una palabra («apúntame…»), espera un poco más: seguramente sigues
+      const need = silenceMs + (voiced < 700 ? shortMs : 0);
+      if (speaking && quiet >= need) return 'end';
       if (t >= maxMs) return speaking ? 'end' : 'timeout';
       if (!speaking && t >= waitMs) return 'timeout';
       return speaking ? 'speech' : 'wait';
@@ -140,7 +149,7 @@ let capturing = 0; // frases grabándose ahora mismo (en todos los micros)
 /** ¿Hay algún micro grabando una frase en este momento? */
 export const isCapturing = () => capturing > 0;
 
-export function createMic({ deafMs = 1500, maxMs = 15000, silenceMs = 1100 } = {}) {
+export function createMic({ deafMs = 1500, maxMs = 15000, silenceMs = 1100, shortMs = 0 } = {}) {
   let stream = null;
   let ctx = null;
   let source = null;
@@ -229,7 +238,7 @@ export function createMic({ deafMs = 1500, maxMs = 15000, silenceMs = 1100 } = {
       if (session) finish(false);
       await wake();
       return new Promise((resolve, reject) => {
-        const s = { chunks: [], resolve, reject, onLevel, onChunk, forced: false, vad: createVad({ chunkMs: (4096 / ctx.sampleRate) * 1000, maxMs, silenceMs }), started: Date.now(), retried: false, busy: false };
+        const s = { chunks: [], resolve, reject, onLevel, onChunk, forced: false, vad: createVad({ chunkMs: (4096 / ctx.sampleRate) * 1000, maxMs, silenceMs, shortMs }), started: Date.now(), retried: false, busy: false };
         session = s;
         capturing++;
         // Vigilante: el detector de voz cuenta el tiempo con el sonido que llega;
@@ -253,7 +262,7 @@ export function createMic({ deafMs = 1500, maxMs = 15000, silenceMs = 1100 } = {
           }
           s.started = Date.now();
           s.chunks = [];
-          s.vad = createVad({ chunkMs: (4096 / ctx.sampleRate) * 1000, maxMs, silenceMs });
+          s.vad = createVad({ chunkMs: (4096 / ctx.sampleRate) * 1000, maxMs, silenceMs, shortMs });
           s.busy = false;
         }, 250);
       });

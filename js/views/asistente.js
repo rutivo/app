@@ -18,6 +18,8 @@ import { amend, execute, undo as undoDone } from '../vozAcciones.js';
 import { driverName } from '../welcome.js';
 
 const VOICE_KEY = 'asisVoz';
+// Al dar una orden se hacen pausas («apúntame… treinta… en efectivo»): no cortar antes de tiempo
+const COMMAND_MIC = { silenceMs: 1400, shortMs: 600 };
 const SUGGEST = ['¿Cuánto llevo hoy?', '¿Qué tengo mañana?', '¿Qué tiempo hace?', '¿Quién me debe?', 'Apunta 50 € en efectivo', '¿Cuánto gané este mes?', '¿Qué puedo decirte?'];
 const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 const isIOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
@@ -26,6 +28,7 @@ const HISTORY_MAX = 60;
 let ctx = {};
 let lastDone = null; // lo último apuntado por voz (para «no, eran 45» o «borra lo último»)
 let stopped = false; // se tocó «Parar»: lo que estuviera entendiendo ya no se hace
+let emptyTries = 0; // veces seguidas que no se entendió nada
 /** El hilo de la conversación con lo último apuntado (el asistente lo usa para corregir o quitar). */
 const withDone = () => ({ ...ctx, done: lastDone });
 let rerenderAll = () => {};
@@ -327,7 +330,7 @@ async function listenEar(auto = false) {
   }
   earBusy = true;
   try {
-    mic = mic || createMic();
+    mic = mic || createMic(COMMAND_MIC);
     if (!earLoading) {
       earLoading = prepareEar(earProgress).then(() => { earReady = true; });
       earLoading.catch(() => { earLoading = null; });
@@ -365,7 +368,19 @@ async function listenEar(auto = false) {
     earBusy = false;
     if (!ui) return;
     if (stopped) return setState('idle', 'Parado. Toca la bola para hablar.');
-    if (!text) { convo = false; return setState('idle', 'No te he entendido. Toca la bola y repítelo.'); }
+    if (!text) {
+      // En plena conversación, una vez: lo vuelve a intentar solo (sin tener que tocar la bola)
+      if ((auto || convo) && emptyTries < 1) {
+        emptyTries++;
+        convo = true; // al terminar de hablar, vuelve a escuchar
+        speak('No te he entendido. Repítemelo.');
+        return;
+      }
+      emptyTries = 0;
+      convo = false;
+      return setState('idle', 'No te he entendido. Toca la bola y repítelo.');
+    }
+    emptyTries = 0;
     convo = true;
     const clean = trimChatter(text);
     handle(clean, [], clean !== text ? 0.4 : undefined); // si había charla de fondo, pide confirmar

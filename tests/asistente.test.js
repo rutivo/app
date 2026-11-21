@@ -338,3 +338,23 @@ test('«Apúntame X como gasto/ingreso en efectivo/tarjeta» (como lo dice el co
     assert.ok(!/^esto$/i.test(x.c), q + ': el concepto no es «esto» (' + x.c + ')');
   }
 });
+
+test('micro: no corta la frase por una pausa ni si empiezas a hablar nada más abrirlo', async () => {
+  const { createVad } = await import('../js/microfono.js');
+  const ck = (4096 / 48000) * 1000;
+  const seg = (lvl, ms) => Array(Math.round(ms / ck)).fill(lvl);
+  const endOf = (levels, opts) => { const v = createVad({ chunkMs: ck, silenceMs: 1400, shortMs: 600, ...opts }); let end = null; levels.forEach((l, i) => { if (v.push(l) === 'end' && end === null) end = (i + 1) * ck; }); return end; };
+  // «Ingresa… (pausa de 1,3 s pensando) …treinta en efectivo» (la captura: solo oyó «ingresas.»)
+  const pausa = [...seg(0.01, 300), ...seg(0.08, 500), ...seg(0.012, 1300), ...seg(0.07, 900)];
+  assert.ok(endOf([...pausa, ...seg(0.01, 3000)]) > pausa.length * ck, 'no corta en la pausa');
+  // Empieza a hablar en cuanto se abre el micro
+  const ya = [...seg(0.12, 500), ...seg(0.012, 250), ...seg(0.06, 400), ...seg(0.013, 250), ...seg(0.055, 450), ...seg(0.012, 300), ...seg(0.06, 600)];
+  assert.ok(endOf([...ya, ...seg(0.01, 3000)]) > ya.length * ck, 'detecta la voz y espera al final');
+  // Las palabras más bajas después de una fuerte siguen contando como voz
+  const bajas = [...seg(0.01, 300), ...seg(0.1, 400), ...seg(0.03, 350), ...seg(0.045, 400), ...seg(0.028, 300), ...seg(0.04, 500)];
+  assert.ok(endOf([...bajas, ...seg(0.01, 3000)]) > bajas.length * ck);
+  // Coche con ruido fuerte: termina igual (no se queda escuchando para siempre)
+  const coche = [...seg(0.04, 600), ...seg(0.15, 500), ...seg(0.09, 300), ...seg(0.14, 700)];
+  const e = endOf([...coche, ...seg(0.04, 3000)]);
+  assert.ok(e && e > coche.length * ck && e < coche.length * ck + 2200, String(e));
+});
