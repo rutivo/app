@@ -1,5 +1,6 @@
 // Pantalla "Gasolina": facturas de combustible con foto o PDF.
-import { canStorePhotoInCloud, deletePhoto, downloadPhoto, uploadPhoto } from '../cloud.js';
+import { canStorePhotoInCloud, deletePhoto, downloadPhoto, uploadPhotoNow } from '../cloud.js';
+import { fitPhoto, photoUploaded, syncPhotos } from '../fotos.js';
 import { $, downloadBlob, loadScript, onClick, shareFiles, toast } from '../dom.js';
 import { PERIODS, fuelBetween, packName, periodRange } from '../fuelPack.js';
 import { parseFuelReceipt } from '../fuelReceipt.js';
@@ -41,11 +42,12 @@ async function pdfToImage(file) {
 
 /** Guarda la foto en el móvil y/o en la cuenta. Devuelve true si se guardó en algún sitio. */
 async function storeReceipt(id, file) {
-  const dataUrl = file.type === 'application/pdf' ? await pdfToImage(file) : await shrinkImage(file);
+  const raw = file.type === 'application/pdf' ? await pdfToImage(file) : await shrinkImage(file);
+  const dataUrl = await fitPhoto(raw).catch(() => raw); // que quepa en la nube (antes las grandes se quedaban solo en el móvil)
   const local = await savePhotoLocal(id, dataUrl);
   const cloud = canStorePhotoInCloud(dataUrl);
   if (!local && !cloud) return false;
-  if (cloud) uploadPhoto(id, dataUrl);
+  if (cloud) uploadPhotoNow(id, dataUrl).then((ok) => { if (ok) photoUploaded(id); });
   return true;
 }
 
@@ -218,6 +220,9 @@ async function showReceipt(id) {
 
 export function initGasolina(rerender) {
   rerenderAll = rerender;
+  // Fotos que solo estaban en este móvil: se suben solas a la cuenta al sincronizar
+  let t = null;
+  window.addEventListener('rutivo:sync', () => { clearTimeout(t); t = setTimeout(() => syncPhotos().catch(() => {}), 1500); });
   $('#gf').value = today();
   $('#fg').onsubmit = saveFuel;
   $('#gh').onchange = () => {

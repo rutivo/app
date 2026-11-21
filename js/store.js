@@ -109,7 +109,7 @@ export function clearLocal() {
     const keys = [];
     for (let i = 0; i < localStorage.length; i++) keys.push(localStorage.key(i));
     for (const k of keys) {
-      if (k === STORAGE_KEY || k.startsWith(PHOTO_PREFIX) || k === 'avFired' || k === BACKUP_KEY || k === MIGRATED_KEY) localStorage.removeItem(k);
+      if (k === STORAGE_KEY || k.startsWith(PHOTO_PREFIX) || k === 'avFired' || k === BACKUP_KEY || k === MIGRATED_KEY || k === 'fotosNube') localStorage.removeItem(k);
     }
   } catch {
     /* sin almacenamiento */
@@ -227,6 +227,19 @@ export async function migratePhotos(now = Date.now()) {
 
 export const exportBackup = () => JSON.stringify(S);
 
+/** Copia completa para guardar en archivo: los datos y las fotos de los tickets que haya en este móvil. */
+export async function exportBackupFull() {
+  const fotos = {};
+  for (const g of S.gas) {
+    if (!g.ph) continue;
+    const p = await getPhotoLocal(g.id);
+    if (p) fotos[g.id] = p;
+  }
+  return JSON.stringify({ ...S, fotos });
+}
+
+const validPhoto = (v) => typeof v === 'string' && /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(v) && v.length < 3e6;
+
 /** Anota que se ha hecho una copia (para el recordatorio). */
 export function markBackupDone() {
   try {
@@ -256,8 +269,14 @@ export async function importBackup(text) {
   }
   if (!data || !data.mov || !data.srv || !data.cfg) throw new Error('invalid');
 
+  // Fotos de los tickets que vengan en la copia (archivo): se guardan en este móvil
+  if (data.fotos && typeof data.fotos === 'object') {
+    const wanted = new Set((Array.isArray(data.gas) ? data.gas : []).filter((g) => g && g.ph).map((g) => String(g.id)));
+    for (const [id, v] of Object.entries(data.fotos)) if (wanted.has(id) && /^[A-Za-z0-9_-]{1,40}$/.test(id) && validPhoto(v)) await savePhotoLocal(id, v);
+  }
+  const { fotos, ...rest } = data;
   const base = emptyState();
-  replaceState({ ...base, cfg: {}, ...data });
+  replaceState({ ...base, cfg: {}, ...rest });
   S.cfg = { iva: 10, ...S.cfg };
   // Las fotos no viajan en la copia: se quita la marca si no están en este dispositivo.
   for (const g of S.gas) if (g.ph && !(await getPhotoLocal(g.id))) delete g.ph;

@@ -139,6 +139,7 @@ const D = {
   'Copia de seguridad': 'Backup', 'Exportar copia': 'Export backup', 'Descarga un archivo con todos tus datos': 'Download a file with all your data', 'Importar copia': 'Import backup',
   'Recupera tus datos desde un archivo': 'Restore your data from a file', 'Copiar como texto': 'Copy as text', 'Alternativa si no puedes usar archivos': 'Alternative if you can’t use files',
   'Copiar mis datos': 'Copy my data', 'Restaurar': 'Restore', 'La copia incluye caja, servicios, facturas, gasolina, hucha y tus datos de emisor. No incluye las fotos de los tickets.': 'The backup includes cash, services, invoices, fuel, savings and your issuer details. It doesn’t include receipt photos.',
+  'La copia en archivo incluye caja, servicios, facturas, gasolina (con las fotos de los tickets), hucha y tus datos de emisor. «Copiar como texto» no lleva las fotos.': 'The backup file includes cash, services, invoices, fuel (with receipt photos), savings and your issuer details. «Copy as text» doesn\u2019t include the photos.',
   'Aquí aparece tu copia, o pega aquí una copia para restaurarla': 'Your backup appears here, or paste a backup here to restore it',
   'Legal': 'Legal', 'Condiciones, privacidad y aviso legal': 'Terms, privacy and legal notice (in Spanish)', 'Licencia': 'Licence',
   'Prohibida su copia, modificación o distribución sin autorización.': 'Copying, modification or distribution without permission is prohibited.',

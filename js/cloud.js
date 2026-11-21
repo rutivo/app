@@ -444,6 +444,17 @@ export function uploadPhoto(id, dataUrl) {
   if (remote) remote.putPhoto(id, dataUrl).catch(() => {});
 }
 
+/** Sube la foto y espera: true si quedó guardada en la cuenta. */
+export async function uploadPhotoNow(id, dataUrl) {
+  if (!remote) return false;
+  try {
+    await remote.putPhoto(id, dataUrl);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export async function downloadPhoto(id) {
   if (!remote) return null;
   try {

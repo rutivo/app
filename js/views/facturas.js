@@ -4,7 +4,7 @@ import { COLORS, ICON_NAMES, ICONS, accentColor, iconSvg, logoSvg } from '../log
 import { cloudEnabled, problemText, syncNow, syncProblems } from '../cloud.js';
 import { clientProblems, duplicateNumbers, fingerprint, isoWithZone, issuerProblems, lastHash, nextRectNumber, recordString } from '../facturaLegal.js';
 import { baseOf, invoiceTotals, nextInvoiceNumber } from '../money.js';
-import { S, exportBackup, importBackup, markBackupDone, save } from '../store.js';
+import { S, exportBackup, exportBackupFull, importBackup, markBackupDone, save } from '../store.js';
 import { csvCell, esc, eur, fd, r2, slug, today, uid } from '../utils.js';
 import { isEn } from '../i18n.js';
 
@@ -468,7 +468,7 @@ function restoreBackup() {
 
 /** Guarda la copia como archivo .json (compartir en el móvil o descarga). */
 export async function saveBackupFile() {
-  const blob = new Blob([exportBackup()], { type: 'application/json' });
+  const blob = new Blob([await exportBackupFull()], { type: 'application/json' }); // con las fotos de los tickets
   const filename = 'rutivo-copia-' + today() + '.json';
   const result = await saveFile(blob, filename, 'application/json');
   if (result === 'cancelled') return;
