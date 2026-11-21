@@ -14,10 +14,21 @@ const ok = (n, c, extra = '') => { res.push(!!c); console.log((c ? 'PASS ' : 'FA
 const OIDO = `
 export const earSupported = () => true;
 export async function prepareEar() {}
-export async function transcribe(audio) { self.__frases = (self.__frases || 0) + 1; return (self.__guion || []).shift() || ''; }
+export async function transcribe(audio, ms, opts) {
+  self.__frases = (self.__frases || 0) + 1;
+  self.__topes = (self.__topes || []).concat(opts && opts.maxTokens ? [opts.maxTokens] : []);
+  if (self.__lento) {
+    // Como un iPhone real: tarda en entender. ¿Sigue grabando el micro mientras tanto?
+    const m = await import('/js/microfono.js');
+    await new Promise((r) => setTimeout(r, self.__lento / 2));
+    (self.__oyendo = self.__oyendo || []).push(m.isCapturing());
+    await new Promise((r) => setTimeout(r, self.__lento / 2));
+  }
+  return (self.__guion || []).shift() || '';
+}
 `;
 
-async function run(browser, app, guion) {
+async function run(browser, app, guion, lento = 0) {
   const ctx = await browser.newContext({ locale: 'es-ES', permissions: ['microphone'], viewport: { width: 400, height: 860 } });
   await ctx.route('**/*', (r) => {
     const u = new URL(r.request().url());
@@ -28,10 +39,11 @@ async function run(browser, app, guion) {
   const page = await ctx.newPage();
   page.errors = [];
   page.on('pageerror', (e) => page.errors.push(e.message));
-  await page.addInitScript((guion) => {
+  await page.addInitScript(({ guion, lento }) => {
     for (const [k, v] of [['tipInstall', '1'], ['legalAcepta', '1'], ['lastBackup', String(Date.now())], ['oyeRutivo', '1']]) localStorage.setItem(k, v);
     localStorage.setItem('cajaTransfer', JSON.stringify({ mov: [], srv: [], gas: [], huc: [], fac: [], prv: [], jor: [], cli: {}, cfg: { nom: 'Antonio', iva: 10, legal: { v: 1, at: '2026-11-20' } } }));
     self.__guion = guion.slice();
+    self.__lento = lento;
     // Regla de Safari en iPhone: el audio solo arranca dentro de un toque
     let inGesture = false;
     for (const ev of ['pointerdown', 'touchend', 'click', 'keydown']) window.addEventListener(ev, () => { inGesture = true; setTimeout(() => { inGesture = false; }, 0); }, { capture: true });
@@ -48,7 +60,7 @@ async function run(browser, app, guion) {
     };
     Object.defineProperty(window, 'speechSynthesis', { configurable: true, get: () => fake });
     window.SpeechSynthesisUtterance = class { constructor(t) { this.text = t; } };
-  }, guion);
+  }, { guion, lento });
   await page.goto(app.url);
   await page.waitForTimeout(800);
   return { ctx, page };
@@ -90,6 +102,19 @@ const waitFor = async (page, fn, ms = 40000) => { const t = Date.now(); while (D
     m = await movs(page);
     ok('8 · después vuelve a escuchar solo: «Oye Rutivo, apúntame 12 de gasto» de un tirón', m.length === 2 && m[1].t === 'out' && m[1].i === 12 && m[1].p === 'efectivo', JSON.stringify(m));
     ok('9 · sin errores', !page.errors.length, page.errors.join(' | '));
+    await ctx.close();
+
+    // ---------- 3. Como en un iPhone: entender cada frase tarda 3 s ----------
+    ({ ctx, page } = await run(browser, app, ['música de la radio', 'Oye Rutivo', 'Apúntame 15 como gasto en efectivo'], 3000));
+    await page.mouse.click(200, 300);
+    await waitFor(page, async () => (await movs(page)).length > 0, 60000);
+    const oyendo = await page.evaluate(() => self.__oyendo || []);
+    ok('10 · mientras entiende una frase, el micro SIGUE grabando (antes se quedaba sordo y «Oye Rutivo» se perdía)', oyendo.length > 0 && oyendo.some(Boolean), JSON.stringify(oyendo));
+    m = await movs(page);
+    ok('11 · con un reconocedor lento también funciona: gasto de 15 € en efectivo', m.length === 1 && m[0].t === 'out' && m[0].i === 15 && m[0].p === 'efectivo', JSON.stringify(m));
+    const topes = await page.evaluate(() => self.__topes || []);
+    ok('12 · la escucha de fondo pide respuestas cortas (más rápida con ruido)', topes.length > 0 && topes.every((t) => t <= 30), JSON.stringify(topes));
+    ok('13 · sin errores', !page.errors.length, page.errors.join(' | '));
     await ctx.close();
   } finally {
     await browser.close();

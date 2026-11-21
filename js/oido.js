@@ -56,7 +56,7 @@ export function prepareEar(onProgress = () => {}) {
 const HALLUCINATIONS = /(subt[ií]tulos? (realizados?|por)|amara\.org|gracias por ver|suscr[ií]bete|www\.|¡?gracias!?$|^\s*\.+\s*$|m[uú]sica|\[.*\])/i;
 
 /** Texto de lo dicho (audio a 16 kHz), o '' si no se entendió nada. */
-export async function transcribe(audio, timeoutMs = 45000) {
+export async function transcribe(audio, timeoutMs = 45000, { maxTokens = 0 } = {}) {
   let timer;
   const limit = new Promise((resolve, reject) => {
     timer = setTimeout(() => {
@@ -68,7 +68,7 @@ export async function transcribe(audio, timeoutMs = 45000) {
       reject(new Error('tiempo'));
     }, timeoutMs);
   });
-  const raw = await Promise.race([call('transcribe', { audio, src: earSrc() }, [audio.buffer]), limit]).finally(() => clearTimeout(timer));
+  const raw = await Promise.race([call('transcribe', { audio, src: earSrc(), max: maxTokens }, [audio.buffer]), limit]).finally(() => clearTimeout(timer));
   const text = String(raw || '').trim();
   return HALLUCINATIONS.test(text) && text.split(' ').length < 6 ? '' : text;
 }

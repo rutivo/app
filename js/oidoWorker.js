@@ -34,11 +34,12 @@ async function load(src) {
 }
 
 self.onmessage = async (e) => {
-  const { id, type, audio, src } = e.data;
+  const { id, type, audio, src, max } = e.data;
   try {
     const p = await load(src);
     if (type === 'load') return self.postMessage({ id, text: '' });
-    const out = await p(audio, { language: 'spanish', task: 'transcribe', chunk_length_s: 30 });
+    // `max`: tope de palabras (para «Oye Rutivo…» basta con pocas; con ruido, Whisper se inventa frases largas y tarda)
+    const out = await p(audio, { language: 'spanish', task: 'transcribe', chunk_length_s: 30, ...(max > 0 ? { max_new_tokens: max } : {}) });
     self.postMessage({ id, text: out.text || '' });
   } catch (err) {
     self.postMessage({ id, error: String(err && err.message ? err.message : err) });

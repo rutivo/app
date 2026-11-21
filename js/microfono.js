@@ -144,7 +144,11 @@ export class DeafMicError extends Error {
  * pedir permiso en cada frase). Si el sistema lo deja mudo (en iPhone pasa
  * cuando el asistente habla), se vuelve a abrir solo.
  */
-export function createMic({ deafMs = 1500, maxMs = 15000 } = {}) {
+let capturing = 0; // frases grabándose ahora mismo (en todos los micros)
+/** ¿Hay algún micro grabando una frase en este momento? */
+export const isCapturing = () => capturing > 0;
+
+export function createMic({ deafMs = 1500, maxMs = 15000, silenceMs = 1100 } = {}) {
   let stream = null;
   let ctx = null;
   let source = null;
@@ -211,6 +215,7 @@ export function createMic({ deafMs = 1500, maxMs = 15000 } = {}) {
     const s = session;
     if (!s) return;
     session = null;
+    capturing = Math.max(0, capturing - 1);
     clearInterval(s.watch);
     if (error) return s.reject(error);
     const all = new Float32Array(s.chunks.reduce((n, c) => n + c.length, 0));
@@ -230,8 +235,9 @@ export function createMic({ deafMs = 1500, maxMs = 15000 } = {}) {
       if (session) finish(false);
       await wake();
       return new Promise((resolve, reject) => {
-        const s = { chunks: [], resolve, reject, onLevel, vad: createVad({ chunkMs: (4096 / ctx.sampleRate) * 1000, maxMs }), started: Date.now(), retried: false, busy: false };
+        const s = { chunks: [], resolve, reject, onLevel, vad: createVad({ chunkMs: (4096 / ctx.sampleRate) * 1000, maxMs, silenceMs }), started: Date.now(), retried: false, busy: false };
         session = s;
+        capturing++;
         // Vigilante: el detector de voz cuenta el tiempo con el sonido que llega;
         // si no llega nada, aquí se nota, se reabre el micro y, si sigue mudo, se avisa.
         s.watch = setInterval(async () => {
@@ -253,14 +259,14 @@ export function createMic({ deafMs = 1500, maxMs = 15000 } = {}) {
           }
           s.started = Date.now();
           s.chunks = [];
-          s.vad = createVad({ chunkMs: (4096 / ctx.sampleRate) * 1000, maxMs });
+          s.vad = createVad({ chunkMs: (4096 / ctx.sampleRate) * 1000, maxMs, silenceMs });
           s.busy = false;
         }, 250);
       });
     },
     /** «Ya he terminado» (tocar la bola mientras escucha). */
     stop() { if (session) finish(true); },
-    cancel() { if (session) { const s = session; session = null; clearInterval(s.watch); s.resolve(null); } },
+    cancel() { if (session) { const s = session; session = null; capturing = Math.max(0, capturing - 1); clearInterval(s.watch); s.resolve(null); } },
     close() {
       this.cancel();
       teardown();

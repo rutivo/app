@@ -86,17 +86,60 @@ export const wakeLog = () => heard.slice();
 const setState = (s) => { state = s; onState(s); };
 export const wakeState = () => state;
 
+const WAKE_TOKENS = 24; // palabras como mucho al analizar (basta para «Oye Rutivo, apúntame 20 como gasto con tarjeta»)
+const WAKE_SILENCE_MS = 700; // 0,7 s callado = has terminado (contesta antes)
+
+/**
+ * Analiza lo grabado SIN dejar de escuchar: mientras el reconocedor piensa una
+ * frase, el micro ya está grabando la siguiente (antes se quedaba sordo esos
+ * segundos y «Oye Rutivo» se perdía, sobre todo con ruido de fondo).
+ * Si se acumulan frases, se analizan las más recientes.
+ */
+let queue = [];
+let analyzing = false;
+let woke = false;
+async function analyze() {
+  if (analyzing) return;
+  analyzing = true;
+  try {
+    while (queue.length && !paused && !woke) {
+      const audio = queue.shift();
+      const secs = audio.length / 16000;
+      let text = '';
+      try {
+        text = await transcribe(audio, 45000, { maxTokens: WAKE_TOKENS });
+      } catch {
+        continue;
+      }
+      if (heard.length > 20) heard.shift();
+      heard.push({ secs, text });
+      const m = wakeMatch(text);
+      if (m && !paused && !woke) {
+        woke = true;
+        queue = [];
+        pauseWake(); // para el micro de la escucha de fondo (el asistente usa el suyo)
+        onWake(m.rest);
+        return;
+      }
+    }
+  } finally {
+    analyzing = false;
+  }
+}
+
 async function loop() {
   if (running) return;
   running = true;
+  woke = false;
   setState('listening');
   try {
     // La primera vez (o si se borró) se descarga el reconocedor: se enseña cómo va
     await prepareEar((p) => onProgress(p));
     onProgress(null);
-    mic = mic || createMic({ maxMs: MAX_S * 1000 });
+    const newMic = () => createMic({ maxMs: MAX_S * 1000, silenceMs: WAKE_SILENCE_MS });
+    mic = mic || newMic();
     let deaf = 0;
-    while (!paused && wakeEnabled() && document.visibilityState === 'visible') {
+    while (!paused && !woke && wakeEnabled() && document.visibilityState === 'visible') {
       let audio;
       try {
         audio = await mic.listen();
@@ -109,26 +152,20 @@ async function loop() {
         // Micro mudo: se reintenta solo unas veces (con un respiro); si sigue, hace falta un toque
         if (++deaf > 3) { setState('tap'); return; }
         await new Promise((r) => setTimeout(r, 1500 * deaf));
-        mic = createMic({ maxMs: MAX_S * 1000 });
+        mic = newMic();
         continue;
       }
-      if (paused || !audio) continue;
+      if (paused || woke || !audio) continue;
       const secs = audio.length / 16000;
-      if (heard.length > 20) heard.shift();
-      if (secs < MIN_S) { heard.push({ secs, text: null }); continue; }
-      let text = '';
-      try {
-        text = await transcribe(audio);
-      } catch {
+      if (secs < MIN_S) {
+        if (heard.length > 20) heard.shift();
+        heard.push({ secs, text: null });
         continue;
       }
-      heard.push({ secs, text });
-      const m = wakeMatch(text);
-      if (m && !paused) {
-        pauseWake();
-        onWake(m.rest);
-        return;
-      }
+      // A la cola y a seguir escuchando enseguida (sin esperar a entenderlo)
+      queue.push(audio);
+      if (queue.length > 2) queue.shift(); // si se acumulan, mandan las más recientes
+      analyze();
     }
   } catch {
     onProgress(null);
@@ -154,6 +191,7 @@ function stopWake() {
 /** Mientras el asistente está abierto (usa su propio micro). */
 export function pauseWake() {
   paused = true;
+  queue = [];
   if (mic) { mic.cancel(); mic.close(); mic = null; }
   setState('paused');
 }
