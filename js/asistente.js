@@ -288,6 +288,7 @@ const NOT_CONCEPT = [
   /\b(en|con|por|y)?\s*(el |la )?(efectivo|tarjeta|metalico|bizum|datafono|visa|mastercard|transferencia|tpv|contactless|cash)\b/g,
   /\b(o+y+e+|hey|oye|hoy el)?\s*(rutivo|rutibo|ruto|rutio)\b/g,
   /\b(por favor|gracias|vale|venga|oye|hola|porfa)\b/g,
+  /\b(esto|eso|esta|esa)\b/g, // «apúntame esto en ingreso…»
   /\b(en )?concepto( de)?\b/g,
 ];
 const EDGE = /^(de|del|por|para|en|con|como|la|el|los|las|lo|al|a|y|e|que|me|un|una|mi|su)\s+|\s+(de|del|por|para|en|con|como|la|el|los|las|y|a|que)$/;
@@ -393,7 +394,7 @@ function answer(t, state, now, helpers) {
 
   // --- Ayuda ---
   if (/ayuda|que (puedo|se puede) (preguntar|decir)|que sabes|como funcionas/.test(t)) {
-    return reply('🚗 **Conduciendo (manos libres):** di «Oye Rutivo» → te digo «¿Qué deseas?» → «Apúntame [importe] de [ingreso o gasto] de [concepto], [efectivo o tarjeta]».\nEjemplos: «Apúntame 15 euros de ingreso de primera carrera, efectivo» · «Apúntame 5 euros de gasto de peaje, tarjeta». También de un tirón: «Oye Rutivo, apúntame…». «Borra lo último» lo deshace.\n\nPuedes preguntarme o pedirme cosas como:\n• Hola, ¿qué tal?\n• ¿Qué tiempo hace? / ¿Va a llover mañana?\n• ¿Cuánto llevo hoy?\n• ¿Cuánto gané el mes pasado?\n• ¿Cuánto me debe Charly?\n• ¿Qué tengo mañana?\n• ¿Cuándo llevé a Richard?\n• ¿Cuánto gasto en gasolina?\n• ¿Cuánto IVA pago este trimestre?\n• ¿Cuántos kilómetros llevo este mes?\n• ¿Cómo va mi hucha?\n• Dame el resumen del día\n• ¿Cuántas carreras llevo?\n• ¿Qué he apuntado hoy?\n• Apúntame 12 € en tarjeta\n• Ingrésame 15 con 50 en efectivo\n• Pagué 7 euros de parking\n• He echado 50 de gasoil\n• Mete 5 de propina\n• Borra lo último',
+    return reply('🚗 **Conduciendo (manos libres):** di «Oye Rutivo» → te digo «Dime, ¿en qué puedo ayudarte?» → «Apúntame [importe] de [ingreso o gasto] de [concepto], [efectivo o tarjeta]».\nEjemplos: «Apúntame 15 euros de ingreso de primera carrera, efectivo» · «Apúntame 5 euros de gasto de peaje, tarjeta». También de un tirón: «Oye Rutivo, apúntame…». «Borra lo último» lo deshace.\n\nPuedes preguntarme o pedirme cosas como:\n• Hola, ¿qué tal?\n• ¿Qué tiempo hace? / ¿Va a llover mañana?\n• ¿Cuánto llevo hoy?\n• ¿Cuánto gané el mes pasado?\n• ¿Cuánto me debe Charly?\n• ¿Qué tengo mañana?\n• ¿Cuándo llevé a Richard?\n• ¿Cuánto gasto en gasolina?\n• ¿Cuánto IVA pago este trimestre?\n• ¿Cuántos kilómetros llevo este mes?\n• ¿Cómo va mi hucha?\n• Dame el resumen del día\n• ¿Cuántas carreras llevo?\n• ¿Qué he apuntado hoy?\n• Apúntame 12 € en tarjeta\n• Ingrésame 15 con 50 en efectivo\n• Pagué 7 euros de parking\n• He echado 50 de gasoil\n• Mete 5 de propina\n• Borra lo último',
       'Puedes preguntarme cuánto llevas, quién te debe, qué servicios tienes, o pedirme que apunte una carrera o un gasto.');
   }
 

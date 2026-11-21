@@ -1,5 +1,5 @@
 // © 2026 Alejandro Antonio Fernández Moyano. Todos los derechos reservados. Ver LICENSE.
-// Manos libres: al decir «Oye Rutivo», Rutivo contesta por voz «¿Qué deseas?»,
+// Manos libres: al decir «Oye Rutivo», Rutivo contesta por voz «Dime, ¿en qué puedo ayudarte?»,
 // te escucha, apunta, te lo confirma en voz alta y vuelve a esperar. Sin abrir
 // ninguna pantalla (para usarlo conduciendo); solo un globo pequeño informativo.
 import { ask, normalize, stripFillers, trimChatter } from '../asistente.js';
@@ -164,8 +164,8 @@ export async function handsFree(first = '') {
   let handed = false; // pasa a la pantalla del asistente (que gestiona el micro)
   try {
     if (!text) {
-      show('👂 ¿Qué deseas?', 'speaking');
-      await say('¿Qué deseas?');
+      show('👂 Dime, ¿en qué puedo ayudarte?', 'speaking');
+      await say('Dime, ¿en qué puedo ayudarte?');
     }
     for (let turn = 0; turn < 5 && !cancelled; turn++) {
       if (!text) {
@@ -179,7 +179,7 @@ export async function handsFree(first = '') {
         }
         if (cancelled) break;
         if (!heard) {
-          if (misses++ < 1) { show('🤔 No te he oído', 'speaking'); await say('No te he oído. ¿Qué deseas?'); continue; }
+          if (misses++ < 1) { show('🤔 No te he oído', 'speaking'); await say('No te he oído. ¿En qué puedo ayudarte?'); continue; }
           show('👋 Cuando quieras, di «Oye Rutivo»', 'done');
           await say('Vale. Cuando quieras, dime Oye Rutivo.');
           break;
@@ -190,7 +190,7 @@ export async function handsFree(first = '') {
         if (again) heard = again.rest;
         // Ruido o una palabra suelta sin sentido: como si no te hubiera oído
         if (!stripFillers(normalize(heard))) {
-          if (misses++ < 1) { show('🤔 No te he oído', 'speaking'); await say('No te he oído. ¿Qué deseas?'); continue; }
+          if (misses++ < 1) { show('🤔 No te he oído', 'speaking'); await say('No te he oído. ¿En qué puedo ayudarte?'); continue; }
           break;
         }
         text = heard;

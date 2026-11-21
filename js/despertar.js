@@ -2,14 +2,15 @@
 // «Oye Rutivo»: con la app abierta en pantalla, el micro escucha y, al oír
 // «Oye Rutivo», abre el asistente (y si dices la orden seguida, la hace).
 // Todo se procesa dentro del móvil (Whisper); no se envía audio a nadie.
-// Para no gastar batería solo se analizan frases cortas (no la radio de fondo).
+// Se escucha en trozos de hasta unos segundos: con ruido de fondo constante (motor,
+// radio, aire) la frase nunca «termina», así que los trozos largos también se analizan.
 import { readFlag, writeFlag } from './dom.js';
 import { createMic } from './microfono.js';
 import { earSupported, prepareEar, transcribe } from './oido.js';
 
 const KEY = 'oyeRutivo';
 const MIN_S = 0.5; // frases más cortas: golpes, toses…
-const MAX_S = 10; // frases más largas: conversación o radio, no es «Oye Rutivo…»
+const MAX_S = 6; // trozo máximo que se escucha antes de analizarlo (con ruido de fondo se llega siempre)
 
 export const wakeEnabled = () => readFlag(KEY) !== '0';
 export function setWakeEnabled(on) {
@@ -42,6 +43,7 @@ function isName(w) {
   return w.length >= 5 && w.length <= 8 && /^(r|br|gr|tr)[aeiou]/.test(w) && dist(w.replace(/^[bgt](?=r)/, ''), 'rutivo') <= 2;
 }
 // Lo que se dice antes de «Rutivo» para llamarlo (y lo que a veces oye el reconocedor: «Hoy el Rutivo…»)
+const STRONG = /^(o+y+e+|oie|olle|hey|hola|oiga|oyeme|escucha|escuchame)$/;
 const CALL = /^(o+y+e+s?|oie|olle|oy|hoy|hey|ey|eh|ei|o|el|e|y|a|ah|hola|ola|oiga|oigan|oyeme|escucha|escuchame|venga|vamos|vale|buenas|buenos|dias|tu|che|mira|bueno|pues)$/;
 
 /**
@@ -50,7 +52,7 @@ const CALL = /^(o+y+e+s?|oie|olle|oy|hoy|hey|ey|eh|ei|o|el|e|y|a|ah|hola|ola|oig
  */
 export function wakeMatch(text) {
   const words = String(text || '').trim().split(/\s+/).filter(Boolean);
-  for (let i = 0; i < Math.min(words.length, 5); i++) {
+  for (let i = 0; i < words.length; i++) {
     let w = norm(words[i]);
     let used = 1;
     // Todo junto: «Oyerutivo», «Heyrutivo»
@@ -58,9 +60,13 @@ export function wakeMatch(text) {
     if (glued && isName(glued[2])) w = glued[2];
     else if (!isName(w) && i + 1 < words.length && isName(w + norm(words[i + 1]))) { w += norm(words[i + 1]); used = 2; } // «Ruti vo»
     if (!isName(w)) continue;
-    // «Rutivo» solo vale al principio o detrás de «oye/hey/hola…» (no en mitad de una conversación)
+    // «Rutivo» vale al principio (con «oye/hey/hola…» delante), o en mitad de lo que se oye
+    // si justo antes hay una llamada clara («…con la radio puesta, oye Rutivo»). En mitad de una
+    // conversación sin llamada («el rutivo de mi primo») no.
     const before = words.slice(0, i).map(norm).filter(Boolean);
-    if (before.length > 3 || !before.every((b) => CALL.test(b))) continue;
+    const atStart = before.length <= 3 && before.every((b) => CALL.test(b));
+    const called = before.length && STRONG.test(before[before.length - 1]);
+    if (!atStart && !called) continue;
     const rest = words.slice(i + used).join(' ').replace(/^[\s,.:;!¡?¿-]+/, '').trim();
     return { rest };
   }
@@ -88,7 +94,7 @@ async function loop() {
     // La primera vez (o si se borró) se descarga el reconocedor: se enseña cómo va
     await prepareEar((p) => onProgress(p));
     onProgress(null);
-    mic = mic || createMic({ maxMs: MAX_S * 1000 + 1000 }); // lo que llega al tope es radio o charla: se descarta
+    mic = mic || createMic({ maxMs: MAX_S * 1000 });
     let deaf = 0;
     while (!paused && wakeEnabled() && document.visibilityState === 'visible') {
       let audio;
@@ -103,13 +109,13 @@ async function loop() {
         // Micro mudo: se reintenta solo unas veces (con un respiro); si sigue, hace falta un toque
         if (++deaf > 3) { setState('tap'); return; }
         await new Promise((r) => setTimeout(r, 1500 * deaf));
-        mic = createMic({ maxMs: MAX_S * 1000 + 1000 });
+        mic = createMic({ maxMs: MAX_S * 1000 });
         continue;
       }
       if (paused || !audio) continue;
       const secs = audio.length / 16000;
       if (heard.length > 20) heard.shift();
-      if (secs < MIN_S || secs > MAX_S) { heard.push({ secs, text: null }); continue; }
+      if (secs < MIN_S) { heard.push({ secs, text: null }); continue; }
       let text = '';
       try {
         text = await transcribe(audio);

@@ -314,3 +314,18 @@ test('más vocabulario: como se habla en la calle', () => {
   assert.equal(ask('¿cuánto he ganado hoy?', state, NOW).action, undefined);
   assert.equal(ask('cuanto he sacado este mes', state, NOW).action, undefined);
 });
+
+test('«Apúntame X como gasto/ingreso en efectivo/tarjeta» (como lo dice el conductor)', () => {
+  const it = (q) => { const r = ask(trimChatter(q), state, NOW); return r.action ? r.action.item : null; };
+  const cases = [
+    ['apúntame 20 como gasto en efectivo', 'out', 20, 'efectivo'], ['apúntame 20 como gasto con tarjeta', 'out', 20, 'tarjeta'],
+    ['apúntame esto en ingreso de 30 en efectivo', 'in', 30, 'efectivo'], ['apúntame esto en ingreso de 30 con tarjeta', 'in', 30, 'tarjeta'],
+    ['apúntame un ingreso de 45 en efectivo', 'in', 45, 'efectivo'], ['apúntame un gasto de 12 con tarjeta', 'out', 12, 'tarjeta'],
+    ['apúntame cuarenta euros de ingreso en efectivo', 'in', 40, 'efectivo'], ['apúntame doce con cincuenta de gasto en tarjeta', 'out', 12.5, 'tarjeta'],
+  ];
+  for (const [q, t, i, p] of cases) {
+    const x = it(q);
+    assert.ok(x && x.t === t && x.i === i && x.p === p, q + ' → ' + JSON.stringify(x));
+    assert.ok(!/^esto$/i.test(x.c), q + ': el concepto no es «esto» (' + x.c + ')');
+  }
+});

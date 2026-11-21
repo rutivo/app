@@ -27,3 +27,9 @@ test('palabras parecidas que NO son «Rutivo» no lo despiertan', () => {
   for (const t of ['Oye, qué ruido hace el coche', 'Oye la ruta de hoy', 'Oye, qué rico', 'Hola, buenas tardes', 'Por motivo de la obra',
     'Es un día festivo', 'Vamos por la rutina', 'Oye rotativo', 'Mi primo dice que el rutivo es bueno', 'Oye, ¿vienes o no?']) assert.equal(wakeMatch(t), null, t);
 });
+
+test('con ruido o charla delante: «… oye Rutivo» también, pero no «el rutivo» en una conversación', () => {
+  assert.equal(wakeMatch('y entonces le dije que sí, oye Rutivo, apúntame 20 euros').rest, 'apúntame 20 euros');
+  assert.ok(wakeMatch('la radio dice que mañana llueve hola rutivo'));
+  for (const t of ['mi primo dice que el rutivo es bueno', 'ayer con el rutivo fuimos', 'le pregunté al rutivo']) assert.equal(wakeMatch(t), null, t);
+});
