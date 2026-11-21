@@ -91,9 +91,20 @@ const live = (s) => !!s && s.getAudioTracks().some((t) => t.readyState === 'live
 const stopShared = () => { if (shared) { shared.getTracks().forEach((t) => t.stop()); shared = null; } };
 
 
+/**
+ * iPhone (Safari 17+): micro y altavoz a la vez. Sin esto, cuando Rutivo habla
+ * el iPhone pasa a «solo reproducir» y deja el micro mudo («El micro no da sonido»).
+ */
+export function playAndRecord() {
+  try {
+    if (typeof navigator !== 'undefined' && navigator.audioSession && navigator.audioSession.type !== 'play-and-record') navigator.audioSession.type = 'play-and-record';
+  } catch { /* navegador sin esta opción */ }
+}
+
 /** El micro compartido (lo pide solo si no hay uno funcionando). `fresh`: pedir uno nuevo. */
 export async function acquireStream(fresh = false) {
   users++;
+  playAndRecord();
   try {
     if (fresh) stopShared();
     if (live(shared)) return shared;
@@ -129,6 +140,7 @@ let sharedCtx = null;
 /** El audio compartido (lo crea si hace falta) e intenta ponerlo en marcha. */
 export function audioCtx() {
   const AC = window.AudioContext || window.webkitAudioContext;
+  playAndRecord();
   if (!sharedCtx || sharedCtx.state === 'closed') sharedCtx = new AC();
   if (sharedCtx.state !== 'running') sharedCtx.resume().catch(() => {});
   return sharedCtx;

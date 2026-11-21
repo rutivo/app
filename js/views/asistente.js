@@ -29,6 +29,7 @@ let ctx = {};
 let lastDone = null; // lo último apuntado por voz (para «no, eran 45» o «borra lo último»)
 let stopped = false; // se tocó «Parar»: lo que estuviera entendiendo ya no se hace
 let emptyTries = 0; // veces seguidas que no se entendió nada
+let deafRetry = false; // ya se reintentó tras quedarse mudo el micro
 /** El hilo de la conversación con lo último apuntado (el asistente lo usa para corregir o quitar). */
 const withDone = () => ({ ...ctx, done: lastDone });
 let rerenderAll = () => {};
@@ -73,7 +74,8 @@ function pickVoice() {
 
 /** «No se le olvida escuchar»: en una conversación por voz, tras contestar vuelve a escuchar. */
 function keepListening() {
-  if (convo && ui && useEar() && !earBusy) setTimeout(() => { if (convo && ui && !earBusy) listenEar(true); }, 300);
+  // En iPhone, tras hablar, el sistema tarda un poco en devolver el micro
+  if (convo && ui && useEar() && !earBusy) setTimeout(() => { if (convo && ui && !earBusy) listenEar(true); }, isIOS ? 700 : 300);
 }
 
 function speak(text) {
@@ -348,13 +350,22 @@ async function listenEar(auto = false) {
       convo = false;
       if (ui) ui.root.style.setProperty('--lvl', '0');
       if (err && err.name === 'DeafMicError') {
-        // El sistema dejó el micro mudo (en iPhone, tras hablar): un toque lo despierta
+        // El sistema dejó el micro mudo (en iPhone, tras hablar): se espera un poco y se reintenta solo una vez
         if (mic) { mic.close(); mic = null; }
+        if (!deafRetry && ui) {
+          deafRetry = true;
+          convo = true;
+          setState('thinking', '🎙️ Recuperando el micro…');
+          setTimeout(() => { if (ui && convo) listenEar(true); }, 900);
+          return;
+        }
+        deafRetry = false;
         return setState('idle', auto ? '👆 Toca la bola para seguir hablando' : 'El micro no da sonido. Toca la bola otra vez (si sigue, cierra y abre Rutivo).');
       }
       if (err && err.name === 'NotAllowedError') return showKeyboard('No tengo permiso para el micrófono. Ajustes → Safari → Micrófono → Permitir (o «Preguntar») y vuelve a tocar la bola. Mientras, usa el 🎤 del teclado.');
       return showKeyboard('No puedo abrir el micrófono (¿lo usa otra app?). Usa el 🎤 del teclado.');
     }
+    deafRetry = false;
     if (ui) ui.root.style.setProperty('--lvl', '0');
     if (!ui) { earBusy = false; return; }
     if (!audio) {
@@ -643,7 +654,7 @@ export function openAssistant(cmd) {
   paint();
   setState('idle');
   if (fromWake && cmd) { convo = true; handle(cmd); } // «Oye Rutivo, apúntame…»: la orden directamente
-  else if (fromWake && useEar()) { convo = true; speak('¿Sí?'); } // contesta y se queda escuchando
+  else if (fromWake && useEar()) { convo = true; speak('Dime, ¿en qué puedo ayudarte?'); } // contesta y se queda escuchando
   else listen(); // al abrir ya escucha (el toque en el botón cuenta como permiso)
 }
 

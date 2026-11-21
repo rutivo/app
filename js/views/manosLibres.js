@@ -141,7 +141,19 @@ function undoLast() {
 
 async function hear() {
   mic = mic || createMic(COMMAND_MIC);
-  const audio = await mic.listen((rms) => { if (bubble) bubble.style.setProperty('--lvl', Math.min(1, rms * 9).toFixed(2)); });
+  const level = (rms) => { if (bubble) bubble.style.setProperty('--lvl', Math.min(1, rms * 9).toFixed(2)); };
+  let audio;
+  try {
+    audio = await mic.listen(level);
+  } catch (err) {
+    if (!err || err.name !== 'DeafMicError' || cancelled) throw err;
+    // iPhone: tras hablar Rutivo el micro puede quedarse mudo un momento; se reintenta solo
+    mic.close();
+    await new Promise((r) => setTimeout(r, 900));
+    if (cancelled) return '';
+    mic = createMic(COMMAND_MIC);
+    audio = await mic.listen(level);
+  }
   if (bubble) bubble.style.setProperty('--lvl', '0');
   if (!audio || cancelled) return '';
   show('… Entendiendo', 'thinking');

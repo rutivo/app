@@ -919,6 +919,8 @@ function fillSlot(t, slot) {
  */
 export function ask(input, state, now = new Date(), helpers = {}, ctx = {}) {
   let t = stripFillers(normalize(input));
+  // Solo «Oye Rutivo»: contesta como al llamarle desde la pantalla principal
+  if (!t && /\b(rutivo|rutibo|ruti|rutivos)\b/.test(normalize(input))) return { ...reply('👂 Dime, ¿en qué puedo ayudarte?', 'Dime, ¿en qué puedo ayudarte?'), ctx };
   if (!t) return { ...reply('Te escucho. Pregúntame, por ejemplo: «¿Cuánto llevo hoy?»'), ctx };
   let hello = '';
   // "Hola, apunta 50 euros": saludar y seguir con la orden
