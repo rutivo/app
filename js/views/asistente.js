@@ -12,17 +12,22 @@ import { leaveBody, leaveLine } from '../salida.js';
 import { serviceTime } from '../trips.js';
 import { openWorth, quickWorth } from './compensa.js';
 import { earSupported, prepareEar, transcribe } from '../oido.js';
-import { S, save } from '../store.js';
-import { esc, uid } from '../utils.js';
+import { S } from '../store.js';
+import { esc } from '../utils.js';
+import { amend, execute, undo as undoDone } from '../vozAcciones.js';
 import { driverName } from '../welcome.js';
 
 const VOICE_KEY = 'asisVoz';
 const SUGGEST = ['¿Cuánto llevo hoy?', '¿Qué tengo mañana?', '¿Qué tiempo hace?', '¿Quién me debe?', 'Apunta 50 € en efectivo', '¿Cuánto gané este mes?', '¿Qué puedo decirte?'];
 const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 const isIOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-const history = []; // {from:'yo'|'rutivo', html, undo?}
-const done = []; // posiciones en history de lo apuntado, para «deshaz lo último»
+const history = []; // conversación de esta sesión (solo en memoria; no se guarda audio ni texto) {from:'yo'|'rutivo', html, undo?}
+const HISTORY_MAX = 60;
 let ctx = {};
+let lastDone = null; // lo último apuntado por voz (para «no, eran 45» o «borra lo último»)
+let stopped = false; // se tocó «Parar»: lo que estuviera entendiendo ya no se hace
+/** El hilo de la conversación con lo último apuntado (el asistente lo usa para corregir o quitar). */
+const withDone = () => ({ ...ctx, done: lastDone });
 let rerenderAll = () => {};
 let ui = null;
 
@@ -101,7 +106,7 @@ function eta(s) {
   return line ? '(' + line.replace(/^\S+\s/, '') + ')' : '';
 }
 
-const LABELS = { idle: 'Toca la bola y habla', listening: 'Te escucho… (con ruido, toca la bola al terminar)', thinking: 'Pensando…', speaking: 'Hablando… (toca la bola para hablar tú)' };
+const LABELS = { idle: 'Toca la bola y habla', listening: 'Te escucho… (con ruido, toca la bola al terminar)', thinking: 'Pensando…', speaking: 'Hablando… (toca la bola para hablar tú)', asking: 'Te escucho: contesta a la pregunta' };
 
 function setState(state, label) {
   if (!ui) return;
@@ -111,6 +116,7 @@ function setState(state, label) {
 
 function paint() {
   if (!ui) return;
+  while (history.length > HISTORY_MAX) history.shift();
   ui.chat.innerHTML = history.length
     ? history.map((m, i) => '<div class="siri-msg ' + m.from + '">' + m.html + (m.undo ? '<button type="button" class="small-btn sec" data-asundo="' + i + '">↩️ Deshacer</button>' : '') + '</div>').join('')
     : '<div class="siri-hello">' + (driverName(S.cfg) ? 'Hola, ' + esc(driverName(S.cfg)) + '.<br>' : '') + '¿En qué te ayudo?</div>';
@@ -120,14 +126,23 @@ function paint() {
 function undoAt(i) {
   const m = history[i];
   if (!m || !m.undo) return false;
-  S[m.undo.list] = S[m.undo.list].filter((x) => x.id !== m.undo.id);
-  save();
+  const d = m.undo;
+  if (!undoDone(d)) {
+    m.html += '<br><i>No se ha podido quitar (¿ya estaba borrado?)</i>';
+    delete m.undo;
+    return false;
+  }
   rerenderAll();
-  m.html += '<br><i>Deshecho ✓</i>';
+  m.html += '<br><i>Quitado ✓</i>';
   delete m.undo;
-  const k = done.indexOf(i);
-  if (k >= 0) done.splice(k, 1);
+  if (lastDone === d) lastDone = null;
   return true;
+}
+
+/** Ir a una pantalla de la app (Caja, Transfer, Gasolina, Facturas, Hucha). */
+function goTo(view) {
+  const b = document.querySelector('.tabs button[data-v="' + view + '"]');
+  if (b) b.click();
 }
 
 /**
@@ -140,13 +155,14 @@ function best(options, conf = 0) {
   const score = (r) => (r.kind === 'action' || r.kind === 'confirm' || r.kind === 'undo' || r.kind === 'weather' || r.kind === 'worth' || r.kind === 'leave' ? 3 : /No te he entendido/.test(r.text || '') ? 0 : r.pending ? 1 : 2);
   let top = null;
   for (const q of list) {
-    const r = ask(q, S, new Date(), { eta, confidence: conf }, ctx);
+    const r = ask(q, S, new Date(), { eta, confidence: conf }, withDone());
     if (!top || score(r) > score(top.r)) top = { q, r };
   }
   return top;
 }
 
 function handle(text, alternatives = [], conf = 0) {
+  stopped = false;
   // Las preguntas «¿Lo apunto?» anteriores ya no se pueden contestar con botones
   history.forEach((m) => { m.html = m.html.replace(/<div class="siri-yn">[\s\S]*?<\/div>/, ''); });
   const pick = best([text, ...alternatives], conf);
@@ -158,12 +174,30 @@ function handle(text, alternatives = [], conf = 0) {
   ctx = r.ctx || {};
   let speech;
   if (r.kind === 'undo') {
-    const i = done.length ? done[done.length - 1] : -1;
-    const ok = i >= 0 && undoAt(i);
-    history.push({ from: 'rutivo', html: ok ? '↩️ Hecho, he quitado lo último que apunté.' : 'No hay nada que deshacer.' });
-    speech = ok ? 'Hecho, lo he quitado.' : 'No hay nada que deshacer.';
+    const i = history.findIndex((m) => m.undo && m.undo === lastDone);
+    const ok = i >= 0 ? undoAt(i) : !!lastDone && undoDone(lastDone);
+    if (ok) { lastDone = null; rerenderAll(); }
+    history.push({ from: 'rutivo', html: ok ? '↩️ Hecho, lo he quitado.' : 'No he podido quitarlo (¿ya estaba borrado?).' });
+    speech = ok ? 'Hecho, lo he quitado.' : 'No he podido quitarlo.';
+  } else if (r.kind === 'amend') {
+    const d = amend(lastDone, r.changes);
+    if (d) {
+      const old = history.find((m) => m.undo === lastDone);
+      if (old) old.undo = d;
+      lastDone = d;
+      rerenderAll();
+    }
+    history.push({ from: 'rutivo', html: d ? rich(r.text) : 'No he podido corregirlo (¿ya estaba borrado?). No he cambiado nada.' });
+    speech = d ? r.speech : 'No he podido corregirlo. No he cambiado nada.';
+  } else if (r.kind === 'nav') {
+    history.push({ from: 'rutivo', html: rich(r.text) });
+    paint();
+    closeAssistant();
+    goTo(r.view);
+    return;
   } else if (r.kind === 'confirm') {
-    history.push({ from: 'rutivo', html: rich(r.text) + '<div class="siri-yn"><button type="button" data-asyes>✅ Sí, apúntalo</button><button type="button" class="sec" data-asno>❌ No</button></div>' });
+    const undoing = r.ctx && r.ctx.confirm && r.ctx.confirm.undo;
+    history.push({ from: 'rutivo', html: rich(r.text) + '<div class="siri-yn"><button type="button" data-asyes>' + (undoing ? '🗑️ Sí, quítalo' : '✅ Sí, apúntalo') + '</button><button type="button" class="sec" data-asno>❌ No</button></div>' });
     speech = r.speech;
   } else if (r.kind === 'worth') {
     const entry = { from: 'rutivo', html: rich(r.text) };
@@ -185,16 +219,20 @@ function handle(text, alternatives = [], conf = 0) {
     return;
   } else {
     const entry = { from: 'rutivo', html: rich(r.text) };
+    speech = r.speech;
     if (r.kind === 'action') {
-      const item = { id: uid(), ...r.action.item };
-      S[r.action.list].push(item);
-      save();
-      rerenderAll();
-      entry.undo = { list: r.action.list, id: item.id };
-      done.push(history.length);
+      // Solo se dice «apuntado» si de verdad ha quedado guardado
+      const d = execute(r.action);
+      if (d) {
+        lastDone = d;
+        entry.undo = d;
+        rerenderAll();
+      } else {
+        entry.html = '⚠️ No he podido guardarlo (falta espacio en el móvil). <b>No está apuntado.</b> Inténtalo otra vez o apúntalo a mano.';
+        speech = 'No he podido guardarlo. No está apuntado.';
+      }
     }
     history.push(entry);
-    speech = r.speech;
   }
   paint();
   speak(speech);
@@ -326,6 +364,7 @@ async function listenEar(auto = false) {
     const text = await transcribe(audio);
     earBusy = false;
     if (!ui) return;
+    if (stopped) return setState('idle', 'Parado. Toca la bola para hablar.');
     if (!text) { convo = false; return setState('idle', 'No te he entendido. Toca la bola y repítelo.'); }
     convo = true;
     const clean = trimChatter(text);
@@ -490,7 +529,7 @@ export function openAssistant(cmd) {
   root.setAttribute('role', 'dialog');
   root.innerHTML =
     '<div class="siri-top"><button type="button" class="siri-x" data-sx aria-label="Cerrar">✕</button>' +
-    '<b>Rutivo</b><button type="button" class="siri-voz" data-svoz></button></div>' +
+    '<b>Rutivo <span class="siri-mic" aria-hidden="true">● micro</span></b><span class="siri-tools"><button type="button" class="siri-voz" data-sclear aria-label="Borrar la conversación" title="Borrar la conversación">🗑️</button><button type="button" class="siri-voz" data-svoz></button></span></div>' +
     '<div class="siri-chat"></div>' +
     '<div class="siri-live" aria-live="polite"></div>' +
     '<div class="siri-sug">' + SUGGEST.map((q) => '<button type="button" data-asq="' + esc(q) + '">' + esc(q) + '</button>').join('') + '</div>' +
@@ -500,9 +539,10 @@ export function openAssistant(cmd) {
     '<button type="button" class="siri-wake" data-strain></button>' +
     '<div class="siri-heard"></div>' +
     '<button type="button" class="siri-retry" data-sretry>🎙️ Usar el micro de la app</button>' +
+    '<div class="siri-wave" aria-hidden="true">' + '<i></i>'.repeat(9) + '</div>' +
     '<div class="siri-bottom"><button type="button" class="siri-kb" data-skb aria-label="Escribir">⌨️</button>' +
     '<button type="button" class="siri-orb" data-sorb aria-label="Hablar"><i></i><i></i><i></i></button>' +
-    '<span class="siri-kb"></span></div>';
+    '<button type="button" class="siri-kb siri-stop" data-sstop aria-label="Parar">⏹</button></div>';
   document.body.appendChild(root);
   ui = { root, chat: root.querySelector('.siri-chat'), live: root.querySelector('.siri-live'), status: root.querySelector('.siri-status'),
     form: root.querySelector('.siri-form'), input: root.querySelector('.siri-form input'), voz: root.querySelector('[data-svoz]') };
@@ -551,6 +591,8 @@ export function openAssistant(cmd) {
       }, () => { trainBtn.disabled = false; if (ui) setState('idle', 'No se pudo usar el micro. Toca otra vez.'); });
       return;
     }
+    if (el.matches('[data-sstop]')) return stopAll();
+    if (el.matches('[data-sclear]')) { history.length = 0; ctx = {}; paint(); return setState('idle', 'Conversación borrada.'); }
     if (el.matches('[data-svoz]')) { writeFlag(VOICE_KEY, voiceOn() ? '0' : '1'); paintVoz(); try { speechSynthesis.cancel(); } catch { /* */ } return setState('idle'); }
     if (el.matches('[data-sorb]')) return listen(); // escuchar; si ya escucha, «he terminado»; si habla, se calla y te escucha
     if (el.matches('[data-sretry]')) { writeFlag(DICT_KEY, '0'); root.classList.remove('dict'); ui.form.hidden = true; return listen(); }
@@ -589,6 +631,17 @@ export function openAssistant(cmd) {
   if (fromWake && cmd) { convo = true; handle(cmd); } // «Oye Rutivo, apúntame…»: la orden directamente
   else if (fromWake && useEar()) { convo = true; speak('¿Sí?'); } // contesta y se queda escuchando
   else listen(); // al abrir ya escucha (el toque en el botón cuenta como permiso)
+}
+
+/** «Parar»: se calla, deja de escuchar y no hace lo que estuviera entendiendo. */
+function stopAll() {
+  stopped = true;
+  convo = false;
+  try { speechSynthesis.cancel(); } catch { /* */ }
+  stopListening();
+  if (mic) mic.cancel();
+  if (ui) ui.root.style.setProperty('--lvl', '0');
+  setState('idle', 'Parado. Toca la bola para hablar.');
 }
 
 export function closeAssistant() {

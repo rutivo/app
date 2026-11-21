@@ -7,8 +7,8 @@ import { resumeWake, wakeMatch, wakeNoCommand } from '../despertar.js';
 import { readFlag } from '../dom.js';
 import { createMic } from '../microfono.js';
 import { transcribe } from '../oido.js';
-import { S, save } from '../store.js';
-import { uid } from '../utils.js';
+import { S } from '../store.js';
+import { amend, execute, undo as undoDone } from '../vozAcciones.js';
 
 const VOICE_KEY = 'asisVoz';
 let rerender = () => {};
@@ -20,7 +20,7 @@ let bubble = null;
 let hideTimer = null;
 const heardLog = []; // lo que ha oído (para comprobar que funciona)
 export const handsFreeLog = () => heardLog.slice();
-let last = null; // último apunte hecho a manos libres (para «borra lo último» o el botón)
+let last = null; // último apunte hecho a manos libres (para «no, eran 45», «borra lo último» o el botón)
 
 // ---------- voz ----------
 
@@ -118,21 +118,20 @@ function hide(ms = 5000) {
 
 // ---------- apuntes ----------
 
+/** Apunta de verdad; false si no se ha podido guardar (entonces no se dice «apuntado»). */
 function apply(action) {
-  const item = { id: uid(), ...action.item };
-  S[action.list].push(item);
-  save();
+  const d = execute(action);
+  if (!d) return false;
+  last = d;
   rerender();
-  last = { list: action.list, id: item.id };
+  return true;
 }
 
 function undoLast() {
   if (!last) return false;
-  const before = S[last.list].length;
-  S[last.list] = S[last.list].filter((x) => x.id !== last.id);
-  const ok = S[last.list].length < before;
+  const ok = undoDone(last);
   last = null;
-  if (ok) { save(); rerender(); show('↩️ Quitado', 'done'); hide(2500); }
+  if (ok) { rerender(); show('↩️ Quitado', 'done'); hide(2500); }
   return ok;
 }
 
@@ -198,12 +197,30 @@ export async function handsFree(first = '') {
       }
       const clean = trimChatter(text);
       show('🗣️ «' + clean + '»', 'thinking');
-      const r = ask(clean, S, new Date(), { confidence: clean !== text ? 0.4 : 0 }, ctx);
+      const r = ask(clean, S, new Date(), { confidence: clean !== text ? 0.4 : 0 }, { ...ctx, done: last });
       ctx = r.ctx || {};
       text = '';
       if (r.kind === 'action') {
-        apply(r.action);
-        show(r.text, 'done', true);
+        if (apply(r.action)) {
+          show(r.text, 'done', true);
+          await say(r.speech);
+        } else {
+          show('⚠️ No he podido guardarlo. No está apuntado.', 'error');
+          await say('No he podido guardarlo. No está apuntado.');
+        }
+        break;
+      }
+      if (r.kind === 'amend') {
+        const d = amend(last, r.changes);
+        if (d) { last = d; rerender(); }
+        show(d ? r.text : 'No he podido corregirlo. No he cambiado nada.', d ? 'done' : 'error', !!d);
+        await say(d ? r.speech : 'No he podido corregirlo. No he cambiado nada.');
+        break;
+      }
+      if (r.kind === 'nav') {
+        const b = document.querySelector('.tabs button[data-v="' + r.view + '"]');
+        if (b) b.click();
+        show(r.text, 'done');
         await say(r.speech);
         break;
       }
@@ -222,7 +239,7 @@ export async function handsFree(first = '') {
         const understood = !/No te he entendido/.test(r.text);
         show(understood ? r.text : '🤔 No te he entendido: «' + clean + '»', understood ? 'done' : 'speaking');
         await say(understood ? r.speech || plain(r.text) : 'No te he entendido. Repítemelo.');
-        if (r.ctx && r.ctx.pending) continue; // «¿De cuánto?»
+        if (r.ctx && (r.ctx.pending || r.ctx.slot)) continue; // «¿De cuánto?», «¿En efectivo o con tarjeta?»
         if (!understood && misses++ < 1) continue; // otra oportunidad
         break;
       }

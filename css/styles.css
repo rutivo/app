@@ -1081,3 +1081,36 @@ a.row-btn .chev { text-decoration: none; }
 
 /* Idioma: banderas en el selector */
 .theme-swatch.flag { display: inline-flex; align-items: center; justify-content: center; font-size: 22px; background: var(--sec-bg); }
+
+/* ---------- Asistente: escuchando / pensando / respondiendo ---------- */
+.siri-tools { display: flex; gap: 8px; }
+.siri-mic { display: none; margin-left: 6px; font-size: 11px; font-weight: 800; letter-spacing: .3px; color: #ff6b6b; vertical-align: middle; }
+.siri[data-state="listening"] .siri-mic { display: inline; animation: micBlink 1.2s ease-in-out infinite; }
+@keyframes micBlink { 50% { opacity: .35; } }
+/* Ondas de tu voz (siguen el volumen del micro) */
+.siri-wave { display: flex; align-items: center; justify-content: center; gap: 5px; height: 44px; margin-top: 6px; opacity: 0; transition: opacity .2s; }
+.siri[data-state="listening"] .siri-wave { opacity: 1; }
+.siri-wave i { width: 5px; border-radius: 3px; background: linear-gradient(180deg, #2fd3ff, #b06ef3); height: calc(6px + var(--lvl, 0) * 38px * var(--k, .5));
+  transition: height .08s; animation: waveJit 0.9s ease-in-out infinite; }
+.siri-wave i:nth-child(1), .siri-wave i:nth-child(9) { --k: .3; }
+.siri-wave i:nth-child(2), .siri-wave i:nth-child(8) { --k: .55; animation-delay: -.2s; }
+.siri-wave i:nth-child(3), .siri-wave i:nth-child(7) { --k: .8; animation-delay: -.4s; }
+.siri-wave i:nth-child(4), .siri-wave i:nth-child(6) { --k: .95; animation-delay: -.6s; }
+.siri-wave i:nth-child(5) { --k: 1; animation-delay: -.1s; }
+@keyframes waveJit { 50% { transform: scaleY(.6); } }
+/* Pensando: anillo que gira alrededor de la bola */
+.siri-orb::after { content: ''; position: absolute; inset: -4px; border-radius: 50%; opacity: 0; pointer-events: none;
+  background: conic-gradient(from 0deg, transparent 0 60%, #2fd3ff 75%, #b06ef3 90%, transparent);
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 4px), #000 calc(100% - 3px)); mask: radial-gradient(farthest-side, transparent calc(100% - 4px), #000 calc(100% - 3px)); }
+.siri[data-state="thinking"] .siri-orb::after { opacity: 1; animation: siriSpin .9s linear infinite; }
+/* Respondiendo: ondas que salen de la bola */
+.siri-orb::before { content: ''; position: absolute; inset: 8px; border-radius: 50%; border: 2px solid rgba(176, 110, 243, .7); opacity: 0; pointer-events: none; }
+.siri[data-state="speaking"] .siri-orb::before { animation: talkRing 1.4s ease-out infinite; }
+@keyframes talkRing { from { opacity: .9; transform: scale(.85); } to { opacity: 0; transform: scale(1.45); } }
+/* Parar: solo cuando hay algo que parar */
+.siri-stop { visibility: hidden; color: #fff; }
+.siri[data-state="listening"] .siri-stop, .siri[data-state="thinking"] .siri-stop, .siri[data-state="speaking"] .siri-stop { visibility: visible; background: rgba(255, 90, 90, .25); }
+@media (prefers-reduced-motion: reduce) {
+  .siri-orb i, .siri-wave i, .siri-mic, .siri-orb::after, .siri-orb::before { animation: none !important; }
+}
+@media (max-width: 360px) { .siri-orb { width: 88px; height: 88px; } .siri-msg { font-size: 16px; } }

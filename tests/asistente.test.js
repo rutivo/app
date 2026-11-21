@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { ask, normalize, periodOf, spoken } from '../js/asistente.js';
+import { ask as ask0, normalize, periodOf, spoken } from '../js/asistente.js';
+
+// Si Rutivo pregunta «¿En efectivo o con tarjeta?» (no se dijo), se contesta «en efectivo»
+// (antes daba por hecho efectivo sin preguntar; las pruebas de abajo siguen valiendo).
+const ask = (q, st, now, h = {}, c = {}) => { const r = ask0(q, st, now, h, c); return r.ctx && r.ctx.slot ? ask0('en efectivo', st, now, h, r.ctx) : r; };
 
 const NOW = new Date('2026-11-19T17:00:00');
 const state = {
@@ -152,8 +156,13 @@ test('hilo de la conversación: «¿y ayer?» y completar el importe', () => {
   assert.match(d.text, /¿De cuánto\?/);
   const e = ask('de 35 con tarjeta', state, NOW, {}, d.ctx);
   assert.deepEqual(e.action.item, { f: '2026-11-19', t: 'in', p: 'tarjeta', i: 35, c: 'Carrera' });
-  assert.equal(ask('borra lo último', state, NOW).kind, 'undo');
-  assert.equal(ask('me he equivocado', state, NOW).kind, 'undo');
+  // Quitar lo último: pregunta antes (y si no hay nada reciente, lo dice)
+  assert.match(ask('borra lo último', state, NOW).text, /No hay nada reciente/);
+  const done = { list: 'mov', items: [{ f: '2026-11-19', t: 'in', p: 'tarjeta', i: 35, c: 'Carrera' }], refs: [], at: NOW.getTime() };
+  const u = ask('borra lo último', state, NOW, {}, { done });
+  assert.equal(u.kind, 'confirm');
+  assert.equal(ask('sí', state, NOW, {}, u.ctx).kind, 'undo');
+  assert.equal(ask('me he equivocado', state, NOW, {}, { done }).kind, 'confirm');
 });
 
 test('lo que dijiste tal cual: muletillas, plurales y «como ingreso»', () => {
@@ -194,9 +203,9 @@ test('con ruido: palabras mal oídas, números colados y confirmación', () => {
   assert.deepEqual(ask('sí', state, NOW, {}, long.ctx).action.item, { f: '2026-11-19', t: 'in', p: 'tarjeta', i: 18, c: 'Carrera' });
   assert.match(ask('no', state, NOW, {}, long.ctx).text, /no lo apunto/);
   // El móvil dice que no está seguro de lo que oyó → también pregunta
-  assert.equal(ask('apunta 20 euros', state, NOW, { confidence: 0.4 }).kind, 'confirm');
-  assert.equal(ask('apunta 20 euros', state, NOW, { confidence: 0.9 }).kind, 'action');
-  assert.equal(ask('apunta 20 euros', state, NOW, { confidence: 0 }).kind, 'action'); // 0 = el iPhone no lo dice
+  assert.equal(ask('apunta 20 euros en efectivo', state, NOW, { confidence: 0.4 }).kind, 'confirm');
+  assert.equal(ask('apunta 20 euros en efectivo', state, NOW, { confidence: 0.9 }).kind, 'action');
+  assert.equal(ask('apunta 20 euros en efectivo', state, NOW, { confidence: 0 }).kind, 'action'); // 0 = el iPhone no lo dice
 });
 
 test('micrófono propio: detector de voz con ruido de fondo', async () => {
