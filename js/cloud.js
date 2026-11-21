@@ -338,6 +338,13 @@ function requestSync(force = false) {
   return running;
 }
 
+/** Trae YA lo último de la nube (forzado) y sube lo pendiente. true si se pudo. */
+export function syncNow() {
+  if (!remote) return Promise.resolve(true);
+  clearTimeout(timer);
+  return requestSync(true);
+}
+
 /** Sube los cambios ahora (y trae los de otros móviles). true si todo quedó guardado. */
 export async function flush() {
   if (!remote) return true;

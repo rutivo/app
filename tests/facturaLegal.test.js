@@ -42,3 +42,23 @@ test('numeración: las rectificativas van en su propia serie', () => {
   assert.equal(nextRectNumber(fac), 'R-002');
   assert.equal(nextInvoiceNumber(0, fac.filter((f) => !f.tipo || f.tipo === 'F1')), '008');
 });
+
+import { chainOrder, duplicateNumbers, lastHash as lastHashOf } from '../js/facturaLegal.js';
+
+test('la cadena de huellas va por fecha de emisión, no por el orden de la lista (al bajar de la nube llegan por id)', () => {
+  const a = { id: 'z9', num: '001', huella: 'H1', gen: '2026-11-01T10:00:00+01:00' };
+  const b = { id: 'a1', num: '002', huella: 'H2', gen: '2026-11-02T10:00:00+01:00' };
+  const c = { id: 'm5', num: '003', huella: 'H3', gen: '2026-11-03T10:00:00+01:00' };
+  assert.deepEqual(chainOrder([b, c, a]).map((f) => f.num), ['001', '002', '003']);
+  assert.equal(lastHashOf([c, a, b]), 'H3', 'la última es la más reciente, esté donde esté en la lista');
+});
+
+test('números repetidos (dos móviles sin conexión): se detectan por serie; anulando una queda resuelto', () => {
+  const f = (id, num, gen, extra = {}) => ({ id, num, tipo: 'F1', gen, ...extra });
+  const inv = [f('x', '004', '2026-11-01T10:00:00Z'), f('y', '005', '2026-11-02T10:00:00Z'), f('z', '005', '2026-11-02T10:05:00Z'), { id: 'r', num: '005', tipo: 'R4', gen: '2026-11-03T10:00:00Z' }];
+  const d = duplicateNumbers(inv);
+  assert.equal(d.length, 1);
+  assert.deepEqual(d[0], { num: '005', serie: 'F', ids: ['y', 'z'] }, 'la rectificativa R es otra serie; de la más antigua a la más nueva');
+  inv[2].anulada = 'R-001';
+  assert.deepEqual(duplicateNumbers(inv), [], 'anulada la repetida, ya no se avisa');
+});

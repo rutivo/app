@@ -1,8 +1,8 @@
 // Pantalla "Facturas": datos del emisor, logo, emisión de facturas, PDF y copia de seguridad.
 import { $, $$, confirmTapTimed, disarm, downloadBlob, loadScript, onClick, saveFile, toast } from '../dom.js';
 import { COLORS, ICON_NAMES, ICONS, accentColor, iconSvg, logoSvg } from '../logo.js';
-import { problemText, syncProblems } from '../cloud.js';
-import { clientProblems, fingerprint, isoWithZone, issuerProblems, lastHash, nextRectNumber, recordString } from '../facturaLegal.js';
+import { cloudEnabled, problemText, syncNow, syncProblems } from '../cloud.js';
+import { clientProblems, duplicateNumbers, fingerprint, isoWithZone, issuerProblems, lastHash, nextRectNumber, recordString } from '../facturaLegal.js';
 import { baseOf, invoiceTotals, nextInvoiceNumber } from '../money.js';
 import { S, exportBackup, importBackup, markBackupDone, save } from '../store.js';
 import { csvCell, esc, eur, fd, r2, slug, today, uid } from '../utils.js';
@@ -175,6 +175,17 @@ function renderInvoices() {
         '<div class="mut mt8">No se ha borrado nada: siguen en este móvil y en la copia de seguridad. Haz una copia (Cuenta → Copia de seguridad) por si acaso.</div>'
       : '';
   }
+  // Números repetidos (dos móviles sin conexión a la vez): se dice claramente cómo arreglarlo
+  const dups = duplicateNumbers(S.fac);
+  const dupIds = new Set(dups.flatMap((d) => d.ids));
+  const dupBox = $('#facdup');
+  if (dupBox) {
+    dupBox.hidden = !dups.length;
+    dupBox.innerHTML = dups.length
+      ? '<b>⚠️ Hay facturas con el número repetido</b>' + dups.map((d) => '<div class="mt8">Nº ' + esc(d.num) + ': ' + d.ids.length + ' facturas (se hicieron a la vez en dos móviles sin conexión).</div>').join('') +
+        '<div class="mut mt8">Abre la más reciente, toca «Anular» y vuelve a emitirla: tendrá un número nuevo. Las facturas no se pueden borrar ni cambiar de número.</div>'
+      : '';
+  }
   const unsynced = (f) => facIssues.some((p) => (p.num && p.num === f.num && p.fecha === f.fecha) || (!p.num && String(p.key).startsWith('fac-' + String(f.fecha).slice(0, 4))));
   $('#lfac').innerHTML = S.fac.length
     ? [...S.fac]
@@ -182,9 +193,10 @@ function renderInvoices() {
         .map((f) => {
           const rect = f.tipo && f.tipo !== 'F1';
           const tag = f.anulada ? ' <span class="tag pend">Anulada (' + esc(f.anulada) + ')</span>' : rect ? ' <span class="tag">Rectificativa de ' + esc(f.rect.num) + '</span>' : '';
-          return '<div class="it" data-of="' + esc(f.id) + '"><div><b>' + esc(f.num) + '</b>' + tag + (unsynced(f) ? ' <span class="tag pend">⚠️ Sin sincronizar</span>' : '') + '<small>' + esc(f.cl.nom) + ' · ' + fd(f.fecha) + '</small></div>' +
-            '<div><b>' + eur(invoiceTotals(f).t) + '</b>' +
-            '<button class="x" data-df="' + esc(f.id) + '" aria-label="Borrar factura">×</button></div></div>';
+          const dupTag = dupIds.has(f.id) && !f.anulada ? ' <span class="tag pend">⚠️ Número repetido</span>' : '';
+          // Las facturas emitidas no se borran (numeración correlativa): se anulan con una rectificativa
+          return '<div class="it" data-of="' + esc(f.id) + '"><div><b>' + esc(f.num) + '</b>' + tag + dupTag + (unsynced(f) ? ' <span class="tag pend">⚠️ Sin sincronizar</span>' : '') + '<small>' + esc(f.cl.nom) + ' · ' + fd(f.fecha) + '</small></div>' +
+            '<div><b>' + eur(invoiceTotals(f).t) + '</b></div></div>';
         })
         .join('')
     : '<span class="mut">Todavía no has emitido facturas.</span>';
@@ -220,6 +232,13 @@ async function createInvoice() {
   S.cli[client] = { nif, dir, part };
   creating = true;
   try {
+    // Con cuenta: antes de dar número, se trae lo último de la nube (otro móvil puede
+    // haber emitido una factura). Sin conexión se crea igual y, si se repitiera, se avisa.
+    if (cloudEnabled()) {
+      err('Comprobando el último número en tu cuenta…');
+      const ok = await Promise.race([syncNow(), new Promise((r) => setTimeout(() => r(false), 8000))]);
+      err(ok ? '' : 'Sin conexión: se usa el último número de este móvil. Si otro móvil emitió a la vez, te avisaré.');
+    }
     const invoice = {
       id: uid(),
       tipo: 'F1',
@@ -243,25 +262,22 @@ async function createInvoice() {
   }
 }
 
-function deleteInvoice(button) {
-  if (!confirmTapTimed(button, '¿Borrar?', 'Toca otra vez para borrar la factura.')) return;
-  const f = S.fac.find((x) => x.id === button.dataset.df);
-  if (!f) return;
-  S.fac = S.fac.filter((x) => x !== f);
-  S.fac.forEach((x) => { if (x.anulada === f.num) delete x.anulada; });
-  S.srv.forEach((s) => {
-    if (s.fid === f.id) delete s.fid;
-  });
-  save();
-  rerenderAll();
-  toast('Factura borrada. Sus servicios vuelven a «Sin facturar».');
-}
-
 /** Anular = emitir una factura rectificativa con los importes en negativo (la original no se borra). */
+let annulling = false;
 async function annulInvoice(button) {
+  if (annulling) return; // nunca dos rectificativas por la misma factura
   if (!confirmTapTimed(button, '¿Anular?', 'Toca otra vez: se creará una factura rectificativa que la anula.', 8000)) return;
   const f = S.fac.find((x) => x.id === button.dataset.af);
   if (!f || f.anulada) return;
+  annulling = true;
+  try {
+    await annulNow(f);
+  } finally {
+    annulling = false;
+  }
+}
+
+async function annulNow(f) {
   const rect = {
     id: uid(),
     tipo: 'R4',
@@ -561,15 +577,13 @@ export function initFacturas(rerender) {
   $('#fc').onchange = renderPending;
   $('#mk').onclick = createInvoice;
   onClick('[data-af]', annulInvoice);
-  onClick('[data-df]', deleteInvoice);
   $('#faon').onclick = () => { S.cfg.facOn = 1; save(); rerenderAll(); };
   window.addEventListener('rutivo:sync', () => renderInvoices());
   $('#fanoff').onclick = () => { S.cfg.facOn = 0; save(); rerenderAll(); toast('«Crear facturas» oculto. Tus facturas siguen guardadas.'); };
   $('#faexp').onclick = exportRegister;
-  $('#invanul').onclick = () => annulInvoice($('#invanul'));
   $('#cpart').onchange = () => { $('#cnifbox').style.display = $('#cpart').checked ? 'none' : 'block'; };
   onClick('[data-of]', (el, e) => {
-    if (e.target.closest('[data-af],[data-df]')) return; // los botones no abren la factura
+    if (e.target.closest('[data-af]')) return; // los botones no abren la factura
     const f = S.fac.find((x) => x.id === el.dataset.of);
     if (f) showInvoice(f);
   });

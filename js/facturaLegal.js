@@ -89,10 +89,42 @@ export async function fingerprint(text) {
   return [...new Uint8Array(h)].map((b) => b.toString(16).padStart(2, '0')).join('').toUpperCase();
 }
 
+/**
+ * Facturas de la cadena en el orden en que se emitieron (por fecha y hora de
+ * generación). No vale el orden de la lista: al bajar de la nube llegan
+ * ordenadas por su identificador interno.
+ */
+export function chainOrder(invoices) {
+  const t = (f) => Date.parse(f.gen) || 0;
+  return invoices.filter((f) => f.huella).map((f, i) => ({ f, i })).sort((a, b) => t(a.f) - t(b.f) || a.i - b.i).map((x) => x.f);
+}
+
 /** Última huella de la cadena (la de la factura emitida más reciente que la tenga). */
 export function lastHash(invoices) {
-  const withHash = invoices.filter((f) => f.huella);
-  return withHash.length ? withHash[withHash.length - 1].huella : '';
+  const chain = chainOrder(invoices);
+  return chain.length ? chain[chain.length - 1].huella : '';
+}
+
+/** Serie de una factura: «F» (ordinarias) o «R» (rectificativas). */
+const series = (f) => (!f.tipo || f.tipo === 'F1' ? 'F' : 'R');
+
+/**
+ * Números repetidos dentro de la misma serie (p. ej. dos móviles sin conexión
+ * emitiendo a la vez). Devuelve [{num, serie, ids:[…]}], de la más antigua a la más nueva.
+ * Si todas menos una ya están anuladas (con su rectificativa), está resuelto y no se cuenta.
+ */
+export function duplicateNumbers(invoices) {
+  const groups = new Map();
+  for (const f of invoices) {
+    const key = series(f) + '|' + String(f.num).trim();
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(f);
+  }
+  const t = (f) => Date.parse(f.gen) || 0;
+  return [...groups.values()].filter((g) => g.filter((f) => !f.anulada).length > 1).map((g) => {
+    const sorted = [...g].sort((a, b) => t(a) - t(b));
+    return { num: String(g[0].num).trim(), serie: series(g[0]), ids: sorted.map((f) => f.id) };
+  });
 }
 
 /**
@@ -102,7 +134,7 @@ export function lastHash(invoices) {
 export async function verifyChain(invoices, totalsOf) {
   const bad = [];
   let prev = '';
-  for (const f of invoices.filter((x) => x.huella)) {
+  for (const f of chainOrder(invoices)) {
     const h = await fingerprint(recordString(f, totalsOf(f), prev, f.gen));
     if (h !== f.huella || (f.prev || '') !== prev) bad.push(f.num);
     prev = f.huella;

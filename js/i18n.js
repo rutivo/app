@@ -124,6 +124,10 @@ const D = {
   'Rutivo te prepara la factura con tus datos. Revísala antes de enviarla: su contenido es responsabilidad de quien la emite.': 'Rutivo prepares the invoice with your details. Check it before sending: its content is the issuer’s responsibility.',
   'Preparando PDF…': 'Preparing PDF…', 'PDF listo ✓': 'PDF ready ✓', 'No se pudo crear el PDF. Revisa la conexión e inténtalo otra vez.': 'Couldn’t create the PDF. Check your connection and try again.',
   '«Crear facturas» oculto. Tus facturas siguen guardadas.': '«Create invoices» hidden. Your invoices are still saved.', 'Cerrar': 'Close', 'Anular': 'Cancel invoice', 'Enviar / guardar PDF': 'Send / save PDF',
+  'Comprobando el último número en tu cuenta…': 'Checking the latest number in your account…',
+  'Sin conexión: se usa el último número de este móvil. Si otro móvil emitió a la vez, te avisaré.': 'Offline: using this phone\u2019s latest number. If another phone issued one at the same time, I\u2019ll let you know.',
+  '⚠️ Hay facturas con el número repetido': '⚠️ Some invoices have a repeated number', '⚠️ Número repetido': '⚠️ Repeated number',
+  'Abre la más reciente, toca «Anular» y vuelve a emitirla: tendrá un número nuevo. Las facturas no se pueden borrar ni cambiar de número.': 'Open the most recent one, tap «Cancel invoice» and issue it again: it will get a new number. Invoices can\u2019t be deleted or renumbered.',
   // Cuenta
   '‹ Volver': '‹ Back', 'Este dispositivo': 'This device', 'Tus datos se guardan solo en este móvil. Haz copias de seguridad.': 'Your data is only saved on this phone. Make backups.',
   'Apariencia': 'Appearance', 'Elegante': 'Elegant', 'Azul marino, sobrio': 'Navy blue, understated', 'Clásico': 'Classic', 'Claro (oscuro si el móvil está en modo oscuro)': 'Light (dark if your phone is in dark mode)',
@@ -252,6 +256,7 @@ const R = [
   [/^⬇️ Preparando «Oye Rutivo»… (\d+)% \(solo la primera vez\)$/, '⬇️ Preparing «Oye Rutivo»… $1% (first time only)'],
   [/^(\d\d\/\d\d\/\d{4} \d{1,2}:\d\d) · (.+) a (.+)$/, '$1 · $2 to $3'],
   [/^Rutivo · © (.+)\. Todos los derechos reservados\.$/, 'Rutivo · © $1. All rights reserved.'],
+  [/^Nº (\S+): (\d+) facturas \(se hicieron a la vez en dos móviles sin conexión\)\.$/, 'No. $1: $2 invoices (made at the same time on two offline phones).'],
   [/^Recogida en (\d+) min$/, 'Pickup in $1 min'],
   [/^🚗 ¡Sal ya! Recoges a (.+)$/, '🚗 Leave now! You pick up $1'],
   [/^(.+) · vuelo (\S*) sale a las (\d{1,2}:\d\d)$/, '$1 · flight $2 departs at $3'],
