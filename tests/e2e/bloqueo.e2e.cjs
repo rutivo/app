@@ -47,6 +47,16 @@ const typePin = async (page, pin) => { for (const d of pin) await page.click('#l
     await typePin(page, '4821');
     ok('6 · PIN correcto: se abre', !(await locked(page)) && /Carrera secreta/.test(await page.evaluate(() => document.body.innerText)));
 
+    // ---------- PIN de 6 cifras: 6 huecos y se entra con las 6 ----------
+    await page.evaluate(async () => { const m = await import('/js/bloqueo.js'); await m.enableLock('905173', 1); });
+    await page.reload(); await page.waitForTimeout(1500);
+    const huecos = await page.evaluate(() => document.querySelectorAll('#lock .lk-dots i').length);
+    await typePin(page, '9051');
+    const aMedias = await locked(page);
+    await typePin(page, '73');
+    ok('6b · con un PIN de 6 cifras salen 6 huecos (antes 4) y se entra al poner las 6', huecos === 6 && aMedias && !(await locked(page)), huecos + ' huecos');
+    await page.evaluate(async () => { const m = await import('/js/bloqueo.js'); await m.enableLock('4821', 1); });
+
     // ---------- Al salir de la app ----------
     const hide = (v) => page.evaluate((v) => { Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => v }); document.dispatchEvent(new Event('visibilitychange')); }, v);
     await hide('hidden'); await hide('visible');

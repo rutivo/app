@@ -139,7 +139,9 @@ export function lockNow() {
   let busy = false;
   const dots = overlay.querySelector('.lk-dots');
   const msg = overlay.querySelector('.lk-msg');
-  const paint = () => { dots.innerHTML = Array.from({ length: Math.max(4, pin.length) }, (_, i) => '<i class="' + (i < pin.length ? 'on' : '') + '"></i>').join(''); };
+  // Tantos huecos como cifras tiene TU PIN (4, 5 o 6); en PIN antiguos sin ese dato, 6 huecos que se pueden dejar a medias
+  const size = (lockSettings() || {}).len || 0;
+  const paint = () => { dots.innerHTML = Array.from({ length: size || Math.max(4, pin.length) }, (_, i) => '<i class="' + (i < pin.length ? 'on' : '') + '"></i>').join(''); };
   paint();
   const tryPin = async () => {
     if (busy) return;
