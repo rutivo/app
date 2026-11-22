@@ -1,7 +1,6 @@
 // © 2026 Alejandro Antonio Fernández Moyano. Todos los derechos reservados. Ver LICENSE.
 // Asistente de Rutivo: entiende preguntas y órdenes en español sobre tus datos.
 // Funciones puras: todo se calcula en el móvil, sin enviar nada fuera.
-import { huchaStatus, huchasOf } from './huchas.js';
 import { hoursOf } from './jornada.js';
 import { cashStats, invoiceTotals } from './money.js';
 import { quarterData } from './report.js';
@@ -455,18 +454,16 @@ const sig = (items) => JSON.stringify(items.map((x) => [x.t, x.p, x.i, x.c, x.h]
 
 function answer(t, state, now, helpers) {
   const day = iso(now);
+  // --- La Hucha se quitó de la app: se dice, y no se apunta como otra cosa ---
+  if (/\bhuchas?\b|^ahorra(me)? /.test(t)) {
+    return reply('🐷 La Hucha ya no está en Rutivo. Lo que tenías apuntado sigue guardado en tu cuenta.', 'La hucha ya no está en Rutivo.');
+  }
   // --- Órdenes: apuntar ---
   const amount = amountOf(t);
   if ((isWrite(t) || (!QUESTION.test(t) && WRITE_ANY.test(t))) && !amount) {
     return reply('Claro. ¿De cuánto? Dímelo así: «30 euros en efectivo» o «12 con tarjeta».', 'Claro. ¿De cuánto?', { pending: 'apunta' + (/(gasto|gaste|pague|pagado|gasolina|peaje|parking)/.test(t) ? ' gasto' : '') });
   }
   if (isWrite(t) && amount) {
-    if (has(t, 'hucha', 'huchas') || /^ahorra(me)?( |$)/.test(t)) {
-      const hs = huchasOf(state.cfg);
-      const h = hs.find((x) => has(t, clean(x.n).split(' ').pop())) || hs[0];
-      return { kind: 'action', action: { list: 'huc', item: { f: day, i: r2(amount), h: h.id } },
-        text: '🐷 Metidos **' + eur(amount) + '** en «' + h.n + '».', speech: 'Metidos ' + spoken(amount) + ' en ' + h.n };
-    }
     const cat = EXPENSES.find(([re]) => re.test(t));
     const forcedIn = /como (ingreso|cobro|carrera)|me (han|ha) pagado|me pagaron|propina|he cobrado|cobre/.test(t);
     const expense = !forcedIn && (!!cat || /gasto|gaste|gastado|pagado|pague|como gasto|\bsalida de\b/.test(t));
@@ -490,7 +487,7 @@ function answer(t, state, now, helpers) {
 
   // --- Ir a una pantalla («abre la gasolina») ---
   const NAV = [[/\b(caja|inicio|principal|jornada)\b/, 'hoy', 'la Caja'], [/\b(transfer|transfers|agenda|servicios|reservas)\b/, 'tr', 'Transfer'],
-    [/\b(gasolina|tickets?|combustible)\b/, 'ga', 'Gasolina'], [/\b(facturas?|facturacion)\b/, 'fa', 'Facturas'], [/\b(huchas?|ahorros?)\b/, 'hu', 'la Hucha']];
+    [/\b(gasolina|tickets?|combustible)\b/, 'ga', 'Gasolina'], [/\b(facturas?|facturacion)\b/, 'fa', 'Facturas'], [/\b(panel|tablero|control)\b/, 'pa', 'el Panel']];
   if (/^(abre|abreme|ensename|ensena|llevame|vete|ve|ir|pasa|cambia|muestrame la pantalla|pon la pantalla)( (a|al|a la|la|el|las|los|mi|mis|pantalla de|pantalla del))* /.test(t)) {
     const nav = NAV.find(([re]) => re.test(t));
     if (nav) return { kind: 'nav', view: nav[1], text: '📲 Te abro ' + nav[2] + '.', speech: 'Te abro ' + nav[2] + '.' };
@@ -585,7 +582,7 @@ function answer(t, state, now, helpers) {
 
   // --- Ayuda ---
   if (/ayuda|que (puedo|se puede) (preguntar|decir)|que sabes|como funcionas/.test(t)) {
-    return reply('🚗 **Conduciendo (manos libres):** di «Oye Rutivo» → te digo «Dime, ¿en qué puedo ayudarte?» → «Apúntame [importe] de [ingreso o gasto] de [concepto], [efectivo o tarjeta]».\nEjemplos: «Apúntame 15 euros de ingreso de primera carrera, efectivo» · «Apúntame 5 euros de gasto de peaje, tarjeta». También de un tirón: «Oye Rutivo, apúntame…». «Borra lo último» lo deshace.\n\nPuedes preguntarme o pedirme cosas como:\n• Hola, ¿qué tal?\n• ¿Qué tiempo hace? / ¿Va a llover mañana?\n• ¿Cuánto llevo hoy?\n• ¿Cuánto gané el mes pasado?\n• ¿Cuánto me debe Charly?\n• ¿Qué tengo mañana?\n• ¿Cuándo llevé a Richard?\n• ¿Cuánto gasto en gasolina?\n• ¿Cuánto IVA pago este trimestre?\n• ¿Cuántos kilómetros llevo este mes?\n• ¿Cómo va mi hucha?\n• Dame el resumen del día\n• ¿Cuántas carreras llevo?\n• ¿Qué he apuntado hoy?\n• Apúntame 12 € en tarjeta\n• Ingrésame 15 con 50 en efectivo\n• Pagué 7 euros de parking\n• He echado 50 de gasoil\n• Mete 5 de propina\n• Borra lo último',
+    return reply('🚗 **Conduciendo (manos libres):** di «Oye Rutivo» → te digo «Dime, ¿en qué puedo ayudarte?» → «Apúntame [importe] de [ingreso o gasto] de [concepto], [efectivo o tarjeta]».\nEjemplos: «Apúntame 15 euros de ingreso de primera carrera, efectivo» · «Apúntame 5 euros de gasto de peaje, tarjeta». También de un tirón: «Oye Rutivo, apúntame…». «Borra lo último» lo deshace.\n\nPuedes preguntarme o pedirme cosas como:\n• Hola, ¿qué tal?\n• ¿Qué tiempo hace? / ¿Va a llover mañana?\n• ¿Cuánto llevo hoy?\n• ¿Cuánto gané el mes pasado?\n• ¿Cuánto me debe Charly?\n• ¿Qué tengo mañana?\n• ¿Cuándo llevé a Richard?\n• ¿Cuánto gasto en gasolina?\n• ¿Cuánto IVA pago este trimestre?\n• ¿Cuántos kilómetros llevo este mes?\n• Dame el resumen del día\n• ¿Cuántas carreras llevo?\n• ¿Qué he apuntado hoy?\n• Apúntame 12 € en tarjeta\n• Ingrésame 15 con 50 en efectivo\n• Pagué 7 euros de parking\n• He echado 50 de gasoil\n• Mete 5 de propina\n• Borra lo último',
       'Puedes preguntarme cuánto llevas, quién te debe, qué servicios tienes, o pedirme que apunte una carrera o un gasto.');
   }
 
@@ -655,13 +652,6 @@ function answer(t, state, now, helpers) {
     return reply('🛣️ ' + p.label.charAt(0).toUpperCase() + p.label.slice(1) + ': **' + Math.round(km).toLocaleString('es-ES') + ' km** · **' + (Math.round(h * 10) / 10).toString().replace('.', ',') + ' h** en ' + jor.length + (jor.length === 1 ? ' jornada' : ' jornadas') +
       (km ? ' · ' + eur(net / km) + '/km' : '') + (h ? ' · ' + eur(net / h) + '/h' : ''),
       p.label + ' llevas ' + Math.round(km) + ' kilómetros y ' + Math.round(h) + ' horas' + (h ? ', a ' + spoken(net / h) + ' la hora' : ''));
-  }
-
-  // --- Hucha ---
-  if (/(hucha|ahorr)/.test(t)) {
-    const lines = huchasOf(state.cfg).map((h) => { const s = huchaStatus(h, state.huc, day); return { h, s }; });
-    return reply(lines.map(({ h, s }) => h.e + ' ' + h.n + ': **' + eur(s.saved) + '** de ' + eur(s.goal) + ' (' + s.pct + ' %)' + (s.done ? ' 🎉' : s.eta ? ' · llegas el ' + fd(s.eta) : '')).join('\n'),
-      lines.map(({ h, s }) => 'En ' + h.n + ' llevas ' + spoken(s.saved) + ', el ' + s.pct + ' por ciento').join('. '));
   }
 
   // --- Mejor día ---
@@ -843,7 +833,7 @@ function smallTalk(t, state, now, helpers, ctx = {}) {
   }
   if (/^(muchas )?gracias|^genial$|^perfecto$|^de lujo$|^muy bien$|^ok$|^vale$|^estupendo$/.test(t)) return reply(pick(['¡De nada! 😊', '¡A mandar!', '¡Para eso estoy! 😊'], now), '¡De nada!');
   if (/^(adios|hasta luego|chao|nos vemos|hasta manana|me voy)/.test(t)) return reply('¡Hasta luego' + hi + '! Buen servicio 🚕', 'Hasta luego' + hi + '. Buen servicio.');
-  if (/(quien eres|como te llamas|que eres)/.test(t)) return reply('Soy **Rutivo**, tu asistente. Me sé tu caja, tus servicios, tu gasolina, tus facturas y tus huchas. Pregúntame o pídeme que apunte algo.', 'Soy Rutivo, tu asistente. Pregúntame lo que quieras de tu trabajo, o pídeme que apunte algo.');
+  if (/(quien eres|como te llamas|que eres)/.test(t)) return reply('Soy **Rutivo**, tu asistente. Me sé tu caja, tus servicios, tu gasolina, tus facturas y tus transfers. Pregúntame o pídeme que apunte algo.', 'Soy Rutivo, tu asistente. Pregúntame lo que quieras de tu trabajo, o pídeme que apunte algo.');
   if (/que hora es/.test(t)) { const h = now.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }); return reply('🕒 Son las **' + h + '**.', 'Son las ' + h); }
   if (/que dia es|a que estamos|que fecha/.test(t)) { const d = now.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' }); return reply('📅 Hoy es **' + d + '**.', 'Hoy es ' + d); }
   if (/chiste/.test(t)) return reply('🚕 —Taxista, ¿cuánto me cobra por llevarme al aeropuerto?\n—50 euros.\n—¿Y la maleta?\n—La maleta va gratis.\n—Pues lleve la maleta, que yo voy andando. 😄', 'Un señor le pregunta al taxista cuánto le cobra por ir al aeropuerto. Cincuenta euros. ¿Y la maleta? La maleta va gratis. Pues lleve la maleta, que yo voy andando.');

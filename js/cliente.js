@@ -91,10 +91,17 @@ function render(data) {
   app.appendChild(who);
 
   // Punto de encuentro
-  if (data.p) {
+  if (data.p || data.ph) {
     const c = el('section', 'card');
     c.appendChild(el('h2', null, t.where));
-    c.appendChild(el('div', 'big', '📍 ' + data.p));
+    if (data.p) c.appendChild(el('div', 'big', '📍 ' + data.p));
+    if (data.ph) {
+      const img = el('img', 'ph');
+      img.src = data.ph; // solo una JPEG en base64, comprobada en decodeLink
+      img.alt = t.where;
+      img.onclick = () => img.classList.toggle('open');
+      c.appendChild(img);
+    }
     app.appendChild(c);
   }
 
@@ -135,7 +142,7 @@ function render(data) {
 
 async function start() {
   const data = decodeLink(location.hash);
-  if (!data || (!data.d && !data.p && !data.dt)) {
+  if (!data || (!data.d && !data.p && !data.dt && !data.ph)) {
     const lang = (navigator.language || 'en').slice(0, 2);
     app.textContent = '';
     app.appendChild(el('p', 'broken', (T[lang] || T.en).broken));

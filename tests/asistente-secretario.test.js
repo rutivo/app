@@ -146,7 +146,8 @@ test('frases del encargo: consultas con datos reales', () => {
 
 test('abrir pantallas y facturas por voz (sin inventar)', () => {
   assert.deepEqual([ask('abre la gasolina', state, NOW).kind, ask('abre la gasolina', state, NOW).view], ['nav', 'ga']);
-  assert.equal(ask('llévame a la hucha', state, NOW).view, 'hu');
+  assert.equal(ask('llévame al panel', state, NOW).view, 'pa');
+  assert.equal(ask('llévame a la hucha', state, NOW).view, undefined);
   assert.equal(ask('abre las facturas', state, NOW).view, 'fa');
   const f = ask('hazme una factura para Charly', state, NOW);
   assert.equal(f.kind, 'nav');

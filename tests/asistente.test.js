@@ -73,14 +73,14 @@ test('¿Cuándo llevé a Richard?', () => {
   assert.match(r.text, /MR RICHARD SMITH\*\*: 1 servicio\. El último, el 10\/11\/2026/);
 });
 
-test('gasolina, IVA, km y hucha', () => {
+test('gasolina, IVA y km; la Hucha ya no está', () => {
   assert.match(ask('cuanto gasto en gasolina', state, NOW).text, /este mes: \*\*55,00\s€\*\* · 37 L/);
   assert.match(ask('cuanto iva pago este trimestre', state, NOW).text, /Trimestre 2026 T4: ingresos \*\*545,50\s€\*\*/);
   assert.match(ask('cuantos kilometros llevo este mes', state, NOW).text, /\*\*350 km\*\* · \*\*18 h\*\* en 2 jornadas/);
-  assert.match(ask('como va mi hucha', state, NOW).text, /Mi hucha: \*\*100,00\s€\*\* de 500,00\s€ \(20 %\)/);
+  assert.match(ask('como va mi hucha', state, NOW).text, /La Hucha ya no está en Rutivo/);
 });
 
-test('órdenes: apuntar carreras, gastos y hucha', () => {
+test('órdenes: apuntar carreras y gastos (lo de la hucha no se apunta como otra cosa)', () => {
   const a = ask('Apunta 45 euros en efectivo', state, NOW);
   assert.equal(a.kind, 'action');
   assert.deepEqual(a.action, { list: 'mov', item: { f: '2026-11-19', t: 'in', p: 'efectivo', i: 45, c: 'Carrera' } });
@@ -95,7 +95,9 @@ test('órdenes: apuntar carreras, gastos y hucha', () => {
   const d = ask('apunta un gasto de 6 euros de lavado', state, NOW);
   assert.deepEqual(d.action.item, { f: '2026-11-19', t: 'out', p: 'efectivo', i: 6, c: 'Lavado' });
   const e = ask('mete 10 en la hucha', state, NOW);
-  assert.deepEqual(e.action, { list: 'huc', item: { f: '2026-11-19', i: 10, h: 'main' } });
+  assert.equal(e.kind, 'answer');
+  assert.match(e.text, /La Hucha ya no está/);
+  assert.equal(e.action, undefined);
   const g = ask('he pagado 50 de gasolina con tarjeta', state, NOW);
   assert.deepEqual(g.action.item, { f: '2026-11-19', t: 'out', p: 'tarjeta', i: 50, c: 'Gasolina' });
 });

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { baseOf, cashStats, invoiceTotals, nextInvoiceNumber, savingsPeriod, savingsStatus } from '../js/money.js';
+import { baseOf, cashStats, invoiceTotals, nextInvoiceNumber } from '../js/money.js';
 
 test('baseOf separa el IVA de un importe con IVA incluido', () => {
   assert.equal(baseOf(110, 10), 100);
@@ -35,21 +35,4 @@ test('cashStats separa ingresos, gastos y neto por forma de pago', () => {
   assert.equal(s.out, 20);
   assert.equal(s.netCash, 30);
   assert.equal(s.netCard, 30);
-});
-
-test('savingsPeriod empieza el día configurado', () => {
-  assert.deepEqual(savingsPeriod('2026-11-18', 1), { a: '2026-11-01', b: '2026-12-01', n: 30 });
-  assert.deepEqual(savingsPeriod('2026-11-03', 5), { a: '2026-10-05', b: '2026-11-05', n: 31 });
-  assert.deepEqual(savingsPeriod('2026-01-10', 15), { a: '2025-12-15', b: '2026-01-15', n: 31 });
-  assert.equal(savingsPeriod('2026-11-30', 31).a, '2026-11-28'); // máximo día 28
-});
-
-test('savingsStatus calcula lo que falta y si se va al día', () => {
-  const st = savingsStatus([{ f: '2026-11-01', i: 100 }, { f: '2026-10-31', i: 999 }], '2026-11-10', 300, 1);
-  assert.equal(st.saved, 100);
-  assert.equal(st.missing, 200);
-  assert.equal(st.daily, 10);
-  assert.equal(st.expected, 100);
-  assert.equal(st.onTrack, true);
-  assert.equal(st.daysLeft, 21);
 });

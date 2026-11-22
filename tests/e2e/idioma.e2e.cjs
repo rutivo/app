@@ -34,7 +34,7 @@ const DATA = {
     const tabs = () => page.evaluate(() => [...document.querySelectorAll('.tabs button')].map((b) => b.textContent.trim()).join(','));
     await page.goto(app.url);
     await page.waitForTimeout(1000);
-    ok('1 · por defecto, en español', (await tabs()) === 'Caja,Transfer,Gasolina,Facturas,Hucha', await tabs());
+    ok('1 · por defecto, en español', (await tabs()) === 'Caja,Transfer,Gasolina,Facturas,Panel', await tabs());
 
     // Cuenta → Idioma: dos banderas
     await page.click('#acctbtn');
@@ -43,7 +43,7 @@ const DATA = {
     ok('2 · en Cuenta hay «Idioma · Language» con 🇪🇸 Español y 🇬🇧 English', flags.length === 2 && /🇪🇸.*Español/.test(flags[0]) && /🇬🇧.*English/.test(flags[1]), flags.join(' | '));
     await Promise.all([page.waitForNavigation(), page.click('[data-lang-set="en"]')]);
     await page.waitForTimeout(1200);
-    ok('3 · al tocar la bandera inglesa, la app pasa a inglés', (await tabs()) === 'Cash,Transfer,Fuel,Invoices,Savings', await tabs());
+    ok('3 · al tocar la bandera inglesa, la app pasa a inglés', (await tabs()) === 'Cash,Transfer,Fuel,Invoices,Dashboard', await tabs());
     const body = await page.evaluate(() => document.body.innerText);
     ok('4 · textos de la app en inglés (títulos, botones)', /Daily cash/.test(body) && /Save entry/.test(body) && /Income/.test(body), '');
     const all = await page.evaluate(() => document.body.textContent); // también lo de las pantallas que no se ven ahora
@@ -67,7 +67,7 @@ const DATA = {
     await page.waitForTimeout(600);
     await Promise.all([page.waitForNavigation(), page.click('[data-lang-set="es"]')]);
     await page.waitForTimeout(1200);
-    ok('9 · y se puede volver a español', (await tabs()) === 'Caja,Transfer,Gasolina,Facturas,Hucha', await tabs());
+    ok('9 · y se puede volver a español', (await tabs()) === 'Caja,Transfer,Gasolina,Facturas,Panel', await tabs());
     await page.evaluate(() => document.querySelector('.tabs button[data-v="fa"]').click());
     await page.waitForTimeout(300);
     await page.evaluate(() => { const b = document.querySelector('#lfac [data-of]'); if (b) b.click(); });

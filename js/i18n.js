@@ -28,6 +28,16 @@ export function setLang(l) {
 const D = {
   // Pestañas y títulos
   'Caja': 'Cash', 'Transfer': 'Transfer', 'Gasolina': 'Fuel', 'Facturas': 'Invoices', 'Hucha': 'Savings', 'Cuenta': 'Account',
+  // Panel Transfer y enlace para el cliente
+  'Panel': 'Dashboard', 'Panel Transfer': 'Transfer dashboard', 'Por cobrar': 'To collect', '7 días': '7 days', 'servicios': 'services',
+  'toca para cobrar': 'tap to collect', 'todo cobrado ✓': 'all collected ✓', 'PRÓXIMA RECOGIDA': 'NEXT PICKUP', 'AHORA': 'NOW',
+  '🔗 Enviar enlace al cliente': '🔗 Send link to the client', 'Esta semana': 'This week', 'Te deben': 'Owed to you', 'Sin nombre de pasajero': 'No passenger name',
+  'No tienes servicios próximos.': 'You have no upcoming services.', '🚖 Ir a Transfer': '🚖 Go to Transfer', '🔗 Enlace': '🔗 Link',
+  'Apúntalos en Transfer (o pega el texto de la agencia) y aquí lo tendrás todo a mano.': 'Add them in Transfer (or paste the agency text) and you’ll have everything here.',
+  'Idioma del cliente': 'Client language', 'Dónde le esperas': 'Where you wait', 'Tu coche': 'Your car', 'Matrícula': 'Number plate',
+  'Tu teléfono (para que te escriba o te llame)': 'Your phone (so they can message or call you)', '📲 Enviárselo por WhatsApp': '📲 Send it by WhatsApp',
+  '📋 Copiar enlace': '📋 Copy link', '👀 Ver lo que verá': '👀 See what they’ll see', 'Enlace copiado ✓': 'Link copied ✓',
+  '📸 Foto del punto de encuentro': '📸 Meeting point photo', '🗑️ Quitar foto': '🗑️ Remove photo',
   'Caja diaria': 'Daily cash', 'Día a día': 'Day by day', 'Día': 'Day', 'Hoy': 'Today', 'Mañana': 'Tomorrow', 'Ahora': 'Now',
   'Ingresos': 'Income', 'Gastos': 'Expenses', 'Ingreso': 'Income', 'Gasto': 'Expense', 'Efectivo': 'Cash', 'Tarjeta': 'Card',
   'Servicios Transfer': 'Transfer services', 'Neto en efectivo': 'Net in cash', 'Neto con tarjeta': 'Net by card',

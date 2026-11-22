@@ -31,7 +31,7 @@ const SIZES = [['iPhone', 390, 844, true], ['iPad vertical', 820, 1180, true], [
       await page.goto(app.url);
       await page.waitForTimeout(1200);
       const over = [];
-      for (const v of ['hoy', 'tr', 'ga', 'fa', 'hu']) {
+      for (const v of ['hoy', 'tr', 'ga', 'fa', 'pa']) {
         await page.evaluate((v) => document.querySelector('.tabs button[data-v="' + v + '"]').click(), v);
         await page.waitForTimeout(250);
         const o = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);

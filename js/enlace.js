@@ -61,7 +61,8 @@ export function encodeLink(data) {
  */
 export function decodeLink(hash) {
   try {
-    const s = String(hash || '').replace(/^#/, '').replace(/-/g, '+').replace(/_/g, '/');
+    const [main, ph] = String(hash || '').replace(/^#/, '').split('.');
+    const s = main.replace(/-/g, '+').replace(/_/g, '/');
     if (!s || s.length > 4000) return null;
     const bin = atob(s + '='.repeat((4 - (s.length % 4)) % 4));
     const obj = JSON.parse(new TextDecoder().decode(Uint8Array.from(bin, (c) => c.charCodeAt(0))));
@@ -78,14 +79,36 @@ export function decodeLink(hash) {
     if (out.h && !/^\d{2}:\d{2}$/.test(out.h)) delete out.h;
     if (out.f && !/^[A-Z0-9]{3,8}$/.test(out.f)) delete out.f;
     if (out.t && !/^\+?\d{6,15}$/.test(out.t)) delete out.t;
+    // Foto: solo una JPEG (empieza por /9j/), solo letras del base64 y con tamaño máximo
+    if (ph && ph.length <= PHOTO_MAX && /^[A-Za-z0-9_-]+$/.test(ph)) {
+      const b = ph.replace(/-/g, '+').replace(/_/g, '/');
+      if (b.startsWith('/9j/')) out.ph = 'data:image/jpeg;base64,' + b + '='.repeat((4 - (b.length % 4)) % 4);
+    }
     return out;
   } catch {
     return null;
   }
 }
 
-/** Enlace completo. `base` = dirección de la app (p. ej. https://rutivo.github.io/app/). */
-export const clientUrl = (base, data) => new URL('cliente.html', base).href + '#' + encodeLink(data);
+/** Tamaño máximo de la foto del punto de encuentro dentro del enlace (caracteres). */
+export const PHOTO_MAX = 12000;
+
+/** Foto (data:image/jpeg;base64,…) → trozo para el enlace, o '' si no vale. */
+export function photoPart(dataUrl) {
+  const m = /^data:image\/jpeg;base64,([A-Za-z0-9+/]+={0,2})$/.exec(String(dataUrl || ''));
+  if (!m || !m[1].startsWith('/9j/')) return '';
+  const part = m[1].replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  return part.length <= PHOTO_MAX ? part : '';
+}
+
+/**
+ * Enlace completo. `base` = dirección de la app (p. ej. https://rutivo.github.io/app/).
+ * La foto (si hay) va al final, tras un punto: #datos.foto
+ */
+export const clientUrl = (base, data, photo = '') => {
+  const ph = photoPart(photo);
+  return new URL('cliente.html', base).href + '#' + encodeLink(data) + (ph ? '.' + ph : '');
+};
 
 /** Milisegundos de una fecha y hora de España (sea cual sea la zona horaria del móvil que lo abre). */
 export function spainTime(date, time) {

@@ -29,7 +29,8 @@ function renderProviderSelect() {
 }
 
 /** Botones de cada servicio: llevarme, cartel, vuelo y bienvenida. */
-function serviceActions(s) {
+/** Botones de un servicio (también los usa el Panel). */
+export function serviceActions(s) {
   const id = esc(s.id);
   let html = '<div>';
   html += '<button class="small-btn sec" data-go="' + id + '">📍 Llevarme</button>';

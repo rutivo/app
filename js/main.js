@@ -1,6 +1,6 @@
 // © 2026 Alejandro Antonio Fernández Moyano. Todos los derechos reservados. Ver LICENSE.
 // Punto de entrada: carga los datos, conecta las pantallas y pinta la app.
-import { $, $$ } from './dom.js';
+import { $, $$, onClick } from './dom.js';
 import { checkLegal } from './legal.js';
 import { renderReminders, scheduleReminders } from './reminders.js';
 import { loadLocal, migratePhotos, requestPersistentStorage } from './store.js';
@@ -16,8 +16,8 @@ import { accountsEnabled, initAccount, renderAccount, signOutForgotPin } from '.
 import { cloudEnabled } from './cloud.js';
 import { initFacturas, renderBrand, renderFacturas, saveBackupFile } from './views/facturas.js';
 import { initGasolina, renderGasolina } from './views/gasolina.js';
-import { initHucha, renderHucha } from './views/hucha.js';
 import { initJornada } from './views/jornada.js';
+import { renderPanel } from './views/panel.js';
 import { initUpcoming } from './views/proximos.js';
 import { closeAssistant, initAssistant } from './views/asistente.js';
 import { initTips } from './views/tips.js';
@@ -43,7 +43,7 @@ function render() {
   renderTransfer();
   renderGasolina();
   renderFacturas();
-  renderHucha();
+  renderPanel();
   renderAccount();
   renderThemeChoice();
   renderReminders();
@@ -53,7 +53,7 @@ function render() {
 
 let lastTab = 'hoy';
 
-/** Muestra una pantalla: 'hoy', 'tr', 'ga', 'fa', 'hu' o 'cu' (Cuenta). */
+/** Muestra una pantalla: 'hoy', 'tr', 'ga', 'fa', 'pa' (Panel) o 'cu' (Cuenta). */
 function showView(view) {
   $$('.tabs button').forEach((t) => t.classList.toggle('on', t.dataset.v === view));
   $$('.v').forEach((v) => v.classList.toggle('on', v.id === 'v-' + view));
@@ -68,6 +68,7 @@ function initTabs() {
   $$('.tabs button').forEach((tab) => (tab.onclick = () => showView(tab.dataset.v)));
   $('#acctbtn').onclick = () => showView('cu');
   $('#cuback').onclick = () => showView(lastTab);
+  onClick('[data-gotab]', (el) => showView(el.dataset.gotab));
 }
 
 /** Icono provisional dibujado al vuelo (pestaña del navegador / atajo de inicio). */
@@ -110,7 +111,6 @@ initCaja();
 initCharts();
 initTransfer(render);
 initGasolina(render);
-initHucha();
 initJornada(render);
 initFacturas(render);
 initTips(saveBackupFile);

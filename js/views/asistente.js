@@ -146,7 +146,7 @@ function undoAt(i) {
   return true;
 }
 
-/** Ir a una pantalla de la app (Caja, Transfer, Gasolina, Facturas, Hucha). */
+/** Ir a una pantalla de la app (Caja, Transfer, Gasolina, Facturas, Panel). */
 function goTo(view) {
   const b = document.querySelector('.tabs button[data-v="' + view + '"]');
   if (b) b.click();

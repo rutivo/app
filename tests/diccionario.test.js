@@ -16,7 +16,6 @@ function what(q) {
   const r = ask(q, state, NOW, { noConfirm: true });
   if (r.kind === 'action') {
     const it = r.action.items ? r.action.items : [r.action.item];
-    if (r.action.list === 'huc') return 'hucha ' + it[0].i;
     return it.map((x) => (x.t === 'in' ? 'ingreso ' : 'gasto ') + x.i + ' ' + x.p).join(' + ') + (r.action.gas ? ' +gasolina' : '');
   }
   if (r.ctx && r.ctx.slot) { const b = r.ctx.slot.base; return (b.t === 'in' ? 'ingreso ' : 'gasto ') + b.i + ' ?pago'; }
@@ -107,10 +106,6 @@ const WRITES = {
   'diésel 60 euros con tarjeta': 'gasto 60 tarjeta +gasolina',
   'he puesto 30 de gasolina en efectivo': 'gasto 30 efectivo +gasolina',
   'echado 30 de gasoil con tarjeta': 'gasto 30 tarjeta +gasolina',
-  // Hucha
-  'mete 10 en la hucha': 'hucha 10',
-  'guarda 20 euros en la hucha': 'hucha 20',
-  'ahorra 15 euros': 'hucha 15',
   // Sin forma de pago: pregunta
   'apúntame 30 euros': 'ingreso 30 ?pago',
   'he cobrado 50': 'ingreso 50 ?pago',
@@ -181,11 +176,13 @@ const QUERIES = {
   '¿cuánto fue la última carrera?': /^respuesta: 💶 Lo último/,
   'dame el resumen del día': /^respuesta: 📋/,
   '¿qué he apuntado hoy?': /^respuesta: 📝/,
-  '¿cómo va la hucha?': /^respuesta: /,
+  '¿cómo va la hucha?': /^respuesta: 🐷 La Hucha ya no está/,
+  'mete 10 en la hucha': /^respuesta: 🐷 La Hucha ya no está/,
+  'ahorra 15 euros': /^respuesta: 🐷 La Hucha ya no está/,
   'abre la gasolina': /^abre ga$/,
   'llévame a facturas': /^abre fa$/,
   'abre la caja': /^abre hoy$/,
-  've a la hucha': /^abre hu$/,
+  've al panel': /^abre pa$/,
   'abre transfer': /^abre tr$/,
 };
 

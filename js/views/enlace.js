@@ -2,13 +2,38 @@
 // Panel «🔗 Enlace para tu cliente» de un servicio de Transfer: eliges el idioma,
 // revisas tus datos (teléfono, coche, punto de encuentro) y se lo mandas por WhatsApp.
 import { bottomSheet, toast } from '../dom.js';
-import { clientUrl, linkData, linkMessage } from '../enlace.js';
+import { clientUrl, linkData, linkMessage, photoPart } from '../enlace.js';
 import { MSG_LANGS } from '../mensajes.js';
 import { S, save } from '../store.js';
 import { esc } from '../utils.js';
 import { firstName } from '../welcome.js';
 
 const appBase = () => new URL('./', location.href).href;
+
+/**
+ * Reduce una foto hasta que quepa en el enlace (JPEG pequeña): prueba tamaños y
+ * calidades de mayor a menor y se queda con la primera que cabe.
+ */
+export async function shrinkPhoto(file) {
+  const url = URL.createObjectURL(file);
+  try {
+    const img = await new Promise((ok, ko) => { const i = new Image(); i.onload = () => ok(i); i.onerror = ko; i.src = url; });
+    const c = document.createElement('canvas');
+    for (const side of [420, 360, 300, 240, 200, 160]) {
+      const k = Math.min(1, side / Math.max(img.naturalWidth, img.naturalHeight));
+      c.width = Math.max(1, Math.round(img.naturalWidth * k));
+      c.height = Math.max(1, Math.round(img.naturalHeight * k));
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      for (const q of [0.6, 0.5, 0.4]) {
+        const d = c.toDataURL('image/jpeg', q);
+        if (photoPart(d)) return d;
+      }
+    }
+    return '';
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
 
 async function copy(text) {
   try {
@@ -33,11 +58,15 @@ export function openClientLink(s) {
     '<div><label class="f" for="' + id + '">' + label + '</label><input id="' + id + '" type="' + type + '" data-k="' + key + '" placeholder="' + ph + '" value="' + esc(S.cfg[key] || '') + '"></div>';
   const sheet = bottomSheet(
     '<h3>🔗 Enlace para ' + (name ? esc(name) : 'tu cliente') + '</h3>' +
-    '<div class="mut">Tu cliente abre el enlace sin instalar nada y ve, en su idioma: tu nombre, tu coche, dónde le esperas, su vuelo en directo y botones para escribirte o llamarte. ' +
+    '<div class="mut">Tu cliente abre el enlace sin instalar nada y ve, en su idioma: tu nombre, tu coche, dónde le esperas (con tu foto), su vuelo en directo y botones para escribirte o llamarte. ' +
     'Los datos van dentro del enlace: no se guardan en ningún sitio.</div>' +
     '<label class="f">Idioma del cliente</label><div class="hchips">' +
     MSG_LANGS.map(([k, t]) => '<button type="button" class="hchip" data-llang="' + k + '">' + t + '</button>').join('') + '</div>' +
     '<label class="f" for="lkpunto">Dónde le esperas</label><input id="lkpunto" data-k="punto" placeholder="Ej.: Terminal 3, puerta de salida 3, junto a la cafetería" value="' + esc(S.cfg.punto || '') + '">' +
+    '<label class="f">📸 Foto del punto de encuentro</label>' +
+    '<div class="lk-ph"><img id="lkimg" alt="Foto del punto de encuentro" hidden><div class="lk-phb">' +
+    '<label class="btn sec lk-pick">📷 Elegir foto<input type="file" id="lkfile" accept="image/*" hidden></label>' +
+    '<button type="button" class="sec" id="lkdel" hidden>🗑️ Quitar foto</button></div></div>' +
     '<div class="row">' + field('lkcoche', 'Tu coche', 'coche', 'Ej.: Toyota Corolla blanco') + field('lkmat', 'Matrícula', 'mat', 'Ej.: 1234 ABC') + '</div>' +
     field('lktel', 'Tu teléfono (para que te escriba o te llame)', 'tel', 'Ej.: +34 600 000 000', 'tel') +
     '<div id="lkwarn" class="mut mt8" role="status"></div>' +
@@ -48,7 +77,11 @@ export function openClientLink(s) {
   const $s = (q) => sheet.querySelector(q);
   let url = '';
   const refresh = () => {
-    url = clientUrl(appBase(), linkData(s, S.cfg, lang));
+    url = clientUrl(appBase(), linkData(s, S.cfg, lang), S.cfg.pfoto);
+    const img = $s('#lkimg');
+    img.hidden = !S.cfg.pfoto;
+    if (S.cfg.pfoto) img.src = S.cfg.pfoto;
+    $s('#lkdel').hidden = !S.cfg.pfoto;
     const text = linkMessage(lang, s, S.cfg, url);
     $s('#lksend').href = 'https://wa.me/' + (s.tl || '').replace(/\D/g, '') + '?text=' + encodeURIComponent(text);
     $s('#lkview').href = url;
@@ -72,6 +105,18 @@ export function openClientLink(s) {
     inp.addEventListener('input', () => { S.cfg[inp.dataset.k] = inp.value.trim(); refresh(); });
     inp.addEventListener('change', () => save());
   });
+  $s('#lkfile').addEventListener('change', async (e) => {
+    const f = e.target.files && e.target.files[0];
+    e.target.value = '';
+    if (!f) return;
+    const d = await shrinkPhoto(f).catch(() => '');
+    if (!d) return toast('No he podido usar esa foto. Prueba con otra.');
+    S.cfg.pfoto = d;
+    save();
+    refresh();
+    toast('Foto puesta ✓ (pequeña, para que quepa en el enlace)');
+  });
+  $s('#lkdel').onclick = () => { delete S.cfg.pfoto; save(); refresh(); };
   $s('#lkcopy').onclick = async () => toast((await copy(url)) ? 'Enlace copiado ✓' : 'No se pudo copiar. Mantén pulsado el enlace y cópialo.');
   refresh();
   return sheet;

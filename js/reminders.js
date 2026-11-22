@@ -1,4 +1,4 @@
-// Recordatorios: «Sal ya» hacia cada recogida, bienvenida y hucha.
+// Recordatorios: «Sal ya» hacia cada recogida y bienvenida.
 // - Con los avisos del servidor activados (Web Push), llegan aunque la app esté
 //   cerrada, y el «Sal ya» se mueve solo si el vuelo se retrasa.
 // - Si el móvil no puede, funcionan con la app abierta o recién cerrada.
@@ -89,9 +89,7 @@ export async function buildAlarms(now = Date.now()) {
     }
     if (s.sv && s.tl) add({ id: 'wc-' + s.f + '-' + s.id, at: new Date(s.f + 'T' + s.sv + ':00').getTime() - 60 * 6e4, title: 'Mandar bienvenida', body: (s.pa || 'Pasajero') + ' · vuelo ' + (s.vu || '') + ' sale a las ' + s.sv });
   }
-  const day = today();
   for (const a of dailyAlarms(S, now)) add(a);
-  if (S.huc.length && !S.huc.some((x) => x.f === day && x.i > 0)) add({ id: 'hu-' + day, at: new Date(day + 'T21:00:00').getTime(), title: 'Hucha', body: 'Recuerda meter hoy en la hucha' });
   const changed = [...plans].some(([k, p]) => { const o = lastPlans.get(k); return !o || Math.abs(o.leave - p.leave) > 3e4; }) || plans.size !== lastPlans.size;
   lastPlans = plans;
   if (changed) window.dispatchEvent(new Event('rutivo:salida')); // la tarjeta de próximos se repinta
@@ -196,7 +194,7 @@ export async function renderReminders() {
         (S.cfg.salya === 0 ? '<label class="f" for="avl">Avisar antes de cada recogida (min)</label><input id="avl" type="number" min="0" inputmode="numeric" value="' + leadMinutes() + '">' : '') +
         settingsHtml() +
         '<button class="sec mt10" id="avoff">Desactivar avisos</button>'
-      : '<div class="mut" style="margin:6px 0">🚗 «Sal ya» con el vuelo en directo, la bienvenida y la hucha. Llegan aunque tengas la app cerrada.</div>' +
+      : '<div class="mut" style="margin:6px 0">🚗 «Sal ya» con el vuelo en directo y la bienvenida. Llegan aunque tengas la app cerrada.</div>' +
         '<button id="avb">Activar avisos</button>');
 
   const $$ = (id) => box.querySelector('#' + id);

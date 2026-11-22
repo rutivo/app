@@ -75,3 +75,23 @@ test('textos completos en los 4 idiomas y mensaje de WhatsApp con el enlace', ()
   const m = linkMessage('de', s, cfg, 'https://x/cliente.html#abc');
   assert.equal(m, 'Hallo John! Ich bin Alejandro, Ihr Fahrer. Hier sehen Sie unseren Treffpunkt, mein Auto und Ihren Flug:\nhttps://x/cliente.html#abc');
 });
+
+test('foto del punto de encuentro: va al final del enlace y solo se acepta una JPEG pequeña', async () => {
+  const { photoPart, PHOTO_MAX } = await import('../js/enlace.js');
+  const jpeg = 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ+/abc=';
+  const d = linkData(s, cfg, 'en');
+  const url = clientUrl('https://rutivo.github.io/app/', d, jpeg);
+  const hash = url.split('#')[1];
+  assert.match(hash, /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/);
+  const back = decodeLink('#' + hash);
+  assert.equal(back.ph, jpeg);
+  assert.equal(back.n, 'John');
+  // No vale: otra cosa que no sea JPEG, SVG (podría llevar código), o demasiado grande
+  assert.equal(photoPart('data:image/svg+xml;base64,PHN2Zz4='), '');
+  assert.equal(photoPart('data:image/png;base64,iVBORw0KGgo='), '');
+  assert.equal(photoPart('data:image/jpeg;base64,/9j/' + 'A'.repeat(PHOTO_MAX)), '');
+  assert.equal(decodeLink('#' + hash.split('.')[0] + '.PHN2Zz4').ph, undefined);
+  assert.equal(decodeLink('#' + hash.split('.')[0] + '.<script>').ph, undefined);
+  // Sin foto, el enlace es como antes
+  assert.ok(!clientUrl('https://x/', d).includes('.', 'https://x/cliente.html'.length));
+});

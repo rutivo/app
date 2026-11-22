@@ -1,4 +1,4 @@
-// Cálculos de IVA, facturas, caja y hucha. Funciones puras.
+// Cálculos de IVA, facturas y caja. Funciones puras.
 import { r2, sum } from './utils.js';
 
 /** Base imponible de un importe con IVA incluido. */
@@ -31,55 +31,4 @@ export function cashStats(movements) {
     netCash: total('in', 'efectivo') - total('out', 'efectivo'),
     netCard: total('in', 'tarjeta') - total('out', 'tarjeta'),
   };
-}
-
-const isoDay = (d) => d.toISOString().slice(0, 10);
-
-/**
- * Periodo de la hucha que contiene el día `ref`. El periodo empieza el día
- * `startDay` (1-28) de cada mes. Devuelve inicio `a` (incluido), fin `b`
- * (excluido) y número de días `n`.
- */
-export function savingsPeriod(ref, startDay) {
-  const y = +ref.slice(0, 4);
-  const m = +ref.slice(5, 7) - 1;
-  const d = +ref.slice(8, 10);
-  const D = Math.min(28, startDay || 1);
-  const a = d >= D ? new Date(Date.UTC(y, m, D)) : new Date(Date.UTC(y, m - 1, D));
-  const b = new Date(Date.UTC(a.getUTCFullYear(), a.getUTCMonth() + 1, D));
-  return { a: isoDay(a), b: isoDay(b), n: Math.round((b - a) / 864e5) };
-}
-
-/** Estado de la hucha para el día `day` con objetivo `goal`. */
-export function savingsStatus(entries, day, goal, startDay) {
-  const P = savingsPeriod(day, startDay);
-  const list = entries.filter((x) => x.f >= P.a && x.f < P.b).sort((a, b) => b.f.localeCompare(a.f));
-  const saved = r2(sum(list, (x) => x.i));
-  const missing = Math.max(0, r2(goal - saved));
-  const daysLeft = Math.max(1, Math.round((new Date(P.b) - new Date(day)) / 864e5));
-  const daily = r2(goal / P.n);
-  const daysPassed = Math.round((new Date(day) - new Date(P.a)) / 864e5) + 1;
-  const expected = r2(daily * daysPassed);
-  return {
-    period: P,
-    list,
-    saved,
-    missing,
-    daysLeft,
-    daily,
-    perDayLeft: r2(missing / daysLeft),
-    expected,
-    onTrack: saved >= expected,
-    pct: Math.min(100, Math.round((saved / goal) * 100)),
-  };
-}
-
-/** Ahorro total por periodo (clave: día de inicio). */
-export function savingsByPeriod(entries, startDay) {
-  const groups = {};
-  for (const x of entries) {
-    const a = savingsPeriod(x.f, startDay).a;
-    groups[a] = r2((groups[a] || 0) + x.i);
-  }
-  return groups;
 }
