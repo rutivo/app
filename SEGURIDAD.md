@@ -128,3 +128,25 @@ Clave «Browser key (auto created by Firebase)» del proyecto `rutivo-a8890`:
   llevaba su clave secreta dentro del código.
 - La puerta de pruebas del reconocedor de voz (`__rutivoEarSrc`) solo funciona en
   `localhost`/`127.0.0.1`; en la app publicada se ignora.
+
+## Revisión externa (22/11/2026) y bloqueo con PIN
+
+Un tercero hizo una prueba sin datos reales: sin sesión no se puede leer Firestore
+(403), HTTPS/HSTS correcto, sin XSS reflejado, copias con `__proto__` bloqueadas y
+sin vulnerabilidades conocidas en Firebase 10.14.1 ni Tesseract 5.1.1.
+
+- **Datos en el móvil sin cifrar (medio):** se añade un **bloqueo con PIN opcional**
+  (Cuenta → Seguridad, `js/bloqueo.js`): PIN de 4-6 cifras guardado solo como huella
+  PBKDF2-SHA-256 (150.000 vueltas, sal aleatoria), espera creciente desde el 5.º fallo,
+  bloqueo al abrir y al volver tras 0/1/5/15 min, contenido oculto mientras tanto,
+  «Oye Rutivo» en pausa, y Face ID / huella (WebAuthn, autenticador del móvil,
+  verificación obligatoria). «He olvidado el PIN» sube lo pendiente y cierra sesión;
+  si algo no se puede subir, no sale. Al cerrar sesión ya se borraban los datos del
+  móvil (y ahora también el bloqueo). No es cifrado de los datos guardados: protege
+  frente a quien coge el móvil, no frente a software malicioso con acceso al navegador.
+- **Cabeceras HTTP (bajo):** GitHub Pages no deja ponerlas. `Referrer-Policy` ya va
+  como `<meta>` y el anti-iframe por código. `X-Content-Type-Options`,
+  `Permissions-Policy` y `frame-ancestors` quedan para el paso a Cloudflare Pages
+  (archivo `_headers`) junto con el dominio propio.
+- **Cuentas de prueba** `rutivo-audit-…@example.invalid`: las borra el titular en
+  Firebase → Authentication → Users.

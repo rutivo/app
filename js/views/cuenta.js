@@ -278,6 +278,26 @@ async function signOut(button) {
   location.reload();
 }
 
+/**
+ * «He olvidado el PIN»: sube lo pendiente y cierra sesión (los datos siguen en la
+ * cuenta). Si algo no se ha podido subir, NO sale ('pendiente'): no se pierde nada.
+ */
+export async function signOutForgotPin(beforeReload = () => {}) {
+  if (!accountsEnabled()) return 'sin-cuenta';
+  const saved = await flush();
+  if (!saved || hasUnsavedChanges()) return 'pendiente';
+  try {
+    await (await ensureFirebase()).logout();
+  } catch {
+    return 'red';
+  }
+  await dropAlerts();
+  disconnectAndWipe();
+  beforeReload();
+  location.reload();
+  return 'ok';
+}
+
 // ---------- arranque ----------
 
 async function ensureFirebase() {

@@ -1223,3 +1223,22 @@ input[type="date"]::-webkit-date-and-time-value, input[type="time"]::-webkit-dat
 @media (min-width: 700px) { .kps { grid-template-columns: repeat(3, 1fr); } .ch-plot { height: 170px; } }
 @media (max-width: 350px) { .kp-v { font-size: 17px; } .ch-x span { font-size: 9.5px; } }
 @media (prefers-reduced-motion: reduce) { .ch-anim .ch-bar, .cat-t i, .ch-tip, .cat-items { animation: none !important; } }
+
+/* ---------- Bloqueo con PIN ---------- */
+#lock { position: fixed; inset: 0; z-index: 2147483000; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px;
+  padding: calc(24px + env(safe-area-inset-top, 0px)) 24px calc(24px + env(safe-area-inset-bottom, 0px)); background: var(--app-bg, #0a1020); color: var(--ink); outline: none; }
+.lk-top { display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; }
+.lk-ico { font-size: 34px; }
+.lk-top b { font-size: 20px; }
+.lk-dots { display: flex; gap: 14px; min-height: 16px; }
+.lk-dots i { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--mut); }
+.lk-dots i.on { background: var(--ink); border-color: var(--ink); }
+.lk-msg { min-height: 20px; font-size: 14px; text-align: center; max-width: 320px; }
+.lk-msg button { width: auto; }
+.lk-pad { display: grid; grid-template-columns: repeat(3, 72px); gap: 14px 22px; }
+.lk-pad button { width: 72px; height: 72px; margin: 0; padding: 0; border-radius: 50%; font-size: 28px; font-weight: 600; background: var(--tile); color: var(--ink); border: 1px solid var(--card-line, var(--line)); box-shadow: none !important; }
+.lk-pad button:active { background: color-mix(in srgb, var(--acc) 35%, transparent); }
+.lk-forgot { width: auto; margin: 4px 0 0; background: transparent !important; color: var(--mut); border: 0; box-shadow: none !important; font-size: 14px; text-decoration: underline; }
+#lock.shake .lk-dots { animation: lkshake .4s; }
+@keyframes lkshake { 20%, 60% { transform: translateX(-8px); } 40%, 80% { transform: translateX(8px); } }
+@media (prefers-reduced-motion: reduce) { #lock.shake .lk-dots { animation: none; } }

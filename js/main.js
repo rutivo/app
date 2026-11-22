@@ -7,16 +7,19 @@ import { loadLocal, migratePhotos, requestPersistentStorage } from './store.js';
 import { initUpdates } from './actualizar.js';
 import { initI18n, initLangChoice } from './i18n.js';
 import { initTheme, renderThemeChoice } from './theme.js';
+import { initLock, isLocked, renderLockSettings } from './bloqueo.js';
+import { pauseWake, resumeWake } from './despertar.js';
+import { cancelHandsFree } from './views/manosLibres.js';
 import { initCaja, renderCaja } from './views/caja.js';
 import { initCharts } from './views/graficas.js';
-import { accountsEnabled, initAccount, renderAccount } from './views/cuenta.js';
+import { accountsEnabled, initAccount, renderAccount, signOutForgotPin } from './views/cuenta.js';
 import { cloudEnabled } from './cloud.js';
 import { initFacturas, renderBrand, renderFacturas, saveBackupFile } from './views/facturas.js';
 import { initGasolina, renderGasolina } from './views/gasolina.js';
 import { initHucha, renderHucha } from './views/hucha.js';
 import { initJornada } from './views/jornada.js';
 import { initUpcoming } from './views/proximos.js';
-import { initAssistant } from './views/asistente.js';
+import { closeAssistant, initAssistant } from './views/asistente.js';
 import { initTips } from './views/tips.js';
 import { initTransfer, renderTransfer } from './views/transfer.js';
 
@@ -58,6 +61,7 @@ function showView(view) {
   if (view !== 'cu') lastTab = view;
   scrollTo(0, 0);
   render();
+  if (view === 'cu') renderLockSettings($('#lockc'));
 }
 
 function initTabs() {
@@ -90,6 +94,12 @@ function drawFavicon() {
   }
 }
 
+// Bloqueo con PIN: lo primero, para que no se vea nada antes de desbloquear
+initLock({
+  onLock: () => { cancelHandsFree(); closeAssistant(); pauseWake(); },
+  onUnlock: () => resumeWake(),
+  onForgot: (before) => signOutForgotPin(before),
+});
 initTheme();
 initI18n(); // en inglés, traduce la pantalla (y todo lo que vaya apareciendo)
 initLangChoice();
@@ -106,6 +116,8 @@ initFacturas(render);
 initTips(saveBackupFile);
 initUpcoming();
 initAssistant(render);
+if (isLocked()) pauseWake(); // bloqueada: «Oye Rutivo» no escucha hasta desbloquear
+renderLockSettings($('#lockc'));
 render();
 requestPersistentStorage();
 // Fotos antiguas de localStorage → almacén grande (copia primero; ver store.js)

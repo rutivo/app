@@ -109,7 +109,7 @@ export function clearLocal() {
     const keys = [];
     for (let i = 0; i < localStorage.length; i++) keys.push(localStorage.key(i));
     for (const k of keys) {
-      if (k === STORAGE_KEY || k.startsWith(PHOTO_PREFIX) || k === 'avFired' || k === BACKUP_KEY || k === MIGRATED_KEY || k === 'fotosNube') localStorage.removeItem(k);
+      if (k === STORAGE_KEY || k.startsWith(PHOTO_PREFIX) || k === 'avFired' || k === BACKUP_KEY || k === MIGRATED_KEY || k === 'fotosNube' || k === 'bloqueo' || k === 'bloqueoFallos') localStorage.removeItem(k);
     }
   } catch {
     /* sin almacenamiento */
