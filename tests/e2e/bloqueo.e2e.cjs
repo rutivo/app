@@ -141,12 +141,14 @@ const typePin = async (page, pin) => { for (const d of pin) await page.click('#l
     });
     ok('16 · la pantalla del PIN está fija: no se desplaza ni se amplía con el dedo (ni entre las teclas)', fixed.slice(0, 3).every((x) => x === 'none') && fixed[3] === 'hidden' && fixed[4] === 'hidden', JSON.stringify(fixed));
     // Deslizar el dedo por encima no mueve nada
+    const pos = () => t.evaluate(() => [window.scrollY, Math.round(document.querySelector('#lock').getBoundingClientRect().top), window.visualViewport ? window.visualViewport.scale : 1]);
+    const before = await pos();
     const cdpT = await tctx.newCDPSession(t);
     const touch = (type, y) => cdpT.send('Input.dispatchTouchEvent', { type, touchPoints: type === 'touchEnd' ? [] : [{ x: 195, y }] });
     await touch('touchStart', 700); for (const y of [600, 450, 300]) await touch('touchMove', y); await touch('touchEnd');
     await t.waitForTimeout(300);
-    const still = await t.evaluate(() => [window.scrollY, Math.round(document.querySelector('#lock').getBoundingClientRect().top), window.visualViewport ? window.visualViewport.scale : 1]);
-    ok('17 · al deslizar el dedo, la pantalla no se mueve', still[0] === 0 && still[1] === 0 && still[2] === 1, JSON.stringify(still));
+    const still = await pos();
+    ok('17 · al deslizar el dedo, la pantalla no se mueve', JSON.stringify(still) === JSON.stringify(before) && still[1] === 0 && still[2] === 1, JSON.stringify([before, still]));
     // PIN con cifras repetidas, tocadas muy seguidas (4 4 1 1 7 7)
     for (const d of '441177') { await t.tap('#lock [data-lk="' + d + '"]'); await t.waitForTimeout(60); }
     await t.waitForTimeout(800);
