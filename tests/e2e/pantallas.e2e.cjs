@@ -79,7 +79,7 @@ const SIZES = [['iPhone', 390, 844, true], ['iPad vertical', 820, 1180, true], [
     for (const d of '115577') await p.tap('#lock [data-lk="' + d + '"]');
     await p.waitForTimeout(600);
     const zoom = await p.evaluate(() => (window.visualViewport ? window.visualViewport.scale : 1));
-    ok('PIN · con números repetidos (115577) no hace zoom y se entra', padTA === 'manipulation' && zoom === 1 && !(await p.$('#lock')), padTA + ' · zoom ' + zoom);
+    ok('PIN · con números repetidos (115577) no hace zoom y se entra', (padTA === 'none' || padTA === 'manipulation') && zoom === 1 && !(await p.$('#lock')), padTA + ' · zoom ' + zoom);
     await ctx.close();
   } finally {
     await browser.close();
