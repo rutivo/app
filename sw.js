@@ -9,7 +9,7 @@
 //
 // VERSION es la huella de todos los archivos de FILES: si cambia cualquiera,
 // hay que regenerarla con `npm run version` (las pruebas fallan si no).
-const VERSION = 'c52de93f1cca';
+const VERSION = '46167b3de5dc';
 const CACHE = 'rutivo-' + VERSION;
 const FILES = [
   './',
@@ -86,6 +86,8 @@ const FILES = [
   './js/views/tips.js',
   './js/views/transfer.js',
   './js/welcome.js',
+  './js/mensajes.js',
+  './js/views/mensajes.js',
 ];
 
 // Huella de los archivos descargados (la misma cuenta que scripts/version-sw.mjs)

@@ -5,6 +5,7 @@ import { readService } from '../serviceReader.js';
 import { $, bottomSheet, confirmTap, confirmTapTimed, onClick, saveFile, toast } from '../dom.js';
 import { openFlight } from '../flight.js';
 import { openWelcome } from './bienvenida.js';
+import { openMessages } from './mensajes.js';
 import { mapsUrl } from '../trips.js';
 import { S, save } from '../store.js';
 import { cap, esc, eur, fd, slug, today, uid } from '../utils.js';
@@ -36,6 +37,7 @@ function serviceActions(s) {
   if (s.tl || s.pa) {
     const when = welcomeSendTime(s.sv);
     html += '<button class="small-btn" data-wm="' + id + '">💬 Bienvenida' + (when ? ' (' + when + ')' : '') + '</button>';
+    html += '<button class="small-btn sec" data-msg="' + id + '">✉️ Mensajes</button>';
   }
   return html + '</div>';
 }
@@ -459,6 +461,10 @@ export function initTransfer(rerender) {
   onClick('[data-wm]', (el) => {
     const s = byId(el.dataset.wm);
     if (s) openWelcome(s);
+  });
+  onClick('[data-msg]', (el) => {
+    const s = byId(el.dataset.msg);
+    if (s) openMessages(s);
   });
   onClick('[data-ct]', (el) => {
     const s = S.srv.find((x) => x.id === el.dataset.ct);
