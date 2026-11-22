@@ -375,3 +375,13 @@ test('micro en iPhone sin modo «llamada» (si no, la voz de Rutivo sale muy baj
   assert.equal(micConstraints(true).echoCancellation, false);
   assert.equal(micConstraints(false).echoCancellation, true);
 });
+
+test('el tiempo: el sitio que dices, o si no, donde estás', async () => {
+  const { weatherPlace } = await import('../js/asistente.js');
+  assert.equal(weatherPlace('¿Qué tiempo hace en Madrid?'), 'Madrid');
+  assert.equal(weatherPlace('¿va a llover mañana en Sevilla?'), 'Sevilla');
+  assert.equal(weatherPlace('¿Hace calor en San Sebastián hoy?'), 'San Sebastián');
+  assert.equal(weatherPlace('¿Qué tiempo hace?'), '');
+  assert.equal(weatherPlace('¿qué tiempo hace en la calle?'), '');
+  assert.equal(ask('¿Qué tiempo hace en Madrid?', state, NOW).place, 'Madrid');
+});

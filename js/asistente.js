@@ -795,6 +795,18 @@ function todayLine(state, now) {
 
 const POSITIVE = /^(bien|muy bien|genial|estupendo|de lujo|fenomenal|todo bien|perfecto|de puta madre|guay|tirando|aqui (andamos|estamos)|bien y tu|bien gracias)( |$)/;
 const NEGATIVE = /(^mal|^fatal|^regular|cansad|reventad|agotad|hart[oa]|aburrid|flojo|floja|poco trabajo|no hay trabajo|estresad|hecho polvo|muert[oa])/;
+/** «¿Qué tiempo hace en Sevilla?» → «Sevilla» (con sus tildes); '' si no dice sitio (se usa dónde estás). */
+export function weatherPlace(original) {
+  const t = normalize(original);
+  const m = t.match(/\b(?:tiempo|llover|llovera|lloviendo|llueve|lluvia|temperatura|grados|calor|frio|clima|sol|viento)\b.*?\ben ([a-z ]{3,30}?)(?: (?:hoy|manana|ahora|esta tarde|esta noche|el finde))?$/);
+  if (!m) return '';
+  const p = m[1].trim().replace(/^(el|la|los|las) /, '');
+  if (/^(la calle|casa|la zona|mi zona|aqui|la ciudad|el pueblo|el aeropuerto|tarde|noche)$/.test(m[1].trim()) || /^(este|esta)\b/.test(p)) return '';
+  const words = String(original).replace(/[¿?¡!.,]/g, ' ').split(/\s+/).filter(Boolean);
+  const pretty = p.split(' ').map((w) => words.find((o) => normalize(o) === w) || w).join(' ');
+  return pretty.replace(/(^|\s)\p{Ll}/gu, (c) => c.toUpperCase());
+}
+
 const WEATHER = /(que tiempo|el tiempo|tiempo hace|tiempo va a hacer|tiempo hara|clima|temperatura|grados|llover|lloviendo|lluvia|llueve|paraguas|hace calor|hace frio|hace sol|hace viento|va a hacer (sol|calor|frio|viento))/;
 
 function smallTalk(t, state, now, helpers, ctx = {}) {
@@ -802,7 +814,7 @@ function smallTalk(t, state, now, helpers, ctx = {}) {
   const hi = name ? ', ' + name : '';
   const greetWord = /^buenos dias/.test(t) ? 'Buenos días' : /^buenas tardes/.test(t) ? 'Buenas tardes' : /^buenas noches/.test(t) ? 'Buenas noches' : '¡Hola';
   // El tiempo
-  if (WEATHER.test(t)) return { kind: 'weather', when: has(t, 'manana') ? 'manana' : 'hoy', rain: /llov|lluvia|llueve|paraguas/.test(t), text: '🌦️ Miro el tiempo…', speech: '' };
+  if (WEATHER.test(t)) return { kind: 'weather', when: has(t, 'manana') ? 'manana' : 'hoy', rain: /llov|lluvia|llueve|paraguas/.test(t), place: weatherPlace(helpers.original || t), text: '🌦️ Miro el tiempo…', speech: '' };
   // Saludo: corto y cercano, y pregunta qué tal
   if (GREET.test(t)) {
     if (/^buenas noches/.test(t) && now.getHours() >= 21) {
@@ -961,7 +973,7 @@ export function ask(input, state, now = new Date(), helpers = {}, ctx = {}) {
   const w = worthIntent(t);
   if (w) return { ...w, ctx: {} };
   if (LEAVE.test(t)) return { kind: 'leave', text: '', speech: '', ctx: {} };
-  const chat = smallTalk(t, state, now, helpers, ctx);
+  const chat = smallTalk(t, state, now, { ...helpers, original: input }, ctx);
   if (chat) return { ...chat, ctx: chat.ctx || {} };
   // Completar algo que quedó a medias o seguir con la última pregunta
   if (ctx.pending && amountOf(t) !== null && !QUESTION.test(t)) t = ctx.pending + ' ' + t;

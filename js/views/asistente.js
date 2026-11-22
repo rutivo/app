@@ -6,6 +6,7 @@ import { readFlag, writeFlag } from '../dom.js';
 import { cachedStatus, etaLine } from '../flight.js';
 import { initWake, pauseWake, resumeWake, trainWake, wakeEnabled, wakeLog, wakeModel, wakeStats } from '../despertar.js';
 import { createMic } from '../microfono.js';
+import { currentPosition } from '../ruta.js';
 import { cancelHandsFree, handsFree, initHandsFree } from './manosLibres.js';
 import { leavePlanOf, scheduleReminders } from '../reminders.js';
 import { leaveBody, leaveLine } from '../salida.js';
@@ -281,10 +282,41 @@ async function leaveAnswer(entry) {
 // ---------- el tiempo ----------
 
 const GEO_KEY = 'meteoGeo';
+const HERE_KEY = 'meteoAqui';
+const round2 = (v) => Math.round(v * 100) / 100; // ~1 km: a los servicios del tiempo no les llega tu posición exacta
 
-/** Coordenadas de tu ciudad (la de tus datos de emisor; si no hay, Málaga). Se guardan. */
-async function cityCoords() {
-  const city = (S.cfg.loc || '').trim() || 'Málaga';
+/**
+ * Dónde mirar el tiempo: el sitio que digas («en Sevilla»); si no, dónde estás
+ * (GPS del móvil, pide permiso la primera vez); si no se puede, tu ciudad de los
+ * datos de emisor o Málaga. `guess`: no se sabe dónde estás.
+ */
+async function weatherWhere(place) {
+  if (place) return { ...(await cityCoords(place)), asked: true };
+  const pos = await currentPosition(true, 30).catch(() => null);
+  if (pos) {
+    const lat = round2(pos.lat);
+    const lon = round2(pos.lon);
+    let name = '';
+    try {
+      const saved = JSON.parse(readFlag(HERE_KEY) || 'null');
+      if (saved && saved.lat === lat && saved.lon === lon) name = saved.name;
+    } catch { /* se busca otra vez */ }
+    if (!name) {
+      try {
+        const r = await fetch('https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=10&accept-language=es&lat=' + lat + '&lon=' + lon);
+        const a = (await r.json()).address || {};
+        name = a.city || a.town || a.village || a.municipality || a.county || '';
+        if (name) writeFlag(HERE_KEY, JSON.stringify({ lat, lon, name }));
+      } catch { /* sin nombre: «tu zona» */ }
+    }
+    return { name: name || 'tu zona', lat, lon };
+  }
+  return { ...(await cityCoords()), guess: true };
+}
+
+/** Coordenadas de una ciudad (por defecto la de tus datos de emisor; si no hay, Málaga). Se guardan. */
+async function cityCoords(wanted) {
+  const city = (wanted || '').trim() || (S.cfg.loc || '').trim() || 'Málaga';
   try {
     const saved = JSON.parse(readFlag(GEO_KEY) || 'null');
     if (saved && saved.q === city) return saved;
@@ -301,12 +333,13 @@ async function cityCoords() {
 
 async function weather(entry, r) {
   try {
-    const g = await cityCoords();
+    const g = await weatherWhere(r.place);
     const res = await fetch('https://api.open-meteo.com/v1/forecast?latitude=' + g.lat + '&longitude=' + g.lon +
       '&current=temperature_2m,weather_code,wind_speed_10m&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=auto&forecast_days=2');
     if (!res.ok) throw new Error('meteo');
     const w = weatherText(await res.json(), r.when, g.name, r.rain);
-    entry.html = rich(w.text);
+    // Sin ubicación: se dice de dónde es el tiempo y cómo arreglarlo
+    entry.html = rich(w.text) + (g.guess ? '<br><small>📍 No sé dónde estás (sin permiso de ubicación): es el tiempo de ' + esc(g.name) + '. Para el de donde estés: Ajustes → Privacidad → Localización → Safari → «Al usar la app». O dime «¿qué tiempo hace en Madrid?».</small>' : '');
     paint();
     speak(w.speech);
   } catch {
