@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src https://rutivo-vuelos.pokeboostmlg.workers.dev; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#4a5cff">
+<title>Your transfer</title>
+<link rel="icon" href="icon-192.png">
+<style>
+  @font-face { font-family: Manrope; src: url(fonts/manrope-latin.woff2) format('woff2'); font-weight: 400 800; font-display: swap; }
+  @font-face { font-family: Manrope; src: url(fonts/manrope-latin-ext.woff2) format('woff2'); font-weight: 400 800; font-display: swap; unicode-range: U+0100-024F, U+1E00-1EFF; }
+  :root { --bg: #f4f6fb; --card: #fff; --ink: #0b1222; --mut: #5a6680; --line: #e3e7f0; --acc: #4a5cff; --ok: #128a58; --bad: #c2334b; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #0b1222; --card: #161f35; --ink: #eef2fa; --mut: #9fb0c8; --line: #26314a; --acc: #8ea0ff; --ok: #5fd6a0; --bad: #ff8a9e; } }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.45 Manrope, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 520px; margin: 0 auto; padding-bottom: calc(24px + env(safe-area-inset-bottom)); }
+  .top { padding: calc(20px + env(safe-area-inset-top)) 18px 64px; background: linear-gradient(150deg, #2f6bff, #a24bff); color: #fff; }
+  .brand { font-size: 13px; font-weight: 700; opacity: .92; }
+  .state { display: flex; align-items: center; gap: 9px; margin-top: 16px; font-size: 12.5px; font-weight: 800; letter-spacing: .5px; text-transform: uppercase; }
+  .state i { width: 10px; height: 10px; border-radius: 50%; background: #7bffc4; box-shadow: 0 0 0 5px rgba(123, 255, 196, .3); flex: none; }
+  .state.warn i { background: #ffd27a; box-shadow: 0 0 0 5px rgba(255, 210, 122, .3); }
+  h1 { margin: 6px 0 4px; font-size: 26px; line-height: 1.15; }
+  .top p { margin: 0; font-size: 15px; opacity: .94; }
+  .steps { display: flex; gap: 4px; margin-top: 16px; }
+  .steps div { flex: 1; font-size: 10.5px; font-weight: 700; text-align: center; opacity: .7; }
+  .steps b { display: block; height: 4px; border-radius: 2px; background: rgba(255, 255, 255, .3); margin-bottom: 5px; }
+  .steps .on { opacity: 1; } .steps .on b { background: #fff; }
+  .card { margin: 12px 14px 0; background: var(--card); border: 1px solid var(--line); border-radius: 20px; padding: 14px; }
+  .card.first { margin-top: -48px; box-shadow: 0 10px 30px rgba(20, 30, 80, .15); }
+  .card h2 { margin: 0 0 6px; font-size: 12px; letter-spacing: .8px; text-transform: uppercase; color: var(--acc); }
+  .dr { display: flex; gap: 12px; align-items: center; }
+  .av { flex: none; width: 54px; height: 54px; border-radius: 50%; background: linear-gradient(135deg, #ffb340, #ff5f7a); display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 21px; color: #fff; }
+  .dr b { font-size: 17px; display: block; }
+  .mut { color: var(--mut); font-size: 13.5px; }
+  .plate { display: inline-block; margin-top: 4px; font-weight: 800; letter-spacing: 1px; border: 2px solid var(--ink); border-left: 9px solid #2f6bff; border-radius: 6px; padding: 2px 8px; font-size: 15px; }
+  .big { font-size: 17px; font-weight: 800; }
+  .row { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+  .ok { color: var(--ok); font-weight: 800; } .bad { color: var(--bad); font-weight: 800; }
+  .btns { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 14px 14px 0; }
+  .btns a { display: block; padding: 14px; border-radius: 14px; text-align: center; font-weight: 800; text-decoration: none; }
+  .btns a:only-child { grid-column: 1 / -1; }
+  .wa { background: #25d366; color: #fff; } .ca { background: var(--ink); color: var(--bg); }
+  .foot { text-align: center; font-size: 12px; color: var(--mut); padding: 16px; }
+  .foot b { color: var(--ink); }
+  .broken { margin: 40px 18px; text-align: center; }
+  [hidden] { display: none !important; }
+</style>
+<script type="module" src="js/cliente.js"></script>
+</head>
+<body>
+<main id="app"><noscript><p class="broken">Please enable JavaScript to see your transfer.</p></noscript></main>
+</body>
+</html>

@@ -9,12 +9,13 @@
 //
 // VERSION es la huella de todos los archivos de FILES: si cambia cualquiera,
 // hay que regenerarla con `npm run version` (las pruebas fallan si no).
-const VERSION = '46167b3de5dc';
+const VERSION = 'be28e7195335';
 const CACHE = 'rutivo-' + VERSION;
 const FILES = [
   './',
   './index.html',
   './legal.html',
+  './cliente.html',
   './manifest.webmanifest',
   './icon-192.png',
   './icon-512.png',
@@ -28,10 +29,12 @@ const FILES = [
   './js/backend/claude.js',
   './js/backend/firebase.js',
   './js/cloud.js',
+  './js/cliente.js',
   './js/compensa.js',
   './js/config.js',
   './js/despertar.js',
   './js/dom.js',
+  './js/enlace.js',
   './js/facturaLegal.js',
   './js/flight.js',
   './js/fotos.js',
@@ -73,6 +76,7 @@ const FILES = [
   './js/views/caja.js',
   './js/views/compensa.js',
   './js/views/cuenta.js',
+  './js/views/enlace.js',
   './js/views/facturas.js',
   './js/views/fuelPdf.js',
   './js/views/gasolina.js',

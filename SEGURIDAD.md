@@ -150,3 +150,21 @@ sin vulnerabilidades conocidas en Firebase 10.14.1 ni Tesseract 5.1.1.
   (archivo `_headers`) junto con el dominio propio.
 - **Cuentas de prueba** `rutivo-audit-…@example.invalid`: las borra el titular en
   Firebase → Authentication → Users.
+
+## Enlace para el cliente (`cliente.html`, paso 1)
+
+- Los datos del servicio van **dentro del enlace, después de `#`**: esa parte no se envía
+  a ningún servidor (tampoco a GitHub). No se guarda nada en Firebase ni en ningún sitio,
+  y la página no usa cuentas ni cookies.
+- El enlace lleva solo lo que el cliente necesita: su nombre de pila, tu nombre, tu
+  teléfono, tu coche y matrícula, el punto de encuentro, su vuelo, fecha, hora, origen y
+  destino. **Nunca** el precio, la agencia, tu NIF ni otros datos.
+- Quien tenga el enlace ve esos datos: es como reenviar el mensaje de WhatsApp.
+- A prueba de enlaces manipulados: solo se aceptan los campos conocidos, como texto,
+  con tamaño máximo y formato comprobado (fecha, hora, vuelo, teléfono); todo se pinta con
+  `textContent`, y la CSP de la página solo permite sus propios archivos y el
+  intermediario de vuelos (que ya limita consultas y guarda caché por vuelo).
+- La página solo pregunta por el vuelo de 8 h antes a 4 h después de la recogida.
+- Paso 2 (estado en vivo «Voy de camino / Ya estoy»): requiere cambiar las reglas de
+  Firestore para leer **un único servicio** con una clave secreta. Pendiente de la
+  autorización del titular.

@@ -5,6 +5,7 @@ import { readService } from '../serviceReader.js';
 import { $, bottomSheet, confirmTap, confirmTapTimed, onClick, saveFile, toast } from '../dom.js';
 import { openFlight } from '../flight.js';
 import { openWelcome } from './bienvenida.js';
+import { openClientLink } from './enlace.js';
 import { openMessages } from './mensajes.js';
 import { mapsUrl } from '../trips.js';
 import { S, save } from '../store.js';
@@ -39,6 +40,7 @@ function serviceActions(s) {
     html += '<button class="small-btn" data-wm="' + id + '">💬 Bienvenida' + (when ? ' (' + when + ')' : '') + '</button>';
     html += '<button class="small-btn sec" data-msg="' + id + '">✉️ Mensajes</button>';
   }
+  html += '<button class="small-btn sec" data-lnk="' + id + '">🔗 Enlace</button>';
   return html + '</div>';
 }
 
@@ -461,6 +463,10 @@ export function initTransfer(rerender) {
   onClick('[data-wm]', (el) => {
     const s = byId(el.dataset.wm);
     if (s) openWelcome(s);
+  });
+  onClick('[data-lnk]', (el) => {
+    const s = byId(el.dataset.lnk);
+    if (s) openClientLink(s);
   });
   onClick('[data-msg]', (el) => {
     const s = byId(el.dataset.msg);
