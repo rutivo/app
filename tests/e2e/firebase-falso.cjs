@@ -99,7 +99,7 @@ function createFirestore() {
         if (op !== 'set' || !/^[A-Za-z0-9]{20}$/.test(id) || (prev && prev.o !== uid)) return reply(no);
         const k = Object.keys(body || {});
         const okLink = k.every((x) => ['o', 'd', 'ph', 'exp', 'st'].includes(x)) && body.o === uid && typeof body.d === 'string' && body.d.length < 4000 &&
-          (!('ph' in body) || (typeof body.ph === 'string' && body.ph.length < 16000)) && body.exp && typeof body.exp.__ts === 'number' && body.exp.__ts < Date.now() + 45 * 864e5;
+          (!('ph' in body) || (typeof body.ph === 'string' && body.ph.length <= 200000)) && body.exp && typeof body.exp.__ts === 'number' && body.exp.__ts < Date.now() + 45 * 864e5;
         if (!okLink) return reply(no);
         db.set(p, body); state.writes.push(p);
         return reply({ ok: true });

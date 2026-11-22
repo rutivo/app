@@ -65,7 +65,7 @@ export function decodeLink(hash) {
     const s = main.replace(/-/g, '+').replace(/_/g, '/');
     if (!s || s.length > 4000) return null;
     const bin = atob(s + '='.repeat((4 - (s.length % 4)) % 4));
-    return cleanLink(JSON.parse(new TextDecoder().decode(Uint8Array.from(bin, (c) => c.charCodeAt(0)))), ph);
+    return cleanLink(JSON.parse(new TextDecoder().decode(Uint8Array.from(bin, (c) => c.charCodeAt(0)))), ph, PHOTO_MAX);
   } catch {
     return null;
   }
@@ -74,9 +74,9 @@ export function decodeLink(hash) {
 /**
  * Comprueba los datos de un enlace (vengan dentro del enlace o de la nube):
  * solo los campos conocidos, como texto, con tamaño y formato comprobados.
- * `ph`: la foto en base64 (con - y _ o con + y /), o nada.
+ * `ph`: la foto en base64 (con - y _ o con + y /), o nada; `maxPh`: su tamaño máximo.
  */
-export function cleanLink(obj, ph) {
+export function cleanLink(obj, ph, maxPh = PHOTO_MAX) {
   if (!obj || typeof obj !== 'object' || obj.v !== 1) return null;
   const out = {};
   for (const k of Object.keys(FIELDS)) {
@@ -91,7 +91,7 @@ export function cleanLink(obj, ph) {
   if (out.f && !/^[A-Z0-9]{3,8}$/.test(out.f)) delete out.f;
   if (out.t && !/^\+?\d{6,15}$/.test(out.t)) delete out.t;
   // Foto: solo una JPEG (empieza por /9j/), solo letras del base64 y con tamaño máximo
-  if (typeof ph === 'string' && ph.length <= PHOTO_MAX + 4 && /^[A-Za-z0-9_+/-]+={0,2}$/.test(ph)) {
+  if (typeof ph === 'string' && ph.length <= maxPh + 4 && /^[A-Za-z0-9_+/-]+={0,2}$/.test(ph)) {
     const b = ph.replace(/-/g, '+').replace(/_/g, '/').replace(/=+$/, '');
     if (b.startsWith('/9j/')) out.ph = 'data:image/jpeg;base64,' + b + '='.repeat((4 - (b.length % 4)) % 4);
   }
@@ -116,7 +116,7 @@ export const shortUrl = (base, id) => new URL('cliente.html', base).href + '#' +
 /** Lo que se guarda en la nube para el enlace (sin el dueño ni la caducidad, que pone quien lo sube). */
 export function linkRecord(data, photo) {
   const rec = { d: JSON.stringify({ v: 1, ...data }) };
-  const ph = photoPart(photo);
+  const ph = photoPart(photo, CLOUD_PHOTO_MAX);
   if (ph) rec.ph = ph;
   return rec;
 }
@@ -135,7 +135,7 @@ export function fromRest(doc, now = Date.now()) {
   const exp = f.exp && f.exp.timestampValue ? Date.parse(f.exp.timestampValue) : 0;
   if (!(exp > now)) return null;
   try {
-    const out = cleanLink(JSON.parse(f.d.stringValue), f.ph && f.ph.stringValue);
+    const out = cleanLink(JSON.parse(f.d.stringValue), f.ph && f.ph.stringValue, CLOUD_PHOTO_MAX);
     if (out && f.st && typeof f.st.stringValue === 'string') out.st = clean(f.st.stringValue).slice(0, 20);
     return out;
   } catch {
@@ -143,15 +143,17 @@ export function fromRest(doc, now = Date.now()) {
   }
 }
 
-/** Tamaño máximo de la foto del punto de encuentro dentro del enlace (caracteres). */
+/** Tamaño máximo de la foto del punto de encuentro dentro del enlace largo (caracteres). */
 export const PHOTO_MAX = 12000;
+/** Con el enlace corto, la foto va aparte en la nube: buena calidad (≈ 150 KB). */
+export const CLOUD_PHOTO_MAX = 200000;
 
 /** Foto (data:image/jpeg;base64,…) → trozo para el enlace, o '' si no vale. */
-export function photoPart(dataUrl) {
+export function photoPart(dataUrl, max = PHOTO_MAX) {
   const m = /^data:image\/jpeg;base64,([A-Za-z0-9+/]+={0,2})$/.exec(String(dataUrl || ''));
   if (!m || !m[1].startsWith('/9j/')) return '';
   const part = m[1].replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-  return part.length <= PHOTO_MAX ? part : '';
+  return part.length <= max ? part : '';
 }
 
 /**

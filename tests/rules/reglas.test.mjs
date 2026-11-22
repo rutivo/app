@@ -66,7 +66,7 @@ const ID = 'AbCdEfGhIjKlMnOpQrSt';
 const ID2 = 'ZyXwVuTsRqPoNmLkJiHg';
 const soon = () => Timestamp.fromMillis(Date.now() + 2 * 864e5);
 const link = (o, extra = {}) => ({ o, d: '{"v":1,"n":"John"}', exp: soon(), ...extra });
-await t('enlace: el conductor crea el suyo', assertSucceeds(setDoc(doc(u1, 'enlaces', ID), link('u1', { ph: '/9j/' + 'A'.repeat(100) }))));
+await t('enlace: el conductor crea el suyo (con foto de buena calidad)', assertSucceeds(setDoc(doc(u1, 'enlaces', ID), link('u1', { ph: '/9j/' + 'A'.repeat(199990) }))));
 await t('enlace: lo actualiza (p. ej. el estado «ya estoy»)', assertSucceeds(setDoc(doc(u1, 'enlaces', ID), link('u1', { st: 'aqui' }))));
 await t('enlace: el cliente lo abre SIN cuenta con el código', assertSucceeds(getDoc(doc(anon, 'enlaces', ID))));
 await t('enlace: NO se pueden listar (ni sin cuenta ni con cuenta)', assertFails(getDocs(collection(anon, 'enlaces'))));
@@ -78,7 +78,7 @@ await t('enlace: sin cuenta NO se crea', assertFails(setDoc(doc(anon, 'enlaces',
 await t('enlace: código corto o con símbolos, no', assertFails(setDoc(doc(u1, 'enlaces', 'corto'), link('u1'))));
 await t('enlace: campos extra, no', assertFails(setDoc(doc(u1, 'enlaces', ID2), link('u1', { precio: 95 }))));
 await t('enlace: datos demasiado grandes, no', assertFails(setDoc(doc(u1, 'enlaces', ID2), link('u1', { d: 'x'.repeat(4000) }))));
-await t('enlace: foto demasiado grande, no', assertFails(setDoc(doc(u1, 'enlaces', ID2), link('u1', { ph: 'x'.repeat(16000) }))));
+await t('enlace: foto demasiado grande, no', assertFails(setDoc(doc(u1, 'enlaces', ID2), link('u1', { ph: 'x'.repeat(200001) }))));
 await t('enlace: caducidad de más de 45 días, no', assertFails(setDoc(doc(u1, 'enlaces', ID2), link('u1', { exp: Timestamp.fromMillis(Date.now() + 50 * 864e5) }))));
 await t('enlace: caducidad que no es fecha, no', assertFails(setDoc(doc(u1, 'enlaces', ID2), link('u1', { exp: 123 }))));
 await env.withSecurityRulesDisabled(async (ctx) => { await setDoc(doc(ctx.firestore(), 'enlaces', ID2), link('u1', { exp: Timestamp.fromMillis(Date.now() - 6e4) })); });

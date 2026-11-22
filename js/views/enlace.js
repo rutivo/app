@@ -3,7 +3,7 @@
 // revisas tus datos (teléfono, coche, punto de encuentro) y se lo mandas por WhatsApp.
 import { bottomSheet, toast } from '../dom.js';
 import { canShortLink, saveLink } from '../cloud.js';
-import { clientUrl, linkData, linkExpiry, linkMessage, linkRecord, newLinkId, photoPart, shortUrl } from '../enlace.js';
+import { CLOUD_PHOTO_MAX, PHOTO_MAX, clientUrl, linkData, linkExpiry, linkMessage, linkRecord, newLinkId, photoPart, shortUrl } from '../enlace.js';
 import { MSG_LANGS } from '../mensajes.js';
 import { S, save } from '../store.js';
 import { esc } from '../utils.js';
@@ -11,28 +11,35 @@ import { firstName } from '../welcome.js';
 
 const appBase = () => new URL('./', location.href).href;
 
+/** Foto en buena calidad (va aparte en la nube) y foto pequeña (dentro del enlace largo). */
+const HQ = { max: CLOUD_PHOTO_MAX, sides: [1600, 1280, 1080, 900, 720, 560], qs: [0.85, 0.75, 0.65] };
+const SMALL = { max: PHOTO_MAX, sides: [420, 360, 300, 240, 200, 160], qs: [0.6, 0.5, 0.4] };
+
 /**
- * Reduce una foto hasta que quepa en el enlace (JPEG pequeña): prueba tamaños y
- * calidades de mayor a menor y se queda con la primera que cabe.
+ * Reduce una foto (archivo o data:) hasta que quepa en `opt.max`: prueba tamaños y
+ * calidades de mayor a menor y se queda con la primera que cabe (la de más calidad).
  */
-export async function shrinkPhoto(file) {
-  const url = URL.createObjectURL(file);
+export async function shrinkPhoto(src, opt = HQ) {
+  const url = typeof src === 'string' ? src : URL.createObjectURL(src);
   try {
     const img = await new Promise((ok, ko) => { const i = new Image(); i.onload = () => ok(i); i.onerror = ko; i.src = url; });
     const c = document.createElement('canvas');
-    for (const side of [420, 360, 300, 240, 200, 160]) {
+    for (const side of opt.sides) {
       const k = Math.min(1, side / Math.max(img.naturalWidth, img.naturalHeight));
       c.width = Math.max(1, Math.round(img.naturalWidth * k));
       c.height = Math.max(1, Math.round(img.naturalHeight * k));
-      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
-      for (const q of [0.6, 0.5, 0.4]) {
+      const g = c.getContext('2d');
+      g.fillStyle = '#fff'; // un PNG con transparencia saldría negro en JPEG
+      g.fillRect(0, 0, c.width, c.height);
+      g.drawImage(img, 0, 0, c.width, c.height);
+      for (const q of opt.qs) {
         const d = c.toDataURL('image/jpeg', q);
-        if (photoPart(d)) return d;
+        if (photoPart(d, opt.max)) return d;
       }
     }
     return '';
   } finally {
-    URL.revokeObjectURL(url);
+    if (typeof src !== 'string') URL.revokeObjectURL(url);
   }
 }
 
@@ -77,6 +84,7 @@ export function openClientLink(s) {
   );
   const $s = (q) => sheet.querySelector(q);
   let url = '';
+  let smallPhoto = ''; // sin cuenta: la foto en pequeño, para el enlace largo
   // Enlace corto: los datos se guardan en la nube con un código secreto (uno por servicio).
   // Mientras se guardan, los botones esperan; sin cuenta o sin conexión, sale el enlace largo.
   const short = canShortLink();
@@ -95,8 +103,10 @@ export function openClientLink(s) {
     const ok = await saveLink(s.lk, linkRecord(data, S.cfg.pfoto), linkExpiry(data));
     if (mine !== round) return; // ya hay otro cambio guardándose
     if (ok) return setReady(true);
-    // Sin conexión: el enlace largo (lleva los datos dentro), para no dejarte sin enviar
-    url = clientUrl(appBase(), data, S.cfg.pfoto);
+    // Sin conexión: el enlace largo (lleva los datos dentro y la foto en pequeño), para no dejarte sin enviar
+    const small = S.cfg.pfoto ? await shrinkPhoto(S.cfg.pfoto, SMALL).catch(() => '') : '';
+    if (mine !== round) return;
+    url = clientUrl(appBase(), data, small);
     paintLinks();
     setReady(true, 'Sin conexión con tu cuenta: esta vez el enlace sale largo (funciona igual).');
   };
@@ -106,7 +116,7 @@ export function openClientLink(s) {
     $s('#lkview').href = url;
   };
   const refresh = () => {
-    url = short ? shortUrl(appBase(), s.lk) : clientUrl(appBase(), linkData(s, S.cfg, lang), S.cfg.pfoto);
+    url = short ? shortUrl(appBase(), s.lk) : clientUrl(appBase(), linkData(s, S.cfg, lang), smallPhoto);
     const img = $s('#lkimg');
     img.hidden = !S.cfg.pfoto;
     if (S.cfg.pfoto) img.src = S.cfg.pfoto;
@@ -143,17 +153,19 @@ export function openClientLink(s) {
     const f = e.target.files && e.target.files[0];
     e.target.value = '';
     if (!f) return;
-    const d = await shrinkPhoto(f).catch(() => '');
+    const d = await shrinkPhoto(f, HQ).catch(() => '');
     if (!d) return toast('No he podido usar esa foto. Prueba con otra.');
     S.cfg.pfoto = d;
+    smallPhoto = short ? '' : await shrinkPhoto(d, SMALL).catch(() => '');
     save();
     refresh();
-    toast('Foto puesta ✓ (pequeña, para que quepa en el enlace)');
+    toast('Foto puesta ✓');
   });
-  $s('#lkdel').onclick = () => { delete S.cfg.pfoto; save(); refresh(); };
+  $s('#lkdel').onclick = () => { delete S.cfg.pfoto; smallPhoto = ''; save(); refresh(); };
   // Mientras se guarda, los botones no hacen nada (el enlace aún no se puede abrir)
   sheet.addEventListener('click', (e) => { if (!ready && e.target.closest('#lksend, #lkview')) e.preventDefault(); }, true);
   $s('#lkcopy').onclick = async () => !ready ? null : toast((await copy(url)) ? 'Enlace copiado ✓' : 'No se pudo copiar. Mantén pulsado el enlace y cópialo.');
+  if (!short && S.cfg.pfoto) shrinkPhoto(S.cfg.pfoto, SMALL).then((d) => { smallPhoto = d; refresh(); }).catch(() => {});
   refresh();
   return sheet;
 }

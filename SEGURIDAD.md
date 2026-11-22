@@ -162,7 +162,7 @@ sin vulnerabilidades conocidas en Firebase 10.14.1 ni Tesseract 5.1.1.
   - lectura **sin cuenta** de ESE documento y solo hasta su caducidad (2 días después del
     servicio, como mucho 45 días); **no se pueden listar** ni buscar enlaces;
   - solo lo escribe, cambia o borra el conductor que lo creó (campo `o` = su cuenta);
-  - forma fija: `d` (datos, texto < 4.000), `ph` (foto JPEG pequeña, < 16.000), `exp`
+  - forma fija: `d` (datos, texto < 4.000), `ph` (foto JPEG, ≤ 200.000: unos 150 KB, buena calidad), `exp`
     (fecha), `st` (estado, para el paso 2), nada más.
   - Al borrar el servicio en la app, su enlace se borra. Los caducados ya no se pueden leer;
     para que además se borren solos, se puede activar en la consola una política TTL sobre

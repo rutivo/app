@@ -71,7 +71,8 @@ const STATE = {
     await c.waitForTimeout(1200);
     const text = await c.evaluate(() => document.body.innerText);
     ok('6 · el cliente lo abre sin cuenta y lo ve todo', /Hi John!/.test(text) && /Puerta 4, junto a Costa Coffee/.test(text) && /1234 ABC/.test(text) && /BA490/.test(text), text.slice(0, 80));
-    ok('7 · con la foto del punto de encuentro', await c.evaluate(() => !!document.querySelector('img.ph') && document.querySelector('img.ph').naturalWidth > 50));
+    const w = await c.evaluate(() => (document.querySelector('img.ph') || {}).naturalWidth || 0);
+    ok('7 · con la foto del punto de encuentro en buena calidad (tamaño real, antes como mucho 420 px)', w === 800, w + ' px · ' + Math.round(store.db.get('enlaces/' + id).ph.length * 0.75 / 1024) + ' KB');
     ok('8 · pide solo ese documento, por su código', asked.length === 1 && asked[0] === '/v1/projects/prueba/databases/(default)/documents/enlaces/' + id + '?key=prueba', JSON.stringify(asked));
 
     // Código inventado / caducado
