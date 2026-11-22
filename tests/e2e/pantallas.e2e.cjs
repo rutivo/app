@@ -8,7 +8,9 @@ const { serveApp } = require('./firebase-falso.cjs');
 const res = [];
 const ok = (n, c, extra = '') => { res.push(!!c); console.log((c ? 'PASS ' : 'FAIL ') + n + (extra ? ' — ' + extra : '')); };
 const TODAY = new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Madrid' });
-const STATE = { mov: [{ id: 'a', f: TODAY, t: 'in', p: 'efectivo', i: 45, c: 'Carrera' }, { id: 'b', f: TODAY, t: 'out', p: 'tarjeta', i: 12, c: 'Peaje' }], srv: [{ id: 's1', f: TODAY, h: '23:50', cl: 'Viajes Costa S.L.', o: 'Aeropuerto', d: 'Marbella', i: 95, p: 'pendiente', pa: 'John Smith' }], gas: [], huc: [], prv: [], jor: [], fac: [], cli: {}, cfg: { nom: 'Antonio', iva: 10, legal: { v: 1, at: '2026-11-20' } } };
+// El servicio, mañana: si fuera hoy y cercano, el aviso de «Transfer programado» taparía la pantalla según la hora de la prueba
+const TOMORROW = (() => { const d = new Date(TODAY + 'T12:00:00'); d.setDate(d.getDate() + 1); return d.toLocaleDateString('sv-SE'); })();
+const STATE = { mov: [{ id: 'a', f: TODAY, t: 'in', p: 'efectivo', i: 45, c: 'Carrera' }, { id: 'b', f: TODAY, t: 'out', p: 'tarjeta', i: 12, c: 'Peaje' }], srv: [{ id: 's1', f: TOMORROW, h: '23:50', cl: 'Viajes Costa S.L.', o: 'Aeropuerto', d: 'Marbella', i: 95, p: 'pendiente', pa: 'John Smith' }], gas: [], huc: [], prv: [], jor: [], fac: [], cli: {}, cfg: { nom: 'Antonio', iva: 10, legal: { v: 1, at: '2026-11-20' } } };
 const SIZES = [['iPhone', 390, 844, true], ['iPad vertical', 820, 1180, true], ['iPad horizontal', 1180, 820, true], ['ordenador', 1440, 900, false]];
 
 (async () => {
