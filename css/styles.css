@@ -727,7 +727,7 @@ details[open] > summary.row-btn .chev { transform: rotate(90deg); }
   background: var(--acc);
   color: #fff;
 }
-.bsheet a.btn.sec { background: transparent; color: var(--ink); border: 1px solid var(--line); }
+.bsheet a.btn.sec, .bsheet label.lk-pick { background: transparent; color: var(--ink); border: 1px solid var(--line); }
 .bsheet a.btn small { display: block; font-weight: 500; opacity: 0.85; font-size: 13px; margin-top: 2px; }
 .flmap { margin-top: 12px; height: 52vh; border-radius: 12px; overflow: hidden; border: 1px solid var(--line); background: var(--bg); }
 .flmap iframe { width: 100%; height: 100%; border: 0; }
@@ -840,7 +840,7 @@ details[open] > summary.row-btn .chev { transform: rotate(90deg); }
 .lk-ph img { width: 96px; height: 72px; object-fit: cover; border-radius: 12px; border: 1px solid var(--line); flex: none; }
 .lk-phb { flex: 1; display: grid; gap: 6px; }
 .lk-phb > * { margin: 0; }
-.lk-pick { display: block; text-align: center; cursor: pointer; }
+.lk-pick { display: block; text-align: center; cursor: pointer; padding: 13px; border-radius: 14px; font-weight: 700; }
 
 /* ---------- Chips (Mensajes, Enlace) ---------- */
 .hchips { display: flex; gap: 8px; overflow-x: auto; padding: 2px 0 10px; scrollbar-width: none; }
