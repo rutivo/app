@@ -124,4 +124,13 @@ requestPersistentStorage();
 setTimeout(() => migratePhotos().catch(() => {}), 1500);
 
 initUpdates();
+// Ordenador: Esc cierra lo que esté abierto encima (panel, factura o asistente)
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape' || isLocked()) return;
+  const sheets = document.querySelectorAll('.bsheet, .pay-sheet, .cartel');
+  const top = sheets[sheets.length - 1];
+  if (top) { const c = top.querySelector('[data-close], button'); if (c) c.click(); else top.remove(); return; }
+  if ($('#invwrap') && $('#invwrap').classList.contains('on')) { $('#cl').click(); return; }
+  if (document.querySelector('.siri')) closeAssistant();
+});
 initAccount(render);

@@ -1242,3 +1242,35 @@ input[type="date"]::-webkit-date-and-time-value, input[type="time"]::-webkit-dat
 #lock.shake .lk-dots { animation: lkshake .4s; }
 @keyframes lkshake { 20%, 60% { transform: translateX(-8px); } 40%, 80% { transform: translateX(8px); } }
 @media (prefers-reduced-motion: reduce) { #lock.shake .lk-dots { animation: none; } }
+
+/* ---------- iPad, tablets y ordenador ---------- */
+/* Dos toques seguidos en un botón (p. ej. el mismo número del PIN) no hacen zoom; pellizcar sigue ampliando */
+button, a, label, summary, select, input, textarea, [role="button"], .tag.pay, .lk-pad, .siri-sug { touch-action: manipulation; }
+@media (hover: hover) and (pointer: fine) {
+  button, summary, label[for], select, .tag.pay, [data-ch], [data-cat] { cursor: pointer; }
+  .card button:hover, .row-btn:hover, .ch-seg button:not(.on):hover { filter: brightness(1.12); }
+}
+@media (min-width: 700px) {
+  .app { max-width: 760px; padding: 24px 24px 112px; }
+  .asis-fab { right: max(18px, calc((100vw - 760px) / 2 + 18px)); }
+  .ear-dl { right: max(14px, calc((100vw - 736px) / 2 + 2px)); }
+  /* Paneles: ventana centrada en vez de hoja desde abajo */
+  .bsheet, .pay-sheet { align-items: center; padding: 24px; }
+  .bsheet > div, .pay-sheet > div { max-width: 600px; border-radius: 20px; padding-bottom: 18px; }
+  .tabs { max-width: 760px; margin: 0 auto !important; border-radius: 22px 22px 0 0; padding-left: 12px; padding-right: 12px; }
+  .avatar-btn { right: max(12px, calc((100vw - 760px) / 2 + 24px)); }
+  h1 { font-size: 26px; }
+}
+@media (min-width: 1100px) {
+  .app { max-width: 1240px; }
+  .asis-fab { right: max(18px, calc((100vw - 1240px) / 2 + 18px)); }
+  /* Caja: el día a día a la izquierda y las estadísticas a la derecha, siempre a la vista */
+  #v-hoy.on { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); column-gap: 28px; align-items: start; }
+  #v-hoy > :not(.caja-main):not(.caja-side) { grid-column: 1 / -1; }
+  .caja-side { position: sticky; top: 16px; max-height: calc(100vh - 32px); overflow: auto; scrollbar-width: thin; }
+  .caja-side > .card:first-child { margin-top: 0; }
+  /* Resto de pantallas: centradas y cómodas de leer */
+  .v:not(#v-hoy) { max-width: 820px; margin: 0 auto; }
+  .tabs { max-width: 820px; }
+  .avatar-btn { right: max(12px, calc((100vw - 1240px) / 2 + 24px)); }
+}
