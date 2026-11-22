@@ -50,16 +50,18 @@ export async function transcribe() { return (self.__guion || []).shift() || ''; 
     ok('1 · antes de la notificación, apunta por voz', (await waitMov(1)) === 1);
     await page.waitForTimeout(800);
 
-    // 2. Llega un WhatsApp: el audio queda interrumpido (no vuelve ni con un toque)
+    // 2. Llega un WhatsApp: el audio queda interrumpido (no vuelve ni con un toque).
+    //    Se cierra el asistente antes, para que no quede ninguna escucha a medias.
+    await page.click('[data-sx]');
+    await page.waitForTimeout(600);
     await page.evaluate(async () => { for (const c of self.__ctxs) { c.__roto = true; await c.suspend(); } });
-    await page.evaluate(() => { self.__guion.push('Apúntame 30 euros con tarjeta'); });
-    await page.waitForTimeout(2500); // Rutivo seguía escuchando solo: con el audio interrumpido no le llega nada
-    await page.click('[data-sorb]'); // «ya he terminado»
-    await page.waitForTimeout(1500);
-    const st = await page.textContent('.siri-status');
-    ok('2 · con el audio interrumpido no oye nada (como en tu iPhone)', (await movs()).length === 1, st);
+    await page.click('#asisbtn'); // se abre el asistente: intenta oír con el audio interrumpido
+    let st = '';
+    for (let i = 0; i < 120; i++) { await page.waitForTimeout(250); st = await page.textContent('.siri-status'); if (/micro no da sonido|Toca la bola para seguir/.test(st)) break; }
+    ok('2 · con el audio interrumpido no oye nada (como en tu iPhone) y lo dice', (await movs()).length === 1 && /micro no da sonido|Toca la bola para seguir/.test(st), st);
 
     // 3. Tocar la bola: audio y micro de cero → vuelve a oír
+    await page.evaluate(() => { self.__guion.push('Apúntame 30 euros con tarjeta'); });
     const before = await page.evaluate(() => self.__ctxs.length);
     await page.click('[data-sorb]');
     const n = await waitMov(2);
