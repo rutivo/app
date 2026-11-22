@@ -72,7 +72,7 @@ const CONFIG = "export const FIREBASE_CONFIG=null;export const FIREBASE_SDK='';e
     await page.setInputFiles('#lkfile', { name: 'puerta.jpg', mimeType: 'image/jpeg', buffer: photo });
     await page.waitForTimeout(1200);
     const thumb = await page.evaluate(() => { const i = document.querySelector('#lkimg'); return !i.hidden && i.naturalWidth; });
-    const url = await page.getAttribute('#lkview', 'href');
+    const url = (await page.getAttribute('#lkview', 'href')).replace('?vista=1', '');
     const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('cajaTransfer')).cfg.pfoto || '');
     ok('8 · eliges la foto y sale en pequeño (se recuerda para todos tus enlaces)', thumb > 0 && saved.startsWith('data:image/jpeg;base64,/9j/'), 'foto de ' + Math.round(photo.length / 1024) + ' KB → ' + Math.round(saved.length * 0.75 / 1024) + ' KB');
     ok('9 · la foto va dentro del enlace, que sigue siendo razonable', /#[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(url) && url.length < 14000, url.length + ' caracteres');
@@ -84,7 +84,7 @@ const CONFIG = "export const FIREBASE_CONFIG=null;export const FIREBASE_SDK='';e
     await c.close();
     await page.click('#lkdel');
     await page.waitForTimeout(200);
-    ok('11 · y se puede quitar', !(await page.evaluate(() => JSON.parse(localStorage.getItem('cajaTransfer')).cfg.pfoto)) && !/\./.test((await page.getAttribute('#lkview', 'href')).split('#')[1]));
+    ok('11 · y se puede quitar', !(await page.evaluate(() => JSON.parse(localStorage.getItem('cajaTransfer')).cfg.pfoto)) && !/\./.test(((await page.getAttribute('#lkview', 'href')).replace('?vista=1', '')).split('#')[1]));
 
     const kept = await page.evaluate(() => JSON.parse(localStorage.getItem('cajaTransfer')).huc);
     ok('12 · lo que había en la Hucha sigue guardado (no se borra nada)', kept.length === 1 && kept[0].i === 20);

@@ -185,6 +185,13 @@ async function fromCloud(id) {
 }
 
 async function start() {
+  // Vista previa del conductor (desde la app): barra para volver. El enlace del cliente no lleva ?vista.
+  if (new URLSearchParams(location.search).has('vista')) {
+    const bar = el('button', 'back', '← Volver a Rutivo');
+    bar.type = 'button';
+    bar.onclick = () => { if (history.length > 1) history.back(); else location.href = './'; };
+    document.body.prepend(bar);
+  }
   const hash = location.hash.replace(/^#/, '');
   const data = isLinkId(hash) ? await fromCloud(hash) : decodeLink(hash);
   if (!data || (!data.d && !data.p && !data.dt && !data.ph)) {

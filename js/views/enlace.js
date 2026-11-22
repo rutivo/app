@@ -81,7 +81,7 @@ export function openClientLink(s) {
     field('lktel', 'Tu teléfono (para que te escriba o te llame)', 'tel', 'Ej.: +34 600 000 000', 'tel') +
     '<div id="lkwarn" class="mut mt8" role="status"></div><div id="lkstate" class="mut" role="status"></div>' +
     '<a class="btn" id="lksend" target="_blank" rel="noopener noreferrer">📲 Enviárselo por WhatsApp</a>' +
-    '<div class="row2"><button type="button" class="sec" id="lkcopy">📋 Copiar enlace</button><a class="btn sec" id="lkview" target="_blank" rel="noopener">👀 Ver lo que verá</a></div>' +
+    '<div class="row2"><button type="button" class="sec" id="lkcopy">📋 Copiar enlace</button><a class="btn sec" id="lkview">👀 Ver lo que verá</a></div>' +
     '<button type="button" class="sec" data-close>Cerrar</button>',
   );
   const $s = (q) => sheet.querySelector(q);
@@ -115,7 +115,8 @@ export function openClientLink(s) {
   const paintLinks = () => {
     const text = linkMessage(lang, s, S.cfg, url);
     $s('#lksend').href = 'https://wa.me/' + (s.tl || '').replace(/\D/g, '') + '?text=' + encodeURIComponent(text);
-    $s('#lkview').href = url;
+    // Vista previa dentro de la app, con «← Volver a Rutivo» (?vista: solo la ve el conductor)
+    $s('#lkview').href = url.replace('#', '?vista=1#');
   };
   const refresh = () => {
     url = short ? shortUrl(appBase(), s.lk) : clientUrl(appBase(), linkData(s, S.cfg, lang), smallPhoto);

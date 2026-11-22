@@ -22,6 +22,7 @@ const STATE = {
     const store = createFirestore();
     const A = await device(browser, app, store, { local: STATE, name: 'A' });
     const page = A.page;
+    await A.ctx.route('https://firestore.googleapis.com/v1/**', restLinks(store)); // la vista previa lee el enlace como el cliente
     await page.waitForTimeout(2500);
     for (const b of await page.$$('button:has-text("Entendido")')) if (await b.isVisible()) await b.click();
     // Una foto pequeña de verdad
@@ -51,7 +52,7 @@ const STATE = {
     await page.waitForTimeout(800);
     await page.click('[data-llang="en"]');
     await page.waitForFunction(() => !document.querySelector('#lksend').classList.contains('wait'), null, { timeout: 8000 });
-    const url = await page.getAttribute('#lkview', 'href');
+    const url = (await page.getAttribute('#lkview', 'href')).replace('?vista=1', '');
     const wa = decodeURIComponent(await page.getAttribute('#lksend', 'href'));
     ok('1 · con cuenta, el enlace es corto (…/cliente.html#código de 20)', /\/cliente\.html#[A-Za-z0-9]{20}$/.test(url) && url.length < 80, url);
     ok('2 · el WhatsApp lleva el mensaje y el enlace corto', wa.endsWith('\n' + url) && wa.length < 260, wa.length + ' caracteres');
@@ -66,7 +67,23 @@ const STATE = {
     await page.waitForTimeout(100);
     const waiting = await page.evaluate(() => document.querySelector('#lksend').classList.contains('wait'));
     await page.waitForFunction(() => !document.querySelector('#lksend').classList.contains('wait'), null, { timeout: 8000 });
-    ok('5 · al cambiar algo, espera a guardarlo y el MISMO enlace se actualiza', waiting && (await page.getAttribute('#lkview', 'href')) === url && /Puerta 4/.test(store.db.get('enlaces/' + id).d));
+    // «👀 Ver lo que verá»: dentro de la app, con barra para volver (el cliente nunca la ve)
+    const preview = await page.getAttribute('#lkview', 'href');
+    ok('4b · «Ver lo que verá» se abre en la app (no en otra ventana) y el enlace del cliente no lleva la barra', preview === url.replace('#', '?vista=1#') && !(await page.getAttribute('#lkview', 'target')) && !wa.includes('vista'));
+    await page.click('#lkview');
+    await page.waitForTimeout(1200);
+    const bar = await page.$('button.back');
+    ok('4c · en la vista previa sale «← Volver a Rutivo»', !!bar && /Hi John!/.test(await page.evaluate(() => document.body.innerText)));
+    await bar.click();
+    await page.waitForTimeout(2000);
+    ok('4d · y al tocarlo vuelves a la app', /\/(index\.html)?$/.test(new URL(page.url()).pathname) && !!(await page.$('.tabs')), page.url());
+    for (const b of await page.$$('button:has-text("Entendido")')) if (await b.isVisible()) await b.click();
+    await page.click('.tabs button[data-v="pa"]');
+    await page.waitForTimeout(400);
+    await page.click('.pa-main');
+    await page.waitForTimeout(300);
+    await page.waitForFunction(() => !document.querySelector('#lksend').classList.contains('wait'), null, { timeout: 8000 });
+    ok('5 · al cambiar algo, espera a guardarlo y el MISMO enlace se actualiza', waiting && ((await page.getAttribute('#lkview', 'href')).replace('?vista=1', '')) === url && /Puerta 4/.test(store.db.get('enlaces/' + id).d));
 
     // ---------- El cliente, sin cuenta ----------
     const cctx = await browser.newContext({ viewport: { width: 390, height: 844 }, locale: 'en-GB', timezoneId: 'Europe/London' });
@@ -122,7 +139,7 @@ const STATE = {
     await A.setOffline(true);
     await page.click('.pa-main');
     await page.waitForFunction(() => !document.querySelector('#lksend').classList.contains('wait'), null, { timeout: 15000 });
-    const offUrl = await page.getAttribute('#lkview', 'href');
+    const offUrl = (await page.getAttribute('#lkview', 'href')).replace('?vista=1', '');
     ok('13 · sin conexión: avisa y sale el enlace largo (funciona igual)', /cliente\.html#[A-Za-z0-9_-]{40,}/.test(offUrl) && /enlace sale largo/.test(await page.textContent('#lkstate')), offUrl.length + ' caracteres');
     await A.setOffline(false);
     ok('14 · sin errores en la app', !page.errors.length, page.errors.join(' | '));

@@ -49,7 +49,7 @@ const CONFIG = "export const FIREBASE_CONFIG=null;export const FIREBASE_SDK='';e
     await page.waitForTimeout(200);
     ok('3 · con todo puesto, ya no avisa de nada (y se recuerda para la próxima)', (await page.textContent('#lkwarn')) === '' && /600 11 22 33/.test(await page.evaluate(() => localStorage.getItem('cajaTransfer'))));
     const wa = decodeURIComponent(await page.getAttribute('#lksend', 'href'));
-    const url = await page.getAttribute('#lkview', 'href');
+    const url = (await page.getAttribute('#lkview', 'href')).replace('?vista=1', '');
     ok('4 · «Enviárselo por WhatsApp» va al teléfono del cliente con un mensaje en inglés y el enlace', wa.startsWith('https://wa.me/447700900123?text=Hi John! I\'m Alejandro, your driver.') && wa.endsWith(url), wa.slice(0, 90));
     ok('5 · el enlace es la página del cliente con los datos después de «#» (no llegan a ningún servidor)', /\/cliente\.html#[A-Za-z0-9_-]+$/.test(url), url.slice(0, 70));
     ok('6 · sin errores en la app', !errs.length, errs.join(' | '));
