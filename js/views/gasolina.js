@@ -212,7 +212,7 @@ function deleteFuel(id) {
   rerenderAll();
 }
 
-async function showReceipt(id) {
+export async function showReceipt(id) {
   const src = (await getPhotoLocal(id)) || (await downloadPhoto(id));
   $('#phi').src = src || '';
   $('#ph').classList.add('on');
