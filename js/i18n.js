@@ -37,7 +37,7 @@ const D = {
   'Idioma del cliente': 'Client language', 'Dónde le esperas': 'Where you wait', 'Tu coche': 'Your car', 'Matrícula': 'Number plate',
   'Tu teléfono (para que te escriba o te llame)': 'Your phone (so they can message or call you)', '📲 Enviárselo por WhatsApp': '📲 Send it by WhatsApp',
   '📋 Copiar enlace': '📋 Copy link', '👀 Ver lo que verá': '👀 See what they’ll see', 'Enlace copiado ✓': 'Link copied ✓',
-  '📸 Foto del punto de encuentro': '📸 Meeting point photo', '🗑️ Quitar foto': '🗑️ Remove photo',
+  '📸 Foto del punto de encuentro': '📸 Meeting point photo', '⚠️ Esta foto es de antes y se ve borrosa. Toca «📷 Elegir foto» y vuelve a elegirla: ahora se guarda nítida.': '⚠️ This photo is from before and looks blurry. Tap «📷 Elegir foto» and choose it again: now it is saved sharp.', '🗑️ Quitar foto': '🗑️ Remove photo',
   'Caja diaria': 'Daily cash', 'Día a día': 'Day by day', 'Día': 'Day', 'Hoy': 'Today', 'Mañana': 'Tomorrow', 'Ahora': 'Now',
   'Ingresos': 'Income', 'Gastos': 'Expenses', 'Ingreso': 'Income', 'Gasto': 'Expense', 'Efectivo': 'Cash', 'Tarjeta': 'Card',
   'Servicios Transfer': 'Transfer services', 'Neto en efectivo': 'Net in cash', 'Neto con tarjeta': 'Net by card',

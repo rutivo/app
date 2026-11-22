@@ -12,7 +12,8 @@ import { firstName } from '../welcome.js';
 const appBase = () => new URL('./', location.href).href;
 
 /** Foto en buena calidad (va aparte en la nube) y foto pequeña (dentro del enlace largo). */
-const HQ = { max: CLOUD_PHOTO_MAX, sides: [1600, 1280, 1080, 900, 720, 560], qs: [0.85, 0.75, 0.65] };
+// Primero se mantiene el tamaño (1080 px = el ancho de la pantalla de un móvil) y se baja un poco la calidad
+const HQ = { max: CLOUD_PHOTO_MAX, sides: [1600, 1280, 1080, 960, 800, 640], qs: [0.85, 0.75, 0.65, 0.55, 0.48] };
 const SMALL = { max: PHOTO_MAX, sides: [420, 360, 300, 240, 200, 160], qs: [0.6, 0.5, 0.4] };
 
 /**
@@ -75,6 +76,7 @@ export function openClientLink(s) {
     '<div class="lk-ph"><img id="lkimg" alt="Foto del punto de encuentro" hidden><div class="lk-phb">' +
     '<label class="btn sec lk-pick">📷 Elegir foto<input type="file" id="lkfile" accept="image/*" hidden></label>' +
     '<button type="button" class="sec" id="lkdel" hidden>🗑️ Quitar foto</button></div></div>' +
+    '<div id="lkold" class="lk-old" role="status" hidden>⚠️ Esta foto es de antes y se ve borrosa. Toca «📷 Elegir foto» y vuelve a elegirla: ahora se guarda nítida.</div>' +
     '<div class="row">' + field('lkcoche', 'Tu coche', 'coche', 'Ej.: Toyota Corolla blanco') + field('lkmat', 'Matrícula', 'mat', 'Ej.: 1234 ABC') + '</div>' +
     field('lktel', 'Tu teléfono (para que te escriba o te llame)', 'tel', 'Ej.: +34 600 000 000', 'tel') +
     '<div id="lkwarn" class="mut mt8" role="status"></div><div id="lkstate" class="mut" role="status"></div>' +
@@ -121,6 +123,8 @@ export function openClientLink(s) {
     img.hidden = !S.cfg.pfoto;
     if (S.cfg.pfoto) img.src = S.cfg.pfoto;
     $s('#lkdel').hidden = !S.cfg.pfoto;
+    // Foto elegida con la versión anterior (pequeña): se ve borrosa; hay que volver a elegirla
+    $s('#lkold').hidden = !(S.cfg.pfoto && S.cfg.pfv !== 2);
     paintLinks();
     if (short) {
       setReady(false, '⏳ Preparando el enlace…');
@@ -156,12 +160,13 @@ export function openClientLink(s) {
     const d = await shrinkPhoto(f, HQ).catch(() => '');
     if (!d) return toast('No he podido usar esa foto. Prueba con otra.');
     S.cfg.pfoto = d;
+    S.cfg.pfv = 2; // foto en buena calidad (las de antes eran pequeñas)
     smallPhoto = short ? '' : await shrinkPhoto(d, SMALL).catch(() => '');
     save();
     refresh();
     toast('Foto puesta ✓');
   });
-  $s('#lkdel').onclick = () => { delete S.cfg.pfoto; smallPhoto = ''; save(); refresh(); };
+  $s('#lkdel').onclick = () => { delete S.cfg.pfoto; delete S.cfg.pfv; smallPhoto = ''; save(); refresh(); };
   // Mientras se guarda, los botones no hacen nada (el enlace aún no se puede abrir)
   sheet.addEventListener('click', (e) => { if (!ready && e.target.closest('#lksend, #lkview')) e.preventDefault(); }, true);
   $s('#lkcopy').onclick = async () => !ready ? null : toast((await copy(url)) ? 'Enlace copiado ✓' : 'No se pudo copiar. Mantén pulsado el enlace y cópialo.');

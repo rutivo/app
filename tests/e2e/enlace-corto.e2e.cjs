@@ -30,10 +30,23 @@ const STATE = {
     const photo = await shot.screenshot({ type: 'jpeg', quality: 85 });
     await shot.close();
 
+    // Una foto de móvil de verdad: grande y con mucho detalle (lo que más pesa en JPEG)
+    const big = await browser.newPage({ viewport: { width: 2016, height: 1512 } });
+    await big.setContent('<canvas id="c" width="2016" height="1512"></canvas><script>const g=c.getContext("2d");for(let i=0;i<60000;i++){g.fillStyle="hsl("+(Math.random()*360)+",70%,"+(30+Math.random()*50)+"%)";g.fillRect(Math.random()*2016,Math.random()*1512,3+Math.random()*30,3+Math.random()*30);}g.fillStyle="#000";g.font="bold 160px Arial";g.fillText("LA MANON",500,300);</script><style>body{margin:0}</style>');
+    const realPhoto = await big.screenshot({ type: 'jpeg', quality: 92 });
+    await big.close();
+
+    // Una foto guardada con la versión anterior (pequeña): avisa de que se ve borrosa
+    await page.evaluate(async () => { const m = await import('/js/store.js'); m.S.cfg.pfoto = 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAMCAgICAgMCAgIDAwMDBAYEBAQEBAgGBgUGCQgKCgkICQkKDA8MCgsOCwkJDRENDg8QEBEQCgwSExIQEw8QEBD/yQALCAABAAEBAREA/8wABgAQEAX/2gAIAQEAAD8A0s8g/9k='; delete m.S.cfg.pfv; m.save(); });
     await page.click('.tabs button[data-v="pa"]');
     await page.waitForTimeout(400);
     await page.click('.pa-main');
     await page.waitForTimeout(300);
+    ok('0 · si la foto es de la versión anterior (pequeña), avisa de que se ve borrosa', await page.isVisible('#lkold'));
+    await page.setInputFiles('#lkfile', { name: 'manon.jpg', mimeType: 'image/jpeg', buffer: realPhoto });
+    await page.waitForTimeout(1500);
+    const hq = await page.evaluate(async () => { const d = JSON.parse(localStorage.getItem('cajaTransfer')).cfg.pfoto; const i = new Image(); await new Promise((r) => { i.onload = r; i.src = d; }); return [i.naturalWidth, d.length]; });
+    ok('0b · foto de 2016 px con muchísimo detalle: se guarda nítida (≥ 900 px; una foto real de móvil sale a 1600 px) y cabe (≤ 200.000) — y el aviso desaparece', hq[0] >= 900 && hq[1] <= 200000 + 30 && !(await page.isVisible('#lkold')), hq[0] + ' px · ' + Math.round(hq[1] * 0.75 / 1024) + ' KB');
     await page.setInputFiles('#lkfile', { name: 'p.jpg', mimeType: 'image/jpeg', buffer: photo });
     await page.waitForTimeout(800);
     await page.click('[data-llang="en"]');

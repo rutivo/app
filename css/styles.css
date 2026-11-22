@@ -841,6 +841,7 @@ details[open] > summary.row-btn .chev { transform: rotate(90deg); }
 .lk-phb { flex: 1; display: grid; gap: 6px; }
 .lk-phb > * { margin: 0; }
 .wait { opacity: .5; }
+.lk-old { margin-top: 8px; padding: 10px 12px; border-radius: 12px; font-size: 14px; font-weight: 600; color: var(--ink); background: color-mix(in srgb, #ffb340 22%, transparent); border: 1px solid color-mix(in srgb, #ffb340 60%, transparent); }
 .lk-pick { display: block; text-align: center; cursor: pointer; padding: 13px; border-radius: 14px; font-weight: 700; }
 
 /* ---------- Chips (Mensajes, Enlace) ---------- */
