@@ -146,20 +146,46 @@ export const sharedLive = () => live(shared);
 // Por eso hay UN audio compartido que se desbloquea con cualquier toque en la
 // app y se queda en marcha: así «Oye Rutivo» puede escuchar sin tocar nada.
 let sharedCtx = null;
+// iPhone: una notificación (WhatsApp, una llamada…) «interrumpe» el audio de la app.
+// A veces ni el micro ni el audio vuelven solos, ni reanudándolos con un toque:
+// hay que empezar de cero (audio nuevo y micro nuevo), y eso se hace en el siguiente toque.
+let needReset = false;
+const watchCtx = (c) => { c.onstatechange = () => { if (c.state === 'interrupted') needReset = true; }; };
 
 /** El audio compartido (lo crea si hace falta) e intenta ponerlo en marcha. */
 export function audioCtx() {
   const AC = window.AudioContext || window.webkitAudioContext;
   playAndRecord();
-  if (!sharedCtx || sharedCtx.state === 'closed') sharedCtx = new AC();
+  if (!sharedCtx || sharedCtx.state === 'closed') { sharedCtx = new AC(); watchCtx(sharedCtx); }
   if (sharedCtx.state !== 'running') sharedCtx.resume().catch(() => {});
   return sharedCtx;
 }
 export const audioRunning = () => !!sharedCtx && sharedCtx.state === 'running';
+/** ¿Se quedó el audio interrumpido (o una escucha falló sin motivo)? Entonces el próximo toque lo rehace. */
+export const audioNeedsReset = () => needReset || (!!sharedCtx && sharedCtx.state === 'interrupted');
+/** Marca que el micro no funcionó bien (p. ej. «No te he oído» con el micro mudo): el próximo toque lo rehace. */
+export const markAudioBroken = () => { needReset = true; };
+
+/**
+ * Audio y micro de cero. Llamar DENTRO de un toque (en iPhone, el audio nuevo
+ * solo arranca así). El micro se vuelve a abrir al escuchar (sin pedir permiso
+ * otra vez en la misma sesión).
+ */
+export function resetAudio() {
+  needReset = false;
+  stopShared();
+  try { if (sharedCtx && sharedCtx.state !== 'closed') sharedCtx.close(); } catch { /* ya cerrado */ }
+  sharedCtx = null;
+  return audioCtx();
+}
 
 if (typeof document !== 'undefined') {
   // Cualquier toque en la app desbloquea el audio (dentro del propio toque, como exige iPhone)
-  const unlock = () => { if (!audioRunning() && (window.AudioContext || window.webkitAudioContext)) audioCtx(); };
+  const unlock = () => {
+    if (!(window.AudioContext || window.webkitAudioContext)) return;
+    if (audioNeedsReset()) resetAudio(); // tras una interrupción (notificación, llamada…): de cero
+    else if (!audioRunning()) audioCtx();
+  };
   for (const ev of ['pointerdown', 'touchend', 'click', 'keydown']) document.addEventListener(ev, unlock, { capture: true, passive: true });
 }
 
@@ -190,6 +216,7 @@ export function createMic({ deafMs = 1500, maxMs = 15000, silenceMs = 1100, shor
   let proc = null;
   let session = null;
   let lastChunk = 0;
+  let lastPeak = 1;
 
   /** El audio compartido: se activa sin esperar a nada (si esto ocurre dentro de un toque, iPhone lo deja arrancar). */
   function ensureCtx() {
@@ -214,6 +241,7 @@ export function createMic({ deafMs = 1500, maxMs = 15000, silenceMs = 1100, shor
       for (let i = 0; i < d.length; i++) s += d[i] * d[i];
       const rms = Math.sqrt(s / d.length);
       if (rms > 1e-6) session.sound = true; // un micro de verdad siempre capta algo (aunque sea ruido)
+      if (rms > session.peak) session.peak = rms;
       session.chunks.push(new Float32Array(d));
       session.onLevel(rms, session.vad.speaking);
       // Escucha continua: quien escucha puede pedir terminar ya (p. ej. ya oyó «Oye Rutivo»)
@@ -258,6 +286,7 @@ export function createMic({ deafMs = 1500, maxMs = 15000, silenceMs = 1100, shor
     const all = new Float32Array(s.chunks.reduce((n, c) => n + c.length, 0));
     let o = 0;
     for (const c of s.chunks) { all.set(c, o); o += c.length; }
+    lastPeak = s.peak;
     s.resolve(ok && (s.vad.speaking || s.forced) ? resample(all, ctx ? ctx.sampleRate : 48000) : null);
   }
 
@@ -272,7 +301,7 @@ export function createMic({ deafMs = 1500, maxMs = 15000, silenceMs = 1100, shor
       if (session) finish(false);
       await wake();
       return new Promise((resolve, reject) => {
-        const s = { chunks: [], resolve, reject, onLevel, onChunk, forced: false, vad: createVad({ chunkMs: (4096 / ctx.sampleRate) * 1000, maxMs, silenceMs, shortMs, follow }), started: Date.now(), retried: false, busy: false };
+        const s = { chunks: [], peak: 0, resolve, reject, onLevel, onChunk, forced: false, vad: createVad({ chunkMs: (4096 / ctx.sampleRate) * 1000, maxMs, silenceMs, shortMs, follow }), started: Date.now(), retried: false, busy: false };
         session = s;
         capturing++;
         // Vigilante: el detector de voz cuenta el tiempo con el sonido que llega;
@@ -308,6 +337,8 @@ export function createMic({ deafMs = 1500, maxMs = 15000, silenceMs = 1100, shor
       this.cancel();
       teardown();
     },
+    /** Sonido más fuerte de la última escucha (casi 0 = micro mudo, no silencio normal). */
+    get lastPeak() { return lastPeak; },
     /** Último momento en que llegó sonido (para pruebas). */
     get lastChunk() { return lastChunk; },
   };

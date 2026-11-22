@@ -5,7 +5,7 @@ import { ask, trimChatter, weatherText } from '../asistente.js';
 import { readFlag, writeFlag } from '../dom.js';
 import { cachedStatus, etaLine } from '../flight.js';
 import { initWake, pauseWake, resumeWake, trainWake, wakeEnabled, wakeLog, wakeModel, wakeStats } from '../despertar.js';
-import { createMic } from '../microfono.js';
+import { audioNeedsReset, audioRunning, createMic, markAudioBroken, resetAudio } from '../microfono.js';
 import { currentPosition } from '../ruta.js';
 import { cancelHandsFree, handsFree, initHandsFree } from './manosLibres.js';
 import { leavePlanOf, scheduleReminders } from '../reminders.js';
@@ -394,6 +394,7 @@ async function listenEar(auto = false) {
           return;
         }
         deafRetry = false;
+        markAudioBroken();
         return setState('idle', auto ? '👆 Toca la bola para seguir hablando' : 'El micro no da sonido. Toca la bola otra vez (si sigue, cierra y abre Rutivo).');
       }
       if (err && err.name === 'NotAllowedError') return showKeyboard('No tengo permiso para el micrófono. Ajustes → Safari → Micrófono → Permitir (o «Preguntar») y vuelve a tocar la bola. Mientras, usa el 🎤 del teclado.');
@@ -405,6 +406,7 @@ async function listenEar(auto = false) {
     if (!audio) {
       earBusy = false;
       convo = false; // si en la conversación ya no dices nada, deja de escuchar
+      if ((mic && mic.lastPeak < 0.0008) || !audioRunning()) markAudioBroken(); // silencio absoluto o audio parado (iPhone interrumpido): el próximo toque rehace el audio
       return setState('idle', auto ? LABELS.idle : 'No te he oído. Toca la bola y habla cerca del móvil.');
     }
     setState('thinking', earReady ? 'Entendiendo…' : '⬇️ Preparando el oído de Rutivo (solo la primera vez)…');
@@ -483,6 +485,8 @@ function useDictation(why) {
 /** Empieza a escuchar. Se llama SIEMPRE desde un toque (lo exige el iPhone). */
 function listen() {
   unlockVoice();
+  // Tras una interrupción del iPhone (una notificación) o una escucha fallida: audio y micro de cero, dentro de este toque
+  if (audioNeedsReset()) { resetAudio(); if (mic) { mic.close(); mic = null; } }
   try { speechSynthesis.cancel(); } catch { /* */ }
   if (useEar()) return listenEar();
   if (dictation()) return showKeyboard('Toca el 🎤 del teclado y habla. Se envía solo cuando terminas.');
