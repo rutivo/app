@@ -54,9 +54,9 @@ async function open(browser, app, opts) {
     // ---------- iPhone ----------
     const { ctx, page } = await open(browser, app, { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 1 });
     const order = await page.evaluate(() => { const g = document.querySelector('#graf'); return [g.previousElementSibling.id, g.nextElementSibling.tagName]; });
-    ok('1 · el panel está justo debajo de la tarjeta de ingresos y gastos del mes', order[0] === 'mes', JSON.stringify(order));
-    const top = await page.evaluate(() => Math.round(document.querySelector('#graf').getBoundingClientRect().top));
-    ok('2 · se ve al abrir la Caja sin bajar mucho (empieza en la primera pantalla y media)', top < 844 * 1.5, top + ' px');
+    ok('1 · el panel va justo después de apuntar ingresos y gastos y de los movimientos del día', order[0] === 'lm', JSON.stringify(order));
+    const seq = await page.evaluate(() => ['#mes', '#fm', '#lm', '#graf', '#lmes'].map((q) => Math.round(document.querySelector(q).getBoundingClientRect().top + window.scrollY)));
+    ok('2 · orden: resumen del mes → apuntar ingreso/gasto → movimientos del día → estadísticas → todos los meses', seq.every((v, i) => i === 0 || v > seq[i - 1]), JSON.stringify(seq));
 
     // Cifras clave frente a las calculadas aparte
     const k = await page.evaluate(() => [...document.querySelectorAll('#graf .kp')].map((x) => [x.querySelector('.kp-l').textContent, x.querySelector('.kp-v').textContent]));
