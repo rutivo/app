@@ -111,7 +111,9 @@ function ensureStyle() {
   if (document.getElementById('lockcss')) return;
   const st = document.createElement('style');
   st.id = 'lockcss';
-  st.textContent = 'body.locked>*:not(#lock):not(#lockcss){visibility:hidden!important}';
+  // Bloqueada: no se ve nada de la app y la pantalla no se mueve (sin desplazar ni rebotar)
+  st.textContent = 'body.locked>*:not(#lock):not(#lockcss){visibility:hidden!important}' +
+    'html:has(body.locked),body.locked{overflow:hidden!important;overscroll-behavior:none!important}';
   document.head.appendChild(st);
 }
 
@@ -154,9 +156,7 @@ export function lockNow() {
     overlay.classList.remove('shake'); void overlay.offsetWidth; overlay.classList.add('shake');
     msg.textContent = r.wait ? 'Demasiados intentos. Espera ' + Math.ceil(r.wait / 1000) + ' s.' : 'PIN incorrecto' + (r.left ? ' · te quedan ' + r.left + ' intentos' : '');
   };
-  overlay.addEventListener('click', async (e) => {
-    const b = e.target.closest('[data-lk]');
-    if (!b) return;
+  const press = async (b) => {
     const k = b.dataset.lk;
     if (k === 'del') { pin = pin.slice(0, -1); paint(); return; }
     if (k === 'bio') { if (await bioUnlock()) unlock(); else msg.textContent = 'No se pudo comprobar. Usa el PIN.'; return; }
@@ -167,7 +167,22 @@ export function lockNow() {
     paint();
     // 4 cifras: se comprueba; si el PIN es más largo, al fallar se puede seguir escribiendo
     if (pin.length === ((lockSettings() || {}).len || 4)) tryPin();
+  };
+  overlay.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-lk]');
+    if (b) press(b);
   });
+  // Pantalla fija: con el dedo no se desplaza, no se pellizca para ampliar y dos toques
+  // seguidos (p. ej. un PIN con dos cifras iguales) no hacen zoom. En las teclas, el toque
+  // se atiende al levantar el dedo (sin esperar ni el «doble toque» del navegador).
+  const stop = (e) => { if (e.cancelable) e.preventDefault(); };
+  for (const ev of ['touchmove', 'gesturestart', 'gesturechange', 'gestureend', 'dblclick']) overlay.addEventListener(ev, stop, { passive: false });
+  overlay.addEventListener('touchend', (e) => {
+    const b = e.target.closest('[data-lk]');
+    if (!b || !e.cancelable) return;
+    e.preventDefault(); // sin «click» detrás: no cuenta dos veces y no hay zoom
+    press(b);
+  }, { passive: false });
   // Teclado físico (ordenador)
   overlay.tabIndex = -1;
   overlay.focus();

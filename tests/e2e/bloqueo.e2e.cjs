@@ -117,6 +117,43 @@ const typePin = async (page, pin) => { for (const d of pin) await page.click('#l
     ok('14 · al abrir, se desbloquea con Face ID / huella sin escribir el PIN', !(await p2.evaluate(() => !!document.querySelector('#lock'))));
     ok('15 · sin errores', !errs.length, errs.join(' | '));
     await ctx.close();
+
+    // ---------- Móvil táctil: pantalla fija, sin zoom con dos toques seguidos ----------
+    const tctx = await browser.newContext({ locale: 'es-ES', viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true, deviceScaleFactor: 2 });
+    await tctx.route('**/*', (r) => {
+      const u = new URL(r.request().url());
+      if (u.pathname.endsWith('/js/config.js')) return r.fulfill({ contentType: 'text/javascript', body: "export const FIREBASE_CONFIG=null;export const FIREBASE_SDK='';export const FLIGHT_API='';export const PUSH_PUBLIC_KEY='';export const APP_CHECK_SITE_KEY='';" });
+      return u.hostname === '127.0.0.1' ? r.continue() : r.abort();
+    });
+    const t = await tctx.newPage();
+    const terrs = [];
+    t.on('pageerror', (e) => terrs.push(e.message));
+    await t.addInitScript((st) => { for (const [k, v] of [['tipInstall', '1'], ['legalAcepta', '1'], ['lastBackup', String(Date.now())], ['oyeRutivo', '0']]) localStorage.setItem(k, v); if (!localStorage.getItem('cajaTransfer')) localStorage.setItem('cajaTransfer', JSON.stringify(st)); }, STATE);
+    await t.goto(app.url);
+    await t.waitForTimeout(1000);
+    await t.evaluate(async () => { const m = await import('/js/bloqueo.js'); await m.enableLock('441177', 1); });
+    await t.reload();
+    await t.waitForTimeout(1200);
+    const fixed = await t.evaluate(() => {
+      const L = document.querySelector('#lock');
+      const gap = document.querySelector('#lock .lk-pad');
+      return [getComputedStyle(L).touchAction, getComputedStyle(gap).touchAction, getComputedStyle(document.querySelector('#lock [data-lk="4"]')).touchAction, getComputedStyle(document.documentElement).overflow, getComputedStyle(document.body).overflow];
+    });
+    ok('16 · la pantalla del PIN está fija: no se desplaza ni se amplía con el dedo (ni entre las teclas)', fixed.slice(0, 3).every((x) => x === 'none') && fixed[3] === 'hidden' && fixed[4] === 'hidden', JSON.stringify(fixed));
+    // Deslizar el dedo por encima no mueve nada
+    const cdpT = await tctx.newCDPSession(t);
+    const touch = (type, y) => cdpT.send('Input.dispatchTouchEvent', { type, touchPoints: type === 'touchEnd' ? [] : [{ x: 195, y }] });
+    await touch('touchStart', 700); for (const y of [600, 450, 300]) await touch('touchMove', y); await touch('touchEnd');
+    await t.waitForTimeout(300);
+    const still = await t.evaluate(() => [window.scrollY, Math.round(document.querySelector('#lock').getBoundingClientRect().top), window.visualViewport ? window.visualViewport.scale : 1]);
+    ok('17 · al deslizar el dedo, la pantalla no se mueve', still[0] === 0 && still[1] === 0 && still[2] === 1, JSON.stringify(still));
+    // PIN con cifras repetidas, tocadas muy seguidas (4 4 1 1 7 7)
+    for (const d of '441177') { await t.tap('#lock [data-lk="' + d + '"]'); await t.waitForTimeout(60); }
+    await t.waitForTimeout(800);
+    const after2 = await t.evaluate(() => [!!document.querySelector('#lock'), window.visualViewport ? window.visualViewport.scale : 1]);
+    ok('18 · dos toques seguidos en la misma cifra cuentan como dos, sin zoom, y se entra', !after2[0] && after2[1] === 1, JSON.stringify(after2));
+    ok('19 · sin errores (móvil táctil)', !terrs.length, terrs.join(' | '));
+    await tctx.close();
   } finally {
     await browser.close();
     app.server.close();
