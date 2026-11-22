@@ -9,7 +9,7 @@
 //
 // VERSION es la huella de todos los archivos de FILES: si cambia cualquiera,
 // hay que regenerarla con `npm run version` (las pruebas fallan si no).
-const VERSION = 'fdfae4d94e73';
+const VERSION = '6415dd02ca15';
 const CACHE = 'rutivo-' + VERSION;
 const FILES = [
   './',

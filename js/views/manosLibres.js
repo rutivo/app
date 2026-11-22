@@ -244,6 +244,10 @@ export async function handsFree(first = '') {
         await say(r.speech);
         continue;
       }
+      if (r.kind === 'stop') {
+        show('👋 Vale', 'done');
+        break;
+      }
       if (r.kind === 'undo') {
         const ok = undoLast();
         show(ok ? '↩️ Hecho, lo he quitado' : 'No hay nada que deshacer', 'done');

@@ -5,7 +5,7 @@ import { hoursOf } from './jornada.js';
 import { cashStats, invoiceTotals } from './money.js';
 import { quarterData } from './report.js';
 import { serviceTime } from './trips.js';
-import { MONTHS, eur, fd, quarterOf, r2, sum } from './utils.js';
+import { MONTHS, eur, fd, quarterOf, r2, sum, titleCase } from './utils.js';
 import { driverName } from './welcome.js';
 
 // ---------- texto ----------
@@ -447,10 +447,201 @@ export function describeDone(done) {
   if (!done || !done.items || !done.items.length) return '';
   const it = done.items[0];
   if (done.list === 'huc') return eur(it.i) + ' en la hucha';
+  if (done.list === 'srv') return 'el transfer del ' + fd(it.f) + (it.h ? ' a las ' + it.h : '') + (it.o && it.d ? ' (' + it.o + ' → ' + it.d + ')' : '');
+  if (done.list === 'pay') return 'el cobro de ' + eur(it.i) + ' ' + payWords(it.p) + ' (' + it.c + ')';
   return 'el ' + kindWord(it) + ' de ' + partsText(done.items) + (it.c ? ' (' + it.c + ')' : '');
 }
 
 const sig = (items) => JSON.stringify(items.map((x) => [x.t, x.p, x.i, x.c, x.h]));
+
+// ---------- Transfers por voz ----------
+
+const WEEKDAYS = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'];
+
+/** Fecha dicha («mañana», «el viernes», «el 25 de diciembre»…) → AAAA-MM-DD, o null. */
+export function dateOf(t, day) {
+  if (/\bpasado manana\b/.test(t)) return addDays(day, 2);
+  // «mañana» como día (no «a las 10 de la mañana»)
+  if (/(^| )manana( |$)/.test(t.replace(/de la manana/g, ''))) return addDays(day, 1);
+  if (/\bhoy\b|\besta (tarde|noche|manana)\b/.test(t)) return day;
+  const wd = WEEKDAYS.findIndex((w) => new RegExp('(^| )(el |este |el proximo )?' + w + '( |$)').test(t));
+  if (wd >= 0) {
+    const cur = new Date(day + 'T12:00:00').getDay();
+    return addDays(day, ((wd - cur + 7) % 7) || 7);
+  }
+  const m = t.match(/\b(?:el|dia)\s+(\d{1,2})(?:\s+de\s+(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre))?\b/);
+  if (m && +m[1] >= 1 && +m[1] <= 31) {
+    const [y, mo] = day.split('-').map(Number);
+    let month = m[2] ? MONTHS.indexOf(m[2]) + 1 : mo;
+    let year = y;
+    let f = year + '-' + String(month).padStart(2, '0') + '-' + String(+m[1]).padStart(2, '0');
+    if (f < day) { if (m[2]) year++; else { month++; if (month > 12) { month = 1; year++; } } f = year + '-' + String(month).padStart(2, '0') + '-' + String(+m[1]).padStart(2, '0'); }
+    return f;
+  }
+  return null;
+}
+
+/** Hora dicha («a las 10», «a las 8 y media», «a las 7 de la tarde», «a las 10 30») → HH:MM, o null. */
+export function timeOf(t) {
+  const m = t.match(/\ba (?:las|la) (\d{1,2})(?:[ :](\d{2}))?(?: y (media|cuarto))?( menos cuarto)?(?: de la (manana|tarde|noche|madrugada))?\b/);
+  if (!m) return null;
+  let h = +m[1];
+  let min = m[2] ? +m[2] : m[3] === 'media' ? 30 : m[3] === 'cuarto' ? 15 : 0;
+  if (m[4]) { h -= 1; min = 45; }
+  if ((m[5] === 'tarde' || m[5] === 'noche') && h < 12 && !(m[5] === 'noche' && h <= 4)) h += 12;
+  if (h > 23 || min > 59 || h < 0) return null;
+  return String(h).padStart(2, '0') + ':' + String(min).padStart(2, '0');
+}
+
+/** Un sitio dicho, escrito como ya lo tienes en tus servicios (con tildes) o con mayúsculas. */
+function placeName(raw, state) {
+  const r = raw.trim();
+  if (!r) return '';
+  for (const s of state.srv || []) for (const v of [s.o, s.d]) if (v && clean(v).replace(/[^a-z0-9 ]/g, '') === r) return v;
+  for (const s of state.srv || []) for (const v of [s.o, s.d]) if (v && clean(v).replace(/[^a-z0-9 ]/g, '').startsWith(r + ' ')) return v;
+  return titleCase(r);
+}
+
+/** Datos de un servicio nuevo dicho de palabra, o null si no lo parece. */
+export function newServiceOf(t, state, day, nowMs) {
+  if (QUESTION.test(t) && !/^que me (apuntes|pongas)/.test(t)) return null;
+  if (!/\b(transfers?|servicios?|recogidas?|traslados?)\b/.test(t)) return null;
+  if (!(WRITE_VERB.test(t) || /^(tengo|me ha salido|me han pedido|me ha entrado|reserva|reservame|nuevo|crea|creame)( |$)/.test(t))) return null;
+  let f = dateOf(t, day);
+  const h = timeOf(t);
+  if (!f && !h) return null;
+  if (!f) f = h && new Date(day + 'T' + h + ':00').getTime() < nowMs ? addDays(day, 1) : day;
+  // Lo que queda quitando fecha, hora, importe y vuelo: el trayecto y el pasajero
+  let rest = ' ' + t + ' ';
+  const fl = t.match(/\bvuelo\s+([a-z]{1,3})\s?(\d{1,4})\b/);
+  const money = t.match(/\b(?:por|son|precio|cobro|a)\s+(\d+(?:\.\d{1,2})?)\s*(?:euros?|pavos)?(?= |$)|\b(\d+(?:\.\d{1,2})?)\s*(?:euros?|pavos)\b/);
+  const noMoney = t.replace(/\b(?:por |son )?\d+(?:\.\d{1,2})?\s*(?:euros?|pavos)\b/, ' ').replace(/\s+/g, ' ').trim();
+  const pax = t.match(/\b(?:a nombre de|pasajero|pasajera|cliente)\s+([a-z]+(?: [a-z]+)?)/) || noMoney.match(/\bpara ([a-z]+ [a-z]+)$/);
+  if (pax) rest = rest.replace(' para ' + pax[1], ' ');
+  for (const re of [/\b(?:a nombre de|pasajero|pasajera|cliente)\s+[a-z]+(?: [a-z]+)?/, /\bvuelo\s+[a-z]{1,3}\s?\d{1,4}\b/,
+    /\b(?:por|son|precio|cobro)\s+\d+(?:\.\d{1,2})?\s*(?:euros?|pavos)?/, /\b\d+(?:\.\d{1,2})?\s*(?:euros?|pavos)\b/,
+    /\ba (?:las|la) \d{1,2}(?:[ :]\d{2})?(?: y (?:media|cuarto))?(?: menos cuarto)?(?: de la (?:manana|tarde|noche|madrugada))?/,
+    /\b(?:pasado manana|manana|hoy|esta (?:tarde|noche|manana))\b/, new RegExp('\\b(?:el |este |el proximo )?(?:' + WEEKDAYS.join('|') + ')\\b'),
+    /\b(?:el|dia) \d{1,2}(?: de (?:enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre))?\b/]) rest = rest.replace(re, ' ');
+  rest = rest.replace(/^\s*\S+\s+(?:(?:un|una|el|la|otro|otra|nuevo|nueva)\s+)?(?:transfers?|servicios?|recogidas?|traslados?)\b/, ' ').replace(/\s+/g, ' ').trim();
+  const route = rest.match(/(?:^| )(?:del|de|desde)\s+(.+?)\s+(?:al|a|hasta|para)\s+(.+)$/);
+  const strip = (x) => (x || '').replace(/^(el|la|los|las)\s+/, '').replace(/\s+(con|y|en)$/, '').trim();
+  const amount = money ? +(money[1] || money[2]) : 0;
+  return {
+    f, h: h || '', o: route ? placeName(strip(route[1]), state) : '', d: route ? placeName(strip(route[2]), state) : '',
+    i: r2(amount), p: 'pendiente', cl: '', n: '', pa: pax ? titleCase(pax[1]) : '', vu: fl ? (fl[1] + fl[2]).toUpperCase() : '', tl: '', sv: '',
+  };
+}
+
+/** El servicio del que habla («de John», «de SunTours», «el próximo», «el cliente»), o null. */
+export function serviceOf(t, state, nowMs) {
+  const live = (state.srv || []).filter((s) => serviceTime(s) > nowMs - 3 * 36e5).sort((a, b) => serviceTime(a) - serviceTime(b));
+  const all = (state.srv || []).slice().sort((a, b) => Math.abs(serviceTime(a) - nowMs) - Math.abs(serviceTime(b) - nowMs));
+  const names = [...new Set((state.srv || []).flatMap((s) => [s.pa, s.cl]).filter(Boolean))];
+  const who = findName(t, names);
+  if (who) return live.find((s) => s.pa === who || s.cl === who) || all.find((s) => s.pa === who || s.cl === who) || null;
+  if (/\b(proximo|siguiente|cliente|pasajero|recogida|este servicio|el servicio|el vuelo)\b/.test(t)) return live[0] || null;
+  return null;
+}
+
+const whoOf = (s) => s.pa || s.cl || 'el cliente';
+const WD = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+const whenOf = (s, day) => (s.f === day ? 'hoy' : s.f === addDays(day, 1) ? 'mañana' : s.f > day && s.f <= addDays(day, 6) ? 'el ' + WD[new Date(s.f + 'T12:00:00').getDay()] + ' ' + s.f.slice(8) + '/' + s.f.slice(5, 7) : 'el ' + fd(s.f)) + (s.h ? ' a las ' + s.h : '');
+
+/** Lo que tiene que ver con un transfer: crearlo, preguntar por él y hacer cosas con él. */
+function transferIntent(t, state, now, helpers) {
+  const day = iso(now);
+  const nowMs = now.getTime();
+
+  // Servicio nuevo dicho de palabra: siempre se confirma antes de guardar
+  const ns = newServiceOf(t, state, day, nowMs);
+  if (ns) {
+    const what = whenOf(ns, day) + (ns.o || ns.d ? ': ' + (ns.o || '¿origen?') + ' → ' + (ns.d || '¿destino?') : '') + (ns.pa ? ' · ' + ns.pa : '') + (ns.vu ? ' · vuelo ' + ns.vu : '') + (ns.i ? ' · ' + eur(ns.i) : '');
+    const miss = [!ns.h && 'la hora', !(ns.o && ns.d) && 'el trayecto', !ns.i && 'el precio'].filter(Boolean);
+    return { kind: 'confirm', text: '🗓️ ¿Apunto el transfer **' + what + '** (pendiente de cobro)?' + (miss.length ? '\nFalta ' + miss.join(', ') + ': lo puedes completar en Transfer.' : ''),
+      speech: '¿Apunto el transfer ' + whenOf(ns, day) + (ns.o && ns.d ? ', de ' + ns.o + ' a ' + ns.d : '') + (ns.i ? ', por ' + spoken(ns.i) : '') + '?',
+      ctx: { confirm: { action: { list: 'srv', item: ns }, text: '✅ Transfer apuntado: **' + what + '**. Lo tienes en el Panel y en Transfer.', speech: 'Apuntado. Lo tienes en el panel.' } } };
+  }
+
+  // Cobrar un servicio: «SunTours me ha pagado», «marca cobrado el de John», «cobra el servicio de John en efectivo»
+  if (/(cobrad|me (ha|han) pagado|ya (me )?(ha )?pagado|ya cobre|ya me pago|cobra el (servicio|transfer)|marca(lo)? (como )?(cobrado|pagado))/.test(t)) {
+    const pend = (state.srv || []).filter((s) => s.p === 'pendiente');
+    const names = [...new Set(pend.flatMap((s) => [s.pa, s.cl]).filter(Boolean))];
+    const who = findName(t, names);
+    if (who) {
+      const list = pend.filter((s) => s.pa === who || s.cl === who).sort((a, b) => serviceTime(a) - serviceTime(b));
+      const s = list[0];
+      const pay = payOf(t);
+      const what = who + (s.pa && s.pa !== who ? ' · ' + s.pa : '') + ' (' + fd(s.f) + ', ' + eur(s.i) + ')';
+      if (!pay) return reply('💳 ¿El servicio de **' + what + '** lo has cobrado en efectivo o con tarjeta?', '¿En efectivo o con tarjeta?', { payFor: s.id });
+      return { kind: 'confirm', text: '💶 ¿Marco como cobrado el servicio de **' + what + '** ' + payWords(pay) + '? Entra en la caja de hoy.' + (list.length > 1 ? '\n(Tiene ' + list.length + ' sin cobrar: marco el más antiguo.)' : ''),
+        speech: '¿Marco como cobrado el servicio de ' + who + ', ' + spoken(s.i) + ' ' + payWords(pay) + '?',
+        ctx: { confirm: { action: { list: 'pay', id: s.id, p: pay }, text: '✅ Cobrado: **' + what + '** ' + payWords(pay) + '. Añadido a la caja de hoy.', speech: 'Hecho, cobrado.' } } };
+    }
+  }
+
+  const s = serviceOf(t, state, nowMs);
+  // Hacer cosas con el servicio (se abren en la app: tú tocas para enviar o llamar)
+  if (/\benlace\b/.test(t) && /(manda|mandale|envia|enviale|pasa|pasale|comparte|dale|el enlace)/.test(t)) {
+    if (!s) return reply('¿A quién? Dime su nombre, por ejemplo: «Mándale el enlace a John».', '¿A quién se lo mando?');
+    return { kind: 'open', what: 'link', id: s.id, text: '🔗 Te abro el enlace para **' + whoOf(s) + '**. Toca «Enviárselo por WhatsApp».', speech: 'Te abro el enlace de ' + whoOf(s) + '.' };
+  }
+  if (/^(manda|mandale|envia|enviale|escribe|escribele|dile|avisa|avisale|pon un mensaje|mensaje)( |$)|\b(mandale|enviale|escribele) un (mensaje|whatsapp)\b/.test(t)) {
+    if (!s) return reply('¿A quién? Dime su nombre, por ejemplo: «Dile a John que llego en 10 minutos».', '¿A quién se lo digo?');
+    const mins = t.match(/\b(\d{1,2})\s*(?:min|minutos)\b/);
+    const tpl = /llego|llegando|tardo|estoy a/.test(t) && mins ? 'llego' : /(ya estoy|estoy en llegadas|estoy esperando|te espero|ya he llegado)/.test(t) ? 'llegadas'
+      : /(donde esta|donde estas)/.test(t) ? 'donde' : /(retras|llega tarde)/.test(t) ? 'retraso' : /(aterriz)/.test(t) ? 'aterrizado' : /(gracias)/.test(t) ? 'gracias' : /(confirm)/.test(t) ? 'confirmar' : /(coche|matricula)/.test(t) ? 'coche' : '';
+    return { kind: 'open', what: 'msg', id: s.id, tpl, min: mins ? +mins[1] : 0, text: '✉️ Te preparo el mensaje para **' + whoOf(s) + '**. Revísalo y toca «Enviar por WhatsApp».', speech: 'Te preparo el mensaje para ' + whoOf(s) + '.' };
+  }
+  if (/^(llama|llamale|llamar|llamame a|marca|marcale)( |$)/.test(t) && !/(cobrad|pagad)/.test(t)) {
+    if (!s) return reply('¿A quién? Dime su nombre, por ejemplo: «Llama a John».', '¿A quién llamo?');
+    if (!s.tl) return reply('📵 No tengo el teléfono de **' + whoOf(s) + '**. Ponlo en su servicio, en Transfer.', 'No tengo su teléfono.');
+    return { kind: 'open', what: 'call', id: s.id, text: '📞 Llamar a **' + whoOf(s) + '** (' + s.tl + ').', speech: 'Toca para llamar a ' + whoOf(s) + '.' };
+  }
+  if (/^(llevame|como llego|como voy|navega|ruta|indicaciones|vamos)( |$)/.test(t)) {
+    const toDest = /\b(destino|dejarle|dejarla|dejarlo|hotel)\b/.test(t);
+    const named = t.match(/^(?:llevame|como llego|como voy|navega|ruta|indicaciones|vamos)(?: hasta| hacia)?(?: (?:a|al|a la|hasta))? (.+)$/);
+    const target = named ? named[1].trim() : '';
+    if (s || /\b(recogida|cliente|proximo|siguiente)\b/.test(target)) {
+      const sv = s || serviceOf('proximo', state, nowMs);
+      if (sv) {
+        const place = toDest ? sv.d : sv.o;
+        return { kind: 'open', what: 'route', place, text: '📍 Te llevo a ' + (toDest ? 'dejar a' : 'recoger a') + ' **' + whoOf(sv) + '**: ' + place + '.', speech: 'Te abro la ruta a ' + place + '.' };
+      }
+    }
+    if (target && !/^(la |el )?(caja|panel|transfer|gasolina|facturas?)$/.test(target)) {
+      const place = placeName(target.replace(/^(el|la|los|las)\s+/, ''), state);
+      return { kind: 'open', what: 'route', place, text: '📍 Te abro la ruta a **' + place + '**.', speech: 'Te abro la ruta a ' + place + '.' };
+    }
+  }
+
+  // Preguntas sobre un servicio concreto (con su nombre, o «el próximo», «el cliente»)
+  if (!s) return null;
+  const who = whoOf(s);
+  if (/\b(vuelo|avion|aterriza|aterrizado|aterrizo|retraso|retrasado|terminal|cinta|llega el|viene con)\b/.test(t)) {
+    if (!s.vu) return reply('✈️ El servicio de **' + who + '** no tiene vuelo apuntado.', 'Ese servicio no tiene vuelo apuntado.');
+    const line = helpers.flightLine ? helpers.flightLine(s) : '';
+    return { kind: 'open', what: 'flight', id: s.id, text: '✈️ Vuelo **' + s.vu + '** de ' + who + (line ? ': **' + line + '**' : '') + '. Te abro el seguimiento en directo.',
+      speech: 'El vuelo ' + s.vu.replace(/(\D+)(\d+)/, '$1 $2') + (line ? ', ' + line.replace(/[()]/g, '') : '') + '. Te abro el seguimiento.' };
+  }
+  if (/\b(donde|punto de encuentro|sitio)\b/.test(t) && /(espero|esperar|esperarle|esperarla|recojo|recoger|nos vemos|quedo|quedamos|encuentro)/.test(t)) {
+    const punto = (state.cfg && state.cfg.punto) || '';
+    return reply('📍 Recogida de **' + who + '** ' + whenOf(s, day) + ' en **' + (s.o || '¿sin origen?') + '**' + (punto ? '. Tu punto de encuentro: ' + punto : '') + '.',
+      'Recoges a ' + who + ' ' + whenOf(s, day) + ' en ' + (s.o || 'un sitio sin apuntar') + (punto ? '. Tu punto de encuentro: ' + punto : '') + '.');
+  }
+  if (/\b(telefono|numero|movil)\b/.test(t)) {
+    return s.tl ? reply('📞 Teléfono de **' + who + '**: ' + s.tl, 'El teléfono de ' + who + ' es el ' + s.tl.split('').join(' ')) : reply('📵 No tengo el teléfono de **' + who + '**. Ponlo en su servicio, en Transfer.', 'No tengo su teléfono.');
+  }
+  if (/\b(cuanto)\b.*\b(cobro|cobra|paga|pagan|vale|cuesta|es)\b/.test(t)) {
+    return reply('💶 El servicio de **' + who + '** (' + whenOf(s, day) + ') es de **' + eur(s.i) + '** · ' + (s.p === 'pendiente' ? 'pendiente de cobro' : 'cobrado ' + payWords(s.p)) + '.',
+      'El servicio de ' + who + ' es de ' + spoken(s.i) + ', ' + (s.p === 'pendiente' ? 'pendiente de cobro' : 'ya cobrado') + '.');
+  }
+  if (/\b(a que hora|cuando|hora)\b/.test(t) && !LEAVE.test(t) && !/(llev|vez|veces)/.test(t)) {
+    return reply('🚖 **' + who + '**: ' + whenOf(s, day) + (s.o || s.d ? ' · ' + (s.o || '') + ' → ' + (s.d || '') : '') + (s.vu ? ' · vuelo ' + s.vu + (helpers.eta ? ' ' + helpers.eta(s) : '') : ''),
+      'Recoges a ' + who + ' ' + whenOf(s, day) + (s.o ? ', en ' + s.o : '') + '.');
+  }
+  return null;
+}
 
 function answer(t, state, now, helpers) {
   const day = iso(now);
@@ -458,6 +649,12 @@ function answer(t, state, now, helpers) {
   if (/\bhuchas?\b|^ahorra(me)? /.test(t)) {
     return reply('🐷 La Hucha ya no está en Rutivo. Lo que tenías apuntado sigue guardado en tu cuenta.', 'La hucha ya no está en Rutivo.');
   }
+  // --- Manos libres ---
+  if (/manos libres|modo (coche|conduccion|conducir)/.test(t)) {
+    return reply('🚗 El manos libres es decir **«Oye Rutivo»** con la app abierta: te contesto «Dime» y me dices la orden (o todo seguido: «Oye Rutivo, apúntame 20 en efectivo»). Para que funcione, la app tiene que estar en pantalla.',
+      'Di Oye Rutivo con la app abierta y te escucho. También todo seguido: Oye Rutivo, apúntame 20 en efectivo.');
+  }
+
   // --- Órdenes: apuntar ---
   const amount = amountOf(t);
   if ((isWrite(t) || (!QUESTION.test(t) && WRITE_ANY.test(t))) && !amount) {
@@ -580,10 +777,32 @@ function answer(t, state, now, helpers) {
       : reply('📚 Aún no he aprendido conceptos tuyos. Cada vez que apuntes algo («…de primera carrera», «…de peaje») lo aprenderé.', 'Aún no he aprendido conceptos tuyos. Cada vez que apuntes algo, lo aprenderé.');
   }
 
+  // --- Objetivo del día ---
+  if (/(objetivo|meta)/.test(t) && /(cuanto|falta|queda|llevo|voy|como)/.test(t)) {
+    const goal = +((state.cfg && state.cfg.objDia) || 0);
+    const m = money(state, periodOf('hoy', day, 'hoy'));
+    if (!goal) return reply('🎯 Aún no tienes un objetivo diario. Ponlo en la Caja y te digo cuánto te falta cada día.', 'Aún no tienes un objetivo diario. Ponlo en la caja.');
+    const left = r2(goal - m.net);
+    return left > 0
+      ? reply('🎯 Objetivo de hoy: **' + eur(goal) + '**. Llevas **' + eur(m.net) + '** limpios: te faltan **' + eur(left) + '**.', 'Llevas ' + spoken(m.net) + '. Te faltan ' + spoken(left) + ' para tu objetivo.')
+      : reply('🎯 ¡Objetivo de hoy cumplido! Llevas **' + eur(m.net) + '** de ' + eur(goal) + '. 💪', 'Objetivo cumplido. Llevas ' + spoken(m.net) + '.');
+  }
+
+  // --- Clientes ---
+  if (/cuant[oa]s (clientes|pasajeros|agencias)/.test(t)) {
+    const p = periodOf(t, day, 'mes');
+    const list = state.srv.filter((s) => inRange(s.f, p));
+    const pax = new Set(list.map((s) => s.pa).filter(Boolean));
+    const ag = new Set(list.map((s) => s.cl).filter(Boolean));
+    const label = p.label.charAt(0).toUpperCase() + p.label.slice(1);
+    return reply('👥 ' + label + ': **' + pax.size + (pax.size === 1 ? ' pasajero' : ' pasajeros') + '** y **' + ag.size + (ag.size === 1 ? ' agencia o cliente' : ' agencias o clientes') + '** en ' + list.length + (list.length === 1 ? ' servicio.' : ' servicios.'),
+      label + ' has tenido ' + pax.size + ' pasajeros y ' + ag.size + ' agencias o clientes.');
+  }
+
   // --- Ayuda ---
-  if (/ayuda|que (puedo|se puede) (preguntar|decir)|que sabes|como funcionas/.test(t)) {
-    return reply('🚗 **Conduciendo (manos libres):** di «Oye Rutivo» → te digo «Dime, ¿en qué puedo ayudarte?» → «Apúntame [importe] de [ingreso o gasto] de [concepto], [efectivo o tarjeta]».\nEjemplos: «Apúntame 15 euros de ingreso de primera carrera, efectivo» · «Apúntame 5 euros de gasto de peaje, tarjeta». También de un tirón: «Oye Rutivo, apúntame…». «Borra lo último» lo deshace.\n\nPuedes preguntarme o pedirme cosas como:\n• Hola, ¿qué tal?\n• ¿Qué tiempo hace? / ¿Va a llover mañana?\n• ¿Cuánto llevo hoy?\n• ¿Cuánto gané el mes pasado?\n• ¿Cuánto me debe Charly?\n• ¿Qué tengo mañana?\n• ¿Cuándo llevé a Richard?\n• ¿Cuánto gasto en gasolina?\n• ¿Cuánto IVA pago este trimestre?\n• ¿Cuántos kilómetros llevo este mes?\n• Dame el resumen del día\n• ¿Cuántas carreras llevo?\n• ¿Qué he apuntado hoy?\n• Apúntame 12 € en tarjeta\n• Ingrésame 15 con 50 en efectivo\n• Pagué 7 euros de parking\n• He echado 50 de gasoil\n• Mete 5 de propina\n• Borra lo último',
-      'Puedes preguntarme cuánto llevas, quién te debe, qué servicios tienes, o pedirme que apunte una carrera o un gasto.');
+  if (/ayuda|que (puedo|se puede) (preguntar|decir|hacer)|que puedes hacer|que sabes( hacer)?|como funcionas|para que sirves|que haces/.test(t)) {
+    return reply('🚗 **Conduciendo (manos libres):** di «Oye Rutivo» → te digo «Dime, ¿en qué puedo ayudarte?» → «Apúntame [importe] de [ingreso o gasto] de [concepto], [efectivo o tarjeta]».\nEjemplos: «Apúntame 15 euros de ingreso de primera carrera, efectivo» · «Apúntame 5 euros de gasto de peaje, tarjeta». También de un tirón: «Oye Rutivo, apúntame…». «Borra lo último» lo deshace.\n\nPuedes preguntarme o pedirme cosas como:\n• Hola, ¿qué tal?\n• ¿Qué tiempo hace? / ¿Va a llover mañana?\n• ¿Cuánto llevo hoy?\n• ¿Cuánto gané el mes pasado?\n• ¿Cuánto me debe Charly?\n• ¿Qué tengo mañana?\n• ¿Cuándo llevé a Richard?\n• ¿Cuánto gasto en gasolina?\n• ¿Cuánto IVA pago este trimestre?\n• ¿Cuántos kilómetros llevo este mes?\n• Dame el resumen del día\n• ¿Cuántas carreras llevo?\n• ¿Qué he apuntado hoy?\n• Apúntame 12 € en tarjeta\n• Ingrésame 15 con 50 en efectivo\n• Pagué 7 euros de parking\n• He echado 50 de gasoil\n• Mete 5 de propina\n• Borra lo último\n\n🚖 **Transfers:**\n• Apunta un transfer mañana a las 10 del aeropuerto a Marbella por 95 euros\n• ¿A qué hora es la recogida de John? / ¿Cómo va el vuelo de John?\n• Mándale el enlace a John\n• Dile a John que llego en 10 minutos\n• Llama a John\n• Llévame a la recogida / Llévame al aeropuerto\n• SunTours me ha pagado en efectivo\n• ¿Qué servicios tengo mañana?',
+      'Puedes preguntarme cuánto llevas, quién te debe o qué servicios tienes; pedirme que apunte una carrera, un gasto o un transfer; o que mande el enlace o un mensaje a tu cliente.');
   }
 
   // --- Lo que me deben ---
@@ -602,7 +821,7 @@ function answer(t, state, now, helpers) {
   }
 
   // --- Servicios próximos ---
-  if (/(proximo|siguiente|que tengo|tengo algo|servicios? (de|para)? ?(hoy|manana)|agenda|recogida)/.test(t) && !/(llev|gan|cobr)/.test(t)) {
+  if (/(proximo|siguiente|que tengo|tengo algo|que servicios|servicios? (tengo|hay)|servicios? (de|para)? ?(hoy|manana)|agenda|recogida)/.test(t) && !/(llev|gan|cobr)/.test(t)) {
     const target = has(t, 'manana') ? addDays(day, 1) : has(t, 'hoy') ? day : null;
     let list = state.srv.filter((s) => serviceTime(s) >= now.getTime() - 30 * 6e4).sort((a, b) => serviceTime(a) - serviceTime(b));
     if (target) list = list.filter((s) => s.f === target);
@@ -871,6 +1090,7 @@ export function weatherText(d, when, city, rain = false) {
 }
 
 const FOLLOW = /^(y )?(hoy|ayer|anteayer|manana|esta semana|la semana pasada|este mes|el mes pasado|este ano|el ano pasado|este trimestre|el trimestre pasado|(en |el mes de )?(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre))$/;
+const STOP = /^(para|parate|silencio|calla|callate|basta|basta ya|cancela|cancelar|deja|dejalo|nada|olvidalo|adios|hasta luego|cierra|cierrate|vale ya|ya esta)$/;
 const UNDO = /^(deshaz|deshazlo|deshacer|borra(lo)?|quita(lo)?|anula(lo)?|elimina(lo)?|cancela(lo)?)( (lo |el |la )?(ultimo|ultima|eso|lo que (he dicho|has apuntado))( (apunte|ingreso|gasto|cobro|servicio|carrera))?)?$|^me he equivocado$/;
 const YES = /^(si|vale|ok|correcto|exacto|eso es|apuntalo|apunta|dale|venga|claro|perfecto|quitalo|borralo|hazlo|adelante|otra vez|si otra vez)( |$)/;
 const NO = /^(no|nada|cancela|dejalo|olvidalo|para|mal|incorrecto|no lo apuntes)( |$)/;
@@ -880,13 +1100,13 @@ const RECENT = 10 * 60e3; // lo apuntado hace menos de 10 min se puede corregir 
 
 /** ¿Corrige lo último que se apuntó? Devuelve los cambios o null. */
 function correctionOf(t, done) {
-  if (!done || !CORRECT.test(t) || done.items.length !== 1) return null;
+  if (!done || !CORRECT.test(t) || done.items.length !== 1 || done.list === 'srv') return null;
   const it = done.items[0];
   const changes = {};
   const said = t.match(/\b(?:eran|era|son|es|fueron|fue|pon|ponlo|ponle|cambialo a|cambia a|a|de)\s+(\d+(?:\.\d{1,2})?)/) || t.match(/(\d+(?:\.\d{1,2})?)/);
-  if (said && done.list !== 'huc') changes.i = r2(+said[1]);
-  else if (said) changes.i = r2(+said[1]);
-  const pay = done.list === 'mov' ? payOf(t.replace(/\bno (en |con )?(efectivo|tarjeta)\b/g, ' ')) : null;
+  if (said && done.list !== 'pay') changes.i = r2(+said[1]); // un cobro de servicio: solo se cambia la forma de pago
+  // «No en efectivo, con tarjeta» quita el «no en efectivo»; «no, en efectivo» a secas es «en efectivo»
+  const pay = done.list === 'mov' || done.list === 'pay' ? payOf(t.replace(/\bno (en |con )?(efectivo|tarjeta)\b/g, ' ')) || (/^no /.test(t) ? payOf(t) : null) : null;
   if (pay && pay !== it.p) changes.p = pay;
   if (done.list === 'mov' && !done.gas) {
     if (/\b(era|es|fue) (un )?gasto\b|\bcomo gasto\b/.test(t) && it.t !== 'out') changes.t = 'out';
@@ -954,15 +1174,29 @@ export function ask(input, state, now = new Date(), helpers = {}, ctx = {}) {
     const what = done.list === 'huc' ? eur(it.i) + ' en la hucha' : kindWord(it) + ' de ' + eur(it.i) + ' ' + payWords(it.p) + (it.c ? ' (' + it.c + ')' : '');
     return { kind: 'amend', changes: fix, text: '✏️ Corregido: ahora es ' + what + '.', speech: 'Corregido. Ahora es ' + (done.list === 'huc' ? spoken(it.i) + ' en la hucha' : kindWord(it) + ' de ' + spoken(it.i) + ' ' + payWords(it.p)) + '.', ctx: {} };
   }
+  // «Para», «silencio», «calla»: se calla y cierra (si no hay nada reciente que deshacer)
+  if (STOP.test(t) && !(done && /^cancela/.test(t))) return { kind: 'stop', text: '👋 Vale.', speech: '', ctx: {} };
   // Quitar lo último: siempre preguntando antes
   if (UNDO.test(t)) {
     if (!done) return { ...reply('No hay nada reciente que quitar. Para borrar algo más antiguo, hazlo en su pantalla.', 'No hay nada reciente que quitar.'), ctx: {} };
     const what = describeDone(done);
     return { kind: 'confirm', text: '🗑️ ¿Quito ' + what + '?', speech: '¿Quito ' + what.replace(/\s*\(.*\)/, '').replace(/(\d+),(\d+)\s€/g, (m, e, c) => spoken(+e + c / 100)) + '?', ctx: { confirm: { undo: true } } };
   }
+  // «¿En efectivo o con tarjeta?» al cobrar un servicio
+  if (ctx.payFor && payOf(t)) {
+    const sv = (state.srv || []).find((x) => x.id === ctx.payFor && x.p === 'pendiente');
+    if (sv) {
+      const pay = payOf(t);
+      const what = (sv.pa || sv.cl) + ' (' + fd(sv.f) + ', ' + eur(sv.i) + ')';
+      return { kind: 'action', action: { list: 'pay', id: sv.id, p: pay }, text: '✅ Cobrado: **' + what + '** ' + payWords(pay) + '. Añadido a la caja de hoy.', speech: 'Hecho, cobrado ' + payWords(pay) + '.', ctx: {} };
+    }
+  }
   const w = worthIntent(t);
   if (w) return { ...w, ctx: {} };
   if (LEAVE.test(t)) return { kind: 'leave', text: '', speech: '', ctx: {} };
+  // Transfers antes que la charla («¿a qué hora es la recogida de John?» no es «¿qué hora es?»)
+  const tr = transferIntent(t, state, now, helpers);
+  if (tr) return tr.ctx ? tr : finish(tr, t, helpers, ctx, done, false);
   const chat = smallTalk(t, state, now, { ...helpers, original: input }, ctx);
   if (chat) return { ...chat, ctx: chat.ctx || {} };
   // Completar algo que quedó a medias o seguir con la última pregunta
@@ -995,10 +1229,11 @@ function finish(r, t, helpers, ctx, done, answered) {
     }
   }
   const next = {};
+  if (r.payFor) next.payFor = r.payFor;
   if (r.slot) next.slot = r.slot;
   else if (r.pending) next.pending = r.pending;
   else if (r.kind === 'answer' && !/No te he entendido/.test(r.text)) next.last = t;
-  const { slot, ...out } = r;
+  const { slot, payFor, ...out } = r;
   return { ...out, ctx: next };
 }
 

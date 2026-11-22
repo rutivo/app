@@ -34,10 +34,10 @@ function arrivalOf(s) {
   return t ? hhmm(t) : '';
 }
 
-/** Abre el panel de mensajes del servicio `s`. */
-export function openMessages(s) {
+/** Abre el panel de mensajes del servicio `s` (`opts.id`: el mensaje elegido; `opts.min`: los minutos). */
+export function openMessages(s, opts = {}) {
   let lang = S.cfg.ml || 'es';
-  let id = 'llegadas';
+  let id = opts.id && allTemplates(S.cfg).some((t) => t.id === opts.id) ? opts.id : 'llegadas';
   const name = firstName(s.pa);
   const sheet = bottomSheet(
     '<h3>💬 Mensajes' + (name ? ' para ' + esc(name) : '') + '</h3>' +
@@ -58,7 +58,8 @@ export function openMessages(s) {
   const $s = (q) => sheet.querySelector(q);
   const text = $s('#mtx');
   const send = $s('#msend');
-  let min = 10;
+  let min = [5, 10, 15, 20].includes(+opts.min) ? +opts.min : 10;
+  if (opts.min && ![5, 10, 15, 20].includes(+opts.min) && +opts.min > 0 && +opts.min < 100) min = +opts.min;
   const list = () => {
     $s('#mlist').innerHTML = allTemplates(S.cfg).map((t) => '<button type="button" class="hchip" data-mid="' + esc(t.id) + '">' + esc(t.title) +
       (t.mine ? ' <span data-mdel="' + esc(t.id) + '" aria-label="Borrar plantilla">✕</span>' : '') + '</button>').join('');

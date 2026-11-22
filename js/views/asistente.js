@@ -2,26 +2,28 @@
 // Asistente de voz de Rutivo, al estilo Siri: pantalla completa, bola que escucha,
 // lo que dices en grande y la respuesta hablada. Todo se calcula en el móvil.
 import { ask, trimChatter, weatherText } from '../asistente.js';
-import { readFlag, writeFlag } from '../dom.js';
-import { cachedStatus, etaLine } from '../flight.js';
+import { bottomSheet, readFlag, writeFlag } from '../dom.js';
+import { cachedStatus, etaLine, openFlight } from '../flight.js';
 import { initWake, pauseWake, resumeWake, trainWake, wakeEnabled, wakeLog, wakeModel, wakeStats } from '../despertar.js';
 import { audioNeedsReset, audioRunning, createMic, markAudioBroken, resetAudio } from '../microfono.js';
 import { currentPosition } from '../ruta.js';
 import { cancelHandsFree, handsFree, initHandsFree } from './manosLibres.js';
 import { leavePlanOf, scheduleReminders } from '../reminders.js';
 import { leaveBody, leaveLine } from '../salida.js';
-import { serviceTime } from '../trips.js';
+import { mapsUrl, serviceTime } from '../trips.js';
 import { openWorth, quickWorth } from './compensa.js';
 import { earSupported, prepareEar, transcribe } from '../oido.js';
 import { S } from '../store.js';
-import { esc } from '../utils.js';
+import { esc, fd } from '../utils.js';
+import { openClientLink } from './enlace.js';
+import { openMessages } from './mensajes.js';
 import { amend, execute, undo as undoDone } from '../vozAcciones.js';
 import { driverName } from '../welcome.js';
 
 const VOICE_KEY = 'asisVoz';
 // Al dar una orden se hacen pausas («apúntame… treinta… en efectivo»): no cortar antes de tiempo
 const COMMAND_MIC = { silenceMs: 1400, shortMs: 600, follow: true };
-const SUGGEST = ['¿Cuánto llevo hoy?', '¿Qué tengo mañana?', '¿Qué tiempo hace?', '¿Quién me debe?', 'Apunta 50 € en efectivo', '¿Cuánto gané este mes?', '¿Qué puedo decirte?'];
+const SUGGEST = ['¿Cuánto llevo hoy?', '¿Cuál es mi próximo servicio?', '¿Qué tengo mañana?', '¿Qué tiempo hace?', '¿Quién me debe?', 'Apunta 50 € en efectivo', '¿Cuánto gané este mes?', '¿Qué puedo decirte?'];
 const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 const isIOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 const history = []; // conversación de esta sesión (solo en memoria; no se guarda audio ni texto) {from:'yo'|'rutivo', html, undo?}
@@ -113,6 +115,32 @@ function eta(s) {
   return line ? '(' + line.replace(/^\S+\s/, '') + ')' : '';
 }
 
+/** Lo último que se sabe del vuelo de un servicio («Llega 19:42 (+12 min)»), sin consultar. */
+const flightLine = (s) => (s.vu ? (etaLine(cachedStatus(s.vu, s.f)) || '').replace(/<[^>]+>/g, '').replace(/^\S+\s/, '') : '');
+
+/**
+ * Abre en la app lo que has pedido para un servicio: el enlace, un mensaje, su vuelo,
+ * llamar o la ruta. Se abre para que TÚ toques enviar/llamar (nunca se envía solo).
+ */
+function openFor(r) {
+  const s = r.id ? S.srv.find((x) => x.id === r.id) : null;
+  if (r.what === 'link' && s) return openClientLink(s);
+  if (r.what === 'msg' && s) return openMessages(s, { id: r.tpl, min: r.min });
+  if (r.what === 'flight' && s) return openFlight(s.vu, esc(s.pa || '') + (s.pa ? ' · ' : '') + fd(s.f) + ' ' + esc(s.h), s.f, s.h);
+  if (r.what === 'call' && s && s.tl) {
+    return bottomSheet('<h3>📞 Llamar a ' + esc(s.pa || s.cl || 'tu cliente') + '</h3><div class="mut">' + esc(s.tl) + '</div>' +
+      '<a class="btn" href="tel:' + esc(s.tl.replace(/[^\d+]/g, '')) + '" data-close>📞 Llamar</a>' +
+      '<a class="btn sec" target="_blank" rel="noopener noreferrer" href="https://wa.me/' + esc(s.tl.replace(/\D/g, '')) + '" data-close>💬 WhatsApp</a>' +
+      '<button type="button" class="sec" data-close>Cancelar</button>');
+  }
+  if (r.what === 'route' && r.place) {
+    return bottomSheet('<h3>📍 Llevarme</h3><div class="mut">Se abre Google Maps con la ruta en coche.</div>' +
+      '<a class="btn" target="_blank" rel="noopener noreferrer" href="' + esc(mapsUrl(r.place)) + '" data-close>🧭 ' + esc(r.place) + '</a>' +
+      '<button type="button" class="sec" data-close>Cancelar</button>');
+  }
+  return null;
+}
+
 const LABELS = { idle: 'Toca la bola y habla', listening: 'Te escucho… (con ruido, toca la bola al terminar)', thinking: 'Pensando…', speaking: 'Hablando… (toca la bola para hablar tú)', asking: 'Te escucho: contesta a la pregunta' };
 
 function setState(state, label) {
@@ -159,10 +187,10 @@ function goTo(view) {
 function best(options, conf = 0) {
   const list = [...new Set(options.map((o) => String(o || '').trim()).filter(Boolean))];
   // Una orden completa vale más que una a medias, y esta más que algo que no se entiende.
-  const score = (r) => (r.kind === 'action' || r.kind === 'confirm' || r.kind === 'undo' || r.kind === 'weather' || r.kind === 'worth' || r.kind === 'leave' ? 3 : /No te he entendido/.test(r.text || '') ? 0 : r.pending ? 1 : 2);
+  const score = (r) => (r.kind === 'action' || r.kind === 'confirm' || r.kind === 'undo' || r.kind === 'weather' || r.kind === 'worth' || r.kind === 'leave' || r.kind === 'open' ? 3 : /No te he entendido/.test(r.text || '') ? 0 : r.pending ? 1 : 2);
   let top = null;
   for (const q of list) {
-    const r = ask(q, S, new Date(), { eta, confidence: conf }, withDone());
+    const r = ask(q, S, new Date(), { eta, flightLine, confidence: conf }, withDone());
     if (!top || score(r) > score(top.r)) top = { q, r };
   }
   return top;
@@ -202,9 +230,20 @@ function handle(text, alternatives = [], conf = 0) {
     closeAssistant();
     goTo(r.view);
     return;
+  } else if (r.kind === 'stop') {
+    history.push({ from: 'rutivo', html: rich(r.text) });
+    closeAssistant();
+    return;
+  } else if (r.kind === 'open') {
+    // Enlace, mensaje, vuelo, llamar o ruta: se cierra el asistente y se abre su panel
+    history.push({ from: 'rutivo', html: rich(r.text) });
+    paint();
+    closeAssistant();
+    openFor(r);
+    return;
   } else if (r.kind === 'confirm') {
     const undoing = r.ctx && r.ctx.confirm && r.ctx.confirm.undo;
-    history.push({ from: 'rutivo', html: rich(r.text) + '<div class="siri-yn"><button type="button" data-asyes>' + (undoing ? '🗑️ Sí, quítalo' : '✅ Sí, apúntalo') + '</button><button type="button" class="sec" data-asno>❌ No</button></div>' });
+    history.push({ from: 'rutivo', html: rich(r.text) + '<div class="siri-yn"><button type="button" data-asyes>' + (undoing ? '🗑️ Sí, quítalo' : r.ctx.confirm.action && r.ctx.confirm.action.list === 'pay' ? '✅ Sí, márcalo cobrado' : '✅ Sí, apúntalo') + '</button><button type="button" class="sec" data-asno>❌ No</button></div>' });
     speech = r.speech;
   } else if (r.kind === 'worth') {
     const entry = { from: 'rutivo', html: rich(r.text) };
@@ -472,7 +511,7 @@ function showKeyboard(hint) {
   ui.form.hidden = false;
   setState('idle', hint || LABELS.idle);
   ui.input.focus(); // dentro del toque: el iPhone abre el teclado
-  setTimeout(() => ui.input.focus(), 30);
+  setTimeout(() => { if (ui) ui.input.focus(); }, 30); // si se ha cerrado entre medias, nada
 }
 
 /** Pasar al dictado del teclado (y recordarlo en este móvil). */
