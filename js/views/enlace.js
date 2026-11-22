@@ -2,7 +2,8 @@
 // Panel «🔗 Enlace para tu cliente» de un servicio de Transfer: eliges el idioma,
 // revisas tus datos (teléfono, coche, punto de encuentro) y se lo mandas por WhatsApp.
 import { bottomSheet, toast } from '../dom.js';
-import { clientUrl, linkData, linkMessage, photoPart } from '../enlace.js';
+import { canShortLink, saveLink } from '../cloud.js';
+import { clientUrl, linkData, linkExpiry, linkMessage, linkRecord, newLinkId, photoPart, shortUrl } from '../enlace.js';
 import { MSG_LANGS } from '../mensajes.js';
 import { S, save } from '../store.js';
 import { esc } from '../utils.js';
@@ -59,7 +60,7 @@ export function openClientLink(s) {
   const sheet = bottomSheet(
     '<h3>🔗 Enlace para ' + (name ? esc(name) : 'tu cliente') + '</h3>' +
     '<div class="mut">Tu cliente abre el enlace sin instalar nada y ve, en su idioma: tu nombre, tu coche, dónde le esperas (con tu foto), su vuelo en directo y botones para escribirte o llamarte. ' +
-    'Los datos van dentro del enlace: no se guardan en ningún sitio.</div>' +
+    'Solo lo puede abrir quien tenga el enlace, y caduca 2 días después del servicio.</div>' +
     '<label class="f">Idioma del cliente</label><div class="hchips">' +
     MSG_LANGS.map(([k, t]) => '<button type="button" class="hchip" data-llang="' + k + '">' + t + '</button>').join('') + '</div>' +
     '<label class="f" for="lkpunto">Dónde le esperas</label><input id="lkpunto" data-k="punto" placeholder="Ej.: Terminal 3, puerta de salida 3, junto a la cafetería" value="' + esc(S.cfg.punto || '') + '">' +
@@ -69,22 +70,55 @@ export function openClientLink(s) {
     '<button type="button" class="sec" id="lkdel" hidden>🗑️ Quitar foto</button></div></div>' +
     '<div class="row">' + field('lkcoche', 'Tu coche', 'coche', 'Ej.: Toyota Corolla blanco') + field('lkmat', 'Matrícula', 'mat', 'Ej.: 1234 ABC') + '</div>' +
     field('lktel', 'Tu teléfono (para que te escriba o te llame)', 'tel', 'Ej.: +34 600 000 000', 'tel') +
-    '<div id="lkwarn" class="mut mt8" role="status"></div>' +
+    '<div id="lkwarn" class="mut mt8" role="status"></div><div id="lkstate" class="mut" role="status"></div>' +
     '<a class="btn" id="lksend" target="_blank" rel="noopener noreferrer">📲 Enviárselo por WhatsApp</a>' +
     '<div class="row2"><button type="button" class="sec" id="lkcopy">📋 Copiar enlace</button><a class="btn sec" id="lkview" target="_blank" rel="noopener">👀 Ver lo que verá</a></div>' +
     '<button type="button" class="sec" data-close>Cerrar</button>',
   );
   const $s = (q) => sheet.querySelector(q);
   let url = '';
+  // Enlace corto: los datos se guardan en la nube con un código secreto (uno por servicio).
+  // Mientras se guardan, los botones esperan; sin cuenta o sin conexión, sale el enlace largo.
+  const short = canShortLink();
+  if (short && !s.lk) { s.lk = newLinkId(); save(); }
+  let ready = !short;
+  let timer = 0;
+  let round = 0;
+  const setReady = (v, note = '') => {
+    ready = v;
+    for (const b of [$s('#lksend'), $s('#lkcopy'), $s('#lkview')]) { b.classList.toggle('wait', !v); b.setAttribute('aria-disabled', String(!v)); }
+    $s('#lkstate').textContent = note;
+  };
+  const upload = async () => {
+    const mine = ++round;
+    const data = linkData(s, S.cfg, lang);
+    const ok = await saveLink(s.lk, linkRecord(data, S.cfg.pfoto), linkExpiry(data));
+    if (mine !== round) return; // ya hay otro cambio guardándose
+    if (ok) return setReady(true);
+    // Sin conexión: el enlace largo (lleva los datos dentro), para no dejarte sin enviar
+    url = clientUrl(appBase(), data, S.cfg.pfoto);
+    paintLinks();
+    setReady(true, 'Sin conexión con tu cuenta: esta vez el enlace sale largo (funciona igual).');
+  };
+  const paintLinks = () => {
+    const text = linkMessage(lang, s, S.cfg, url);
+    $s('#lksend').href = 'https://wa.me/' + (s.tl || '').replace(/\D/g, '') + '?text=' + encodeURIComponent(text);
+    $s('#lkview').href = url;
+  };
   const refresh = () => {
-    url = clientUrl(appBase(), linkData(s, S.cfg, lang), S.cfg.pfoto);
+    url = short ? shortUrl(appBase(), s.lk) : clientUrl(appBase(), linkData(s, S.cfg, lang), S.cfg.pfoto);
     const img = $s('#lkimg');
     img.hidden = !S.cfg.pfoto;
     if (S.cfg.pfoto) img.src = S.cfg.pfoto;
     $s('#lkdel').hidden = !S.cfg.pfoto;
-    const text = linkMessage(lang, s, S.cfg, url);
-    $s('#lksend').href = 'https://wa.me/' + (s.tl || '').replace(/\D/g, '') + '?text=' + encodeURIComponent(text);
-    $s('#lkview').href = url;
+    paintLinks();
+    if (short) {
+      setReady(false, '⏳ Preparando el enlace…');
+      clearTimeout(timer);
+      timer = setTimeout(upload, 350);
+    } else {
+      $s('#lkstate').textContent = 'Entra con tu cuenta para que el enlace salga corto.';
+    }
     const miss = [];
     if (!(S.cfg.punto || '').trim()) miss.push('dónde le esperas');
     if (!(S.cfg.tel || '').trim()) miss.push('tu teléfono');
@@ -117,7 +151,9 @@ export function openClientLink(s) {
     toast('Foto puesta ✓ (pequeña, para que quepa en el enlace)');
   });
   $s('#lkdel').onclick = () => { delete S.cfg.pfoto; save(); refresh(); };
-  $s('#lkcopy').onclick = async () => toast((await copy(url)) ? 'Enlace copiado ✓' : 'No se pudo copiar. Mantén pulsado el enlace y cópialo.');
+  // Mientras se guarda, los botones no hacen nada (el enlace aún no se puede abrir)
+  sheet.addEventListener('click', (e) => { if (!ready && e.target.closest('#lksend, #lkview')) e.preventDefault(); }, true);
+  $s('#lkcopy').onclick = async () => !ready ? null : toast((await copy(url)) ? 'Enlace copiado ✓' : 'No se pudo copiar. Mantén pulsado el enlace y cópialo.');
   refresh();
   return sheet;
 }

@@ -65,25 +65,78 @@ export function decodeLink(hash) {
     const s = main.replace(/-/g, '+').replace(/_/g, '/');
     if (!s || s.length > 4000) return null;
     const bin = atob(s + '='.repeat((4 - (s.length % 4)) % 4));
-    const obj = JSON.parse(new TextDecoder().decode(Uint8Array.from(bin, (c) => c.charCodeAt(0))));
-    if (!obj || typeof obj !== 'object' || obj.v !== 1) return null;
-    const out = {};
-    for (const k of Object.keys(FIELDS)) {
-      if (typeof obj[k] === 'string' || typeof obj[k] === 'number') {
-        const c = clean(obj[k]);
-        if (c) out[k] = c;
-      }
+    return cleanLink(JSON.parse(new TextDecoder().decode(Uint8Array.from(bin, (c) => c.charCodeAt(0)))), ph);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Comprueba los datos de un enlace (vengan dentro del enlace o de la nube):
+ * solo los campos conocidos, como texto, con tamaño y formato comprobados.
+ * `ph`: la foto en base64 (con - y _ o con + y /), o nada.
+ */
+export function cleanLink(obj, ph) {
+  if (!obj || typeof obj !== 'object' || obj.v !== 1) return null;
+  const out = {};
+  for (const k of Object.keys(FIELDS)) {
+    if (typeof obj[k] === 'string' || typeof obj[k] === 'number') {
+      const c = clean(obj[k]);
+      if (c) out[k] = c;
     }
-    if (!LINK_LANGS.includes(out.l)) out.l = 'en';
-    if (out.dt && !/^\d{4}-\d{2}-\d{2}$/.test(out.dt)) delete out.dt;
-    if (out.h && !/^\d{2}:\d{2}$/.test(out.h)) delete out.h;
-    if (out.f && !/^[A-Z0-9]{3,8}$/.test(out.f)) delete out.f;
-    if (out.t && !/^\+?\d{6,15}$/.test(out.t)) delete out.t;
-    // Foto: solo una JPEG (empieza por /9j/), solo letras del base64 y con tamaño máximo
-    if (ph && ph.length <= PHOTO_MAX && /^[A-Za-z0-9_-]+$/.test(ph)) {
-      const b = ph.replace(/-/g, '+').replace(/_/g, '/');
-      if (b.startsWith('/9j/')) out.ph = 'data:image/jpeg;base64,' + b + '='.repeat((4 - (b.length % 4)) % 4);
-    }
+  }
+  if (!LINK_LANGS.includes(out.l)) out.l = 'en';
+  if (out.dt && !/^\d{4}-\d{2}-\d{2}$/.test(out.dt)) delete out.dt;
+  if (out.h && !/^\d{2}:\d{2}$/.test(out.h)) delete out.h;
+  if (out.f && !/^[A-Z0-9]{3,8}$/.test(out.f)) delete out.f;
+  if (out.t && !/^\+?\d{6,15}$/.test(out.t)) delete out.t;
+  // Foto: solo una JPEG (empieza por /9j/), solo letras del base64 y con tamaño máximo
+  if (typeof ph === 'string' && ph.length <= PHOTO_MAX + 4 && /^[A-Za-z0-9_+/-]+={0,2}$/.test(ph)) {
+    const b = ph.replace(/-/g, '+').replace(/_/g, '/').replace(/=+$/, '');
+    if (b.startsWith('/9j/')) out.ph = 'data:image/jpeg;base64,' + b + '='.repeat((4 - (b.length % 4)) % 4);
+  }
+  return out;
+}
+
+// ---------- Enlace corto (los datos se guardan en la nube, en enlaces/{código}) ----------
+
+const B62 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+/** Código secreto del enlace: 20 letras y números al azar (≈ 119 bits: imposible de adivinar). */
+export function newLinkId() {
+  const r = crypto.getRandomValues(new Uint8Array(40));
+  let id = '';
+  for (const b of r) if (b < 248 && id.length < 20) id += B62[b % 62]; // sin sesgo
+  return id.length === 20 ? id : newLinkId();
+}
+export const isLinkId = (s) => /^[A-Za-z0-9]{20}$/.test(String(s || '').replace(/^#/, ''));
+
+/** Enlace corto: …/cliente.html#código */
+export const shortUrl = (base, id) => new URL('cliente.html', base).href + '#' + id;
+
+/** Lo que se guarda en la nube para el enlace (sin el dueño ni la caducidad, que pone quien lo sube). */
+export function linkRecord(data, photo) {
+  const rec = { d: JSON.stringify({ v: 1, ...data }) };
+  const ph = photoPart(photo);
+  if (ph) rec.ph = ph;
+  return rec;
+}
+
+/** Hasta cuándo se puede abrir: 2 días después del servicio (sin fecha, 30 días). Nunca más de 44 días. */
+export function linkExpiry(data, now = Date.now()) {
+  const t = spainTime(data.dt, data.h);
+  const exp = t ? Math.max(now, t) + 2 * 864e5 : now + 30 * 864e5;
+  return Math.min(exp, now + 44 * 864e5);
+}
+
+/** Documento leído con la API REST de Firestore → datos del enlace, o null (caducado, roto…). */
+export function fromRest(doc, now = Date.now()) {
+  const f = doc && doc.fields;
+  if (!f || !f.d || typeof f.d.stringValue !== 'string') return null;
+  const exp = f.exp && f.exp.timestampValue ? Date.parse(f.exp.timestampValue) : 0;
+  if (!(exp > now)) return null;
+  try {
+    const out = cleanLink(JSON.parse(f.d.stringValue), f.ph && f.ph.stringValue);
+    if (out && f.st && typeof f.st.stringValue === 'string') out.st = clean(f.st.stringValue).slice(0, 20);
     return out;
   } catch {
     return null;
@@ -156,28 +209,28 @@ export const T = {
     later: 'Your transfer is booked', soon: 'Your transfer is today', flying: 'Your flight is on its way', landed: 'Welcome! Your flight has landed', past: 'This transfer has finished', canceled: 'Your flight shows as cancelled or diverted',
     laterS: 'Everything is ready. Your driver will be waiting for you.', soonS: 'Your driver is following your flight and will be there on time.', flyingS: 'Your driver is following your flight live. No need to worry about delays.', landedS: 'Once you have your luggage, go to the meeting point.', pastS: 'Thank you for travelling with us.', canceledS: 'Please message your driver so you can arrange a new time.',
     where: 'Where to meet', car: 'The car', pickup: 'Pick-up', route: 'Trip', flight: 'Your flight', landsAt: 'Arrives {t}', landedAt: 'Landed {t}', terminal: 'Terminal {x}', onTime: 'On time', late: '{m} min late', early: '{m} min early',
-    local: 'local time', write: 'WhatsApp', call: 'Call', broken: 'This link is incomplete. Please ask your driver to send it again.', by: 'Powered by', steps: ['Booked', 'In the air', 'Landed', 'Picked up'],
+    local: 'local time', write: 'WhatsApp', call: 'Call', broken: 'This link is incomplete or has expired. Please ask your driver to send it again.', by: 'Powered by', steps: ['Booked', 'In the air', 'Landed', 'Picked up'],
   },
   es: {
     title: 'Tu traslado', hi: '¡Hola, {n}!', hiNo: '¡Hola!', with: 'Tu conductor es {d}.',
     later: 'Tu traslado está reservado', soon: 'Tu traslado es hoy', flying: 'Tu vuelo está de camino', landed: '¡Bienvenido/a! Tu vuelo ha aterrizado', past: 'Este traslado ha terminado', canceled: 'Tu vuelo aparece cancelado o desviado',
     laterS: 'Todo está listo. Tu conductor te estará esperando.', soonS: 'Tu conductor sigue tu vuelo y llegará a tiempo.', flyingS: 'Tu conductor sigue tu vuelo en directo. No te preocupes por los retrasos.', landedS: 'Cuando recojas tu equipaje, ve al punto de encuentro.', pastS: 'Gracias por viajar con nosotros.', canceledS: 'Escribe a tu conductor para acordar una nueva hora.',
     where: 'Punto de encuentro', car: 'El coche', pickup: 'Recogida', route: 'Trayecto', flight: 'Tu vuelo', landsAt: 'Llega a las {t}', landedAt: 'Aterrizó a las {t}', terminal: 'Terminal {x}', onTime: 'En hora', late: '{m} min tarde', early: '{m} min antes',
-    local: 'hora local', write: 'WhatsApp', call: 'Llamar', broken: 'Este enlace está incompleto. Pide a tu conductor que te lo vuelva a enviar.', by: 'Con la tecnología de', steps: ['Reservado', 'En el aire', 'Aterrizado', 'Recogido'],
+    local: 'hora local', write: 'WhatsApp', call: 'Llamar', broken: 'Este enlace está incompleto o ha caducado. Pide a tu conductor que te lo vuelva a enviar.', by: 'Con la tecnología de', steps: ['Reservado', 'En el aire', 'Aterrizado', 'Recogido'],
   },
   de: {
     title: 'Ihr Transfer', hi: 'Hallo {n}!', hiNo: 'Hallo!', with: 'Ihr Fahrer ist {d}.',
     later: 'Ihr Transfer ist gebucht', soon: 'Ihr Transfer ist heute', flying: 'Ihr Flug ist unterwegs', landed: 'Willkommen! Ihr Flug ist gelandet', past: 'Dieser Transfer ist beendet', canceled: 'Ihr Flug ist gestrichen oder umgeleitet',
     laterS: 'Alles ist bereit. Ihr Fahrer wird auf Sie warten.', soonS: 'Ihr Fahrer verfolgt Ihren Flug und ist pünktlich da.', flyingS: 'Ihr Fahrer verfolgt Ihren Flug live. Keine Sorge wegen Verspätungen.', landedS: 'Wenn Sie Ihr Gepäck haben, gehen Sie zum Treffpunkt.', pastS: 'Vielen Dank, dass Sie mit uns gereist sind.', canceledS: 'Bitte schreiben Sie Ihrem Fahrer, um eine neue Zeit zu vereinbaren.',
     where: 'Treffpunkt', car: 'Das Auto', pickup: 'Abholung', route: 'Fahrt', flight: 'Ihr Flug', landsAt: 'Ankunft {t}', landedAt: 'Gelandet {t}', terminal: 'Terminal {x}', onTime: 'Pünktlich', late: '{m} Min. später', early: '{m} Min. früher',
-    local: 'Ortszeit', write: 'WhatsApp', call: 'Anrufen', broken: 'Dieser Link ist unvollständig. Bitten Sie Ihren Fahrer, ihn erneut zu senden.', by: 'Bereitgestellt von', steps: ['Gebucht', 'In der Luft', 'Gelandet', 'Abgeholt'],
+    local: 'Ortszeit', write: 'WhatsApp', call: 'Anrufen', broken: 'Dieser Link ist unvollständig oder abgelaufen. Bitten Sie Ihren Fahrer, ihn erneut zu senden.', by: 'Bereitgestellt von', steps: ['Gebucht', 'In der Luft', 'Gelandet', 'Abgeholt'],
   },
   fr: {
     title: 'Votre transfert', hi: 'Bonjour {n} !', hiNo: 'Bonjour !', with: 'Votre chauffeur est {d}.',
     later: 'Votre transfert est réservé', soon: 'Votre transfert est aujourd\'hui', flying: 'Votre vol est en route', landed: 'Bienvenue ! Votre vol a atterri', past: 'Ce transfert est terminé', canceled: 'Votre vol apparaît annulé ou dérouté',
     laterS: 'Tout est prêt. Votre chauffeur vous attendra.', soonS: 'Votre chauffeur suit votre vol et sera là à l\'heure.', flyingS: 'Votre chauffeur suit votre vol en direct. Pas d\'inquiétude en cas de retard.', landedS: 'Une fois vos bagages récupérés, rendez-vous au point de rencontre.', pastS: 'Merci d\'avoir voyagé avec nous.', canceledS: 'Écrivez à votre chauffeur pour convenir d\'un nouvel horaire.',
     where: 'Point de rencontre', car: 'La voiture', pickup: 'Prise en charge', route: 'Trajet', flight: 'Votre vol', landsAt: 'Arrivée {t}', landedAt: 'Atterri à {t}', terminal: 'Terminal {x}', onTime: 'À l\'heure', late: '{m} min de retard', early: '{m} min d\'avance',
-    local: 'heure locale', write: 'WhatsApp', call: 'Appeler', broken: 'Ce lien est incomplet. Demandez à votre chauffeur de le renvoyer.', by: 'Propulsé par', steps: ['Réservé', 'En vol', 'Atterri', 'Pris en charge'],
+    local: 'heure locale', write: 'WhatsApp', call: 'Appeler', broken: 'Ce lien est incomplet ou a expiré. Demandez à votre chauffeur de le renvoyer.', by: 'Propulsé par', steps: ['Réservé', 'En vol', 'Atterri', 'Pris en charge'],
   },
 };
 

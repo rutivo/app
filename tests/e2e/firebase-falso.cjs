@@ -29,6 +29,7 @@ export const EmailAuthProvider = { credential: () => ({}) };`;
 const FS_JS = `
 const H = '${API}';
 export const getFirestore = () => ({});
+export const Timestamp = { fromMillis: (ms) => ({ __ts: ms }) };
 export const collection = (db, ...p) => ({ path: p.join('/') });
 export const doc = (base, ...p) => { const path = base && base.path ? base.path + '/' + p.join('/') : p.join('/'); return { path, id: path.split('/').pop() }; };
 async function call(op, p, body) {
@@ -89,6 +90,20 @@ function createFirestore() {
       const reply = (o) => r.fulfill({ contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify(o) });
       const forced = state.reject.get(p.split('/').pop());
       if (forced && op === 'set') return reply({ error: forced });
+      // Enlaces para el cliente: las mismas condiciones que firestore.rules (match /enlaces/{id})
+      if (p.startsWith('enlaces/')) {
+        const no = { error: { code: 'permission-denied', message: 'Missing or insufficient permissions.' } };
+        const id = p.slice(8);
+        const prev = db.get(p);
+        if (op === 'del') { if (!prev || prev.o !== uid) return reply(no); db.delete(p); return reply({ ok: true }); }
+        if (op !== 'set' || !/^[A-Za-z0-9]{20}$/.test(id) || (prev && prev.o !== uid)) return reply(no);
+        const k = Object.keys(body || {});
+        const okLink = k.every((x) => ['o', 'd', 'ph', 'exp', 'st'].includes(x)) && body.o === uid && typeof body.d === 'string' && body.d.length < 4000 &&
+          (!('ph' in body) || (typeof body.ph === 'string' && body.ph.length < 16000)) && body.exp && typeof body.exp.__ts === 'number' && body.exp.__ts < Date.now() + 45 * 864e5;
+        if (!okLink) return reply(no);
+        db.set(p, body); state.writes.push(p);
+        return reply({ ok: true });
+      }
       const err = check(uid, op, p, body);
       if (err) return reply({ error: err });
       if (op === 'list') return reply({ docs: [...db].filter(([k]) => k.startsWith(p + '/') && !k.slice(p.length + 1).includes('/')).map(([k, v]) => ({ id: k.split('/').pop(), data: v })) });
@@ -175,4 +190,21 @@ async function device(browser, app, store, { uid = 'u1', local = null, owner = t
   return { ctx, page, setOffline, log, name };
 }
 
-module.exports = { createFirestore, serveApp, device };
+/**
+ * La API REST de Firestore que usa la página del cliente (cliente.html), sin cuenta:
+ * GET …/documents/enlaces/{código}. Como las reglas: solo ese documento y solo si no ha caducado.
+ */
+function restLinks(store) {
+  return (r) => {
+    const m = /\/documents\/enlaces\/([^/?]+)$/.exec(new URL(r.request().url()).pathname);
+    const d = m && store.db.get('enlaces/' + m[1]);
+    const head = { 'access-control-allow-origin': '*' };
+    if (!m || !d || !(d.exp.__ts > Date.now())) return r.fulfill({ status: 403, contentType: 'application/json', headers: head, body: JSON.stringify({ error: { code: 403, status: 'PERMISSION_DENIED' } }) });
+    const fields = { d: { stringValue: d.d }, exp: { timestampValue: new Date(d.exp.__ts).toISOString() }, o: { stringValue: d.o } };
+    if (d.ph) fields.ph = { stringValue: d.ph };
+    if (d.st) fields.st = { stringValue: d.st };
+    return r.fulfill({ contentType: 'application/json', headers: head, body: JSON.stringify({ name: 'enlaces/' + m[1], fields }) });
+  };
+}
+
+module.exports = { createFirestore, serveApp, device, restLinks };

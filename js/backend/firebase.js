@@ -4,6 +4,7 @@
 // Estructura en Firestore (ver firestore.rules):
 //   users/{uid}/data/{trozo}   datos de la app, troceados por mes/año
 //   users/{uid}/fotos/{id}     fotos de facturas de gasolina
+//   enlaces/{código}           enlaces para el cliente (los abre sin cuenta quien tenga el código)
 import { APP_CHECK_SITE_KEY, FIREBASE_CONFIG, FIREBASE_SDK } from '../config.js';
 
 let sdk = null;
@@ -160,5 +161,8 @@ export function userStore(uid) {
       return snap.exists() ? snap.data().d : null;
     },
     removePhoto: (id) => fs.deleteDoc(photo(id)),
+    /** Enlace para el cliente: `rec` = {d, ph?}; `exp` = hasta cuándo se puede abrir (ms). */
+    putLink: (id, rec, exp) => fs.setDoc(fs.doc(db, 'enlaces', id), { ...rec, o: uid, exp: fs.Timestamp.fromMillis(exp) }),
+    removeLink: (id) => fs.deleteDoc(fs.doc(db, 'enlaces', id)),
   };
 }

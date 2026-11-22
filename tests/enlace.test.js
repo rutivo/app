@@ -95,3 +95,45 @@ test('foto del punto de encuentro: va al final del enlace y solo se acepta una J
   // Sin foto, el enlace es como antes
   assert.ok(!clientUrl('https://x/', d).includes('.', 'https://x/cliente.html'.length));
 });
+
+test('enlace corto: código secreto de 20 letras/números, distinto cada vez', async () => {
+  const { newLinkId, isLinkId, shortUrl } = await import('../js/enlace.js');
+  const ids = new Set(Array.from({ length: 2000 }, newLinkId));
+  assert.equal(ids.size, 2000);
+  for (const id of ids) assert.ok(isLinkId(id), id);
+  assert.equal(isLinkId('corto'), false);
+  assert.equal(isLinkId('AbCdEfGhIjKlMnOpQrS!'), false);
+  const url = shortUrl('https://rutivo.github.io/app/', 'AbCdEfGhIjKlMnOpQrSt');
+  assert.equal(url, 'https://rutivo.github.io/app/cliente.html#AbCdEfGhIjKlMnOpQrSt');
+  assert.ok(url.length < 70, 'enlace corto de verdad: ' + url.length);
+});
+
+test('lo que se guarda en la nube y su caducidad (2 días tras el servicio, nunca más de 44)', async () => {
+  const { linkRecord, linkExpiry, spainTime: st } = await import('../js/enlace.js');
+  const d = linkData(s, cfg, 'en');
+  const rec = linkRecord(d, 'data:image/jpeg;base64,/9j/AAAA');
+  assert.deepEqual(Object.keys(rec).sort(), ['d', 'ph']);
+  assert.deepEqual(JSON.parse(rec.d), { v: 1, ...d });
+  assert.ok(!/95|SunTours|12345678Z/.test(JSON.stringify(rec)));
+  assert.equal(linkRecord(d, 'data:image/png;base64,iVBOR').ph, undefined);
+  const now = st('2026-11-20', '12:00');
+  assert.equal(linkExpiry(d, now), st('2026-11-23', '10:30') + 2 * 864e5);
+  assert.equal(linkExpiry({ l: 'en' }, now), now + 30 * 864e5);
+  assert.equal(linkExpiry({ ...d, dt: '2027-06-01' }, now), now + 44 * 864e5);
+});
+
+test('leer el enlace de la nube (API REST): igual de comprobado, y caducado = nada', async () => {
+  const { fromRest } = await import('../js/enlace.js');
+  const d = linkData(s, cfg, 'es');
+  const future = new Date(Date.now() + 864e5).toISOString();
+  const doc = { fields: { d: { stringValue: JSON.stringify({ v: 1, ...d, z: 'extra', f: '"><script>' }) }, ph: { stringValue: '/9j/AAAA' }, exp: { timestampValue: future }, o: { stringValue: 'u1' } } };
+  const got = fromRest(doc);
+  assert.equal(got.n, 'John');
+  assert.equal(got.z, undefined);
+  assert.equal(got.f, undefined);
+  assert.equal(got.ph, 'data:image/jpeg;base64,/9j/AAAA');
+  assert.ok(!JSON.stringify(got).includes('u1'), 'el dueño (su cuenta) no pasa a la página');
+  assert.equal(fromRest({ fields: { ...doc.fields, exp: { timestampValue: new Date(Date.now() - 1000).toISOString() } } }), null);
+  assert.equal(fromRest({}), null);
+  assert.equal(fromRest({ fields: { ...doc.fields, d: { stringValue: 'no es json' } } }), null);
+});

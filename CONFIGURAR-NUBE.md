@@ -64,6 +64,28 @@ service cloud.firestore {
         && request.resource.data.d.size() < 1000000;
     }
 
+    // Enlaces para el cliente (Transfer → 🔗 Enlace). El cliente abre la página con un
+    // código secreto de 20 letras y números (imposible de adivinar) y la lee SIN cuenta:
+    //  - solo ese documento (no se pueden listar ni buscar enlaces) y solo hasta que caduca;
+    //  - solo lo escribe, cambia o borra el conductor que lo creó;
+    //  - forma y tamaño fijos: datos en texto (< 4.000), foto pequeña (< 16.000), caducidad
+    //    de como mucho 45 días y estado opcional («voy de camino», «ya estoy»…).
+    function validLink(x) {
+      return x.keys().hasOnly(['o', 'd', 'ph', 'exp', 'st'])
+        && x.keys().hasAll(['o', 'd', 'exp'])
+        && x.o == request.auth.uid
+        && x.d is string && x.d.size() < 4000
+        && (!('ph' in x) || (x.ph is string && x.ph.size() < 16000))
+        && x.exp is timestamp && x.exp < request.time + duration.value(45, 'd')
+        && (!('st' in x) || (x.st is string && x.st.size() < 20));
+    }
+    match /enlaces/{id} {
+      allow get: if id.matches('^[A-Za-z0-9]{20}$') && resource.data.exp > request.time;
+      allow create: if request.auth != null && id.matches('^[A-Za-z0-9]{20}$') && validLink(request.resource.data);
+      allow update: if request.auth != null && resource.data.o == request.auth.uid && validLink(request.resource.data);
+      allow delete: if request.auth != null && resource.data.o == request.auth.uid;
+    }
+
     // Cualquier otra ruta: prohibida.
     match /{document=**} {
       allow read, write: if false;

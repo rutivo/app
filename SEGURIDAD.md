@@ -120,6 +120,10 @@ Clave «Browser key (auto created by Firebase)» del proyecto `rutivo-a8890`:
    llegan «verificadas». Solo entonces pulsar **Aplicar** en Cloud Firestore.
 4. Si App Check falla al arrancar (sin conexión, reCAPTCHA bloqueado), la app sigue
    funcionando: mientras no se pulse «Aplicar», Firestore no lo exige.
+5. **Ojo, enlaces para el cliente:** la página `cliente.html` lee los enlaces cortos de
+   Firestore SIN App Check (el cliente no tiene la app). Si se pulsa «Aplicar» en Cloud
+   Firestore, esos enlaces dejarán de abrirse hasta añadir App Check también a
+   `cliente.html`. Hacerlo antes de aplicar.
 
 ### Comprobado en el código
 - **Aislamiento entre usuarios**: las reglas reales (`firestore.rules`) probadas
@@ -151,20 +155,27 @@ sin vulnerabilidades conocidas en Firebase 10.14.1 ni Tesseract 5.1.1.
 - **Cuentas de prueba** `rutivo-audit-…@example.invalid`: las borra el titular en
   Firebase → Authentication → Users.
 
-## Enlace para el cliente (`cliente.html`, paso 1)
+## Enlace para el cliente (`cliente.html`)
 
-- Los datos del servicio van **dentro del enlace, después de `#`**: esa parte no se envía
-  a ningún servidor (tampoco a GitHub). No se guarda nada en Firebase ni en ningún sitio,
-  y la página no usa cuentas ni cookies.
+- **Enlace corto (con cuenta):** los datos del enlace se guardan en `enlaces/{código}`,
+  con un código de 20 letras y números al azar (≈ 119 bits, imposible de adivinar). Reglas:
+  - lectura **sin cuenta** de ESE documento y solo hasta su caducidad (2 días después del
+    servicio, como mucho 45 días); **no se pueden listar** ni buscar enlaces;
+  - solo lo escribe, cambia o borra el conductor que lo creó (campo `o` = su cuenta);
+  - forma fija: `d` (datos, texto < 4.000), `ph` (foto JPEG pequeña, < 16.000), `exp`
+    (fecha), `st` (estado, para el paso 2), nada más.
+  - Al borrar el servicio en la app, su enlace se borra. Los caducados ya no se pueden leer;
+    para que además se borren solos, se puede activar en la consola una política TTL sobre
+    el campo `exp` de la colección `enlaces` (opcional).
+- **Sin cuenta o sin conexión:** el enlace lleva los datos dentro, después de `#` (esa parte
+  no llega a ningún servidor). Es largo, pero funciona igual.
 - El enlace lleva solo lo que el cliente necesita: su nombre de pila, tu nombre, tu
-  teléfono, tu coche y matrícula, el punto de encuentro, su vuelo, fecha, hora, origen y
-  destino. **Nunca** el precio, la agencia, tu NIF ni otros datos.
+  teléfono, tu coche y matrícula, el punto de encuentro (y su foto), su vuelo, fecha, hora,
+  origen y destino. **Nunca** el precio, la agencia, tu NIF ni otros datos.
 - Quien tenga el enlace ve esos datos: es como reenviar el mensaje de WhatsApp.
-- A prueba de enlaces manipulados: solo se aceptan los campos conocidos, como texto,
-  con tamaño máximo y formato comprobado (fecha, hora, vuelo, teléfono); todo se pinta con
-  `textContent`, y la CSP de la página solo permite sus propios archivos y el
-  intermediario de vuelos (que ya limita consultas y guarda caché por vuelo).
+- A prueba de enlaces y documentos manipulados: solo se aceptan los campos conocidos, como
+  texto, con tamaño y formato comprobados (fecha, hora, vuelo, teléfono, foto solo JPEG);
+  todo se pinta con `textContent`, y la CSP de la página solo permite sus propios archivos,
+  Firestore y el intermediario de vuelos.
 - La página solo pregunta por el vuelo de 8 h antes a 4 h después de la recogida.
-- Paso 2 (estado en vivo «Voy de camino / Ya estoy»): requiere cambiar las reglas de
-  Firestore para leer **un único servicio** con una clave secreta. Pendiente de la
-  autorización del titular.
+- Pruebas: reglas con el emulador oficial (`tests/rules`), y `tests/e2e/enlace*.e2e.cjs`.

@@ -467,3 +467,23 @@ export async function downloadPhoto(id) {
 export function deletePhoto(id) {
   if (remote) remote.removePhoto(id).catch(() => {});
 }
+
+// ---------- enlaces para el cliente ----------
+
+/** ¿Se pueden hacer enlaces cortos? (hace falta la cuenta, para guardarlos en la nube) */
+export const canShortLink = () => !!remote;
+
+/** Guarda (o actualiza) el enlace corto. true si quedó guardado. */
+export async function saveLink(id, rec, exp) {
+  if (!remote) return false;
+  try {
+    await remote.putLink(id, rec, exp);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function removeLink(id) {
+  if (remote && id) remote.removeLink(id).catch(() => {});
+}

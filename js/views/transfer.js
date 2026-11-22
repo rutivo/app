@@ -3,6 +3,7 @@ import { readFileText } from '../ocr.js';
 import { readProvider } from '../providerReader.js';
 import { readService } from '../serviceReader.js';
 import { $, bottomSheet, confirmTap, confirmTapTimed, onClick, saveFile, toast } from '../dom.js';
+import { removeLink } from '../cloud.js';
 import { openFlight } from '../flight.js';
 import { openWelcome } from './bienvenida.js';
 import { openClientLink } from './enlace.js';
@@ -140,6 +141,7 @@ function deleteService(id) {
   const s = S.srv.find((x) => x.id === id);
   if (!s) return;
   S.srv = S.srv.filter((x) => x.id !== id);
+  removeLink(s.lk); // su enlace para el cliente deja de abrirse
   if (s.mid) S.mov = S.mov.filter((m) => m.id !== s.mid);
   save();
   rerenderAll();
@@ -204,6 +206,7 @@ function deleteAllServices(button) {
   if (!confirmTapTimed(button, 'Toca otra vez: se borran ' + S.srv.length + ' servicios')) return;
   const linked = new Set(S.srv.map((s) => s.mid).filter(Boolean));
   S.mov = S.mov.filter((m) => !linked.has(m.id));
+  for (const x of S.srv) removeLink(x.lk);
   S.srv = [];
   save();
   rerenderAll();

@@ -840,6 +840,7 @@ details[open] > summary.row-btn .chev { transform: rotate(90deg); }
 .lk-ph img { width: 96px; height: 72px; object-fit: cover; border-radius: 12px; border: 1px solid var(--line); flex: none; }
 .lk-phb { flex: 1; display: grid; gap: 6px; }
 .lk-phb > * { margin: 0; }
+.wait { opacity: .5; }
 .lk-pick { display: block; text-align: center; cursor: pointer; padding: 13px; border-radius: 14px; font-weight: 700; }
 
 /* ---------- Chips (Mensajes, Enlace) ---------- */
