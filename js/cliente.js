@@ -51,6 +51,29 @@ function flightCard(data, t) {
   return card;
 }
 
+/** La foto en grande, a pantalla completa (se cierra con la ✕, tocando o con Esc). */
+function openPhoto(src, t) {
+  const box = el('div', 'lb');
+  box.setAttribute('role', 'dialog');
+  box.setAttribute('aria-modal', 'true');
+  box.setAttribute('aria-label', t.where);
+  const img = el('img');
+  img.src = src;
+  img.alt = t.where;
+  const x = el('button', 'lbx', '✕');
+  x.type = 'button';
+  x.setAttribute('aria-label', t.close);
+  const close = () => { box.remove(); document.removeEventListener('keydown', esc); document.body.style.overflow = ''; };
+  const esc = (e) => { if (e.key === 'Escape') close(); };
+  box.onclick = (e) => { if (e.target !== img) close(); };
+  x.onclick = close;
+  box.append(img, x);
+  document.body.appendChild(box);
+  document.body.style.overflow = 'hidden';
+  document.addEventListener('keydown', esc);
+  x.focus();
+}
+
 function render(data) {
   const t = T[data.l] || T.en;
   document.documentElement.lang = data.l;
@@ -96,11 +119,16 @@ function render(data) {
     c.appendChild(el('h2', null, t.where));
     if (data.p) c.appendChild(el('div', 'big', '📍 ' + data.p));
     if (data.ph) {
+      // En pequeño (nítida) dentro de la tarjeta; al tocarla, en grande a pantalla completa
+      const btn = el('button', 'phb');
+      btn.type = 'button';
+      btn.setAttribute('aria-label', t.zoom);
       const img = el('img', 'ph');
-      img.src = data.ph; // solo una JPEG en base64, comprobada en decodeLink
+      img.src = data.ph; // solo una JPEG en base64, comprobada en cleanLink
       img.alt = t.where;
-      img.onclick = () => img.classList.toggle('open');
-      c.appendChild(img);
+      btn.append(img, el('span', 'phz', '⤢ ' + t.zoom));
+      btn.onclick = () => openPhoto(data.ph, t);
+      c.appendChild(btn);
     }
     app.appendChild(c);
   }

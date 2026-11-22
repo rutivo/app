@@ -86,6 +86,14 @@ const STATE = {
     ok('6 · el cliente lo abre sin cuenta y lo ve todo', /Hi John!/.test(text) && /Puerta 4, junto a Costa Coffee/.test(text) && /1234 ABC/.test(text) && /BA490/.test(text), text.slice(0, 80));
     const w = await c.evaluate(() => (document.querySelector('img.ph') || {}).naturalWidth || 0);
     ok('7 · con la foto del punto de encuentro en buena calidad (tamaño real, antes como mucho 420 px)', w === 800, w + ' px · ' + Math.round(store.db.get('enlaces/' + id).ph.length * 0.75 / 1024) + ' KB');
+    const thumb = await c.evaluate(() => { const r = document.querySelector('.phb img').getBoundingClientRect(); return [Math.round(r.width), Math.round(r.height)]; });
+    await c.click('.phb');
+    await c.waitForTimeout(300);
+    const lb = await c.evaluate(() => { const i = document.querySelector('.lb img'); if (!i) return null; const r = i.getBoundingClientRect(); return [Math.round(r.width), Math.round(r.height), i.naturalWidth]; });
+    ok('7b · en pequeño dentro de la tarjeta; al tocarla, en grande a pantalla completa', thumb[1] === 220 && lb && lb[0] >= 380 && lb[2] === 800, JSON.stringify({ pequeña: thumb, grande: lb }));
+    await c.click('.lbx');
+    await c.waitForTimeout(200);
+    ok('7c · y se cierra con la ✕', !(await c.$('.lb')));
     ok('8 · pide solo ese documento, por su código', asked.length === 1 && asked[0] === '/v1/projects/prueba/databases/(default)/documents/enlaces/' + id + '?key=prueba', JSON.stringify(asked));
 
     // Código inventado / caducado

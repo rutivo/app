@@ -47,8 +47,12 @@
   .foot { text-align: center; font-size: 12px; color: var(--mut); padding: 16px; }
   .foot b { color: var(--ink); }
   .broken { margin: 40px 18px; text-align: center; }
-  .ph { display: block; width: 100%; max-height: 240px; object-fit: cover; border-radius: 14px; margin-top: 10px; cursor: zoom-in; }
-  .ph.open { max-height: none; object-fit: contain; cursor: zoom-out; }
+  .phb { position: relative; display: block; width: 100%; margin: 10px 0 0; padding: 0; border: 0; background: none; border-radius: 14px; overflow: hidden; cursor: zoom-in; }
+  .ph { display: block; width: 100%; height: 220px; object-fit: contain; background: #0b1222; }
+  .phz { position: absolute; right: 8px; bottom: 8px; padding: 5px 10px; border-radius: 999px; font-size: 12.5px; font-weight: 800; color: #fff; background: rgba(0, 0, 0, .55); }
+  .lb { position: fixed; inset: 0; z-index: 10; display: flex; align-items: center; justify-content: center; padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom); background: #000; }
+  .lb img { max-width: 100%; max-height: 100%; object-fit: contain; }
+  .lbx { position: absolute; top: calc(12px + env(safe-area-inset-top)); right: 12px; width: 44px; height: 44px; border-radius: 50%; border: 0; font-size: 20px; font-weight: 800; color: #fff; background: rgba(255, 255, 255, .2); }
   [hidden] { display: none !important; }
 </style>
 <script type="module" src="js/cliente.js"></script>
