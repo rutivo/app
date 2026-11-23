@@ -14,6 +14,7 @@ import { initCaja, renderCaja } from './views/caja.js';
 import { initCharts } from './views/graficas.js';
 import { accountsEnabled, initAccount, renderAccount, signOutForgotPin } from './views/cuenta.js';
 import { cloudEnabled } from './cloud.js';
+import * as config from './config.js';
 import { initFacturas, renderBrand, renderFacturas, saveBackupFile } from './views/facturas.js';
 import { initGasolina, renderGasolina } from './views/gasolina.js';
 import { initJornada } from './views/jornada.js';
@@ -115,7 +116,8 @@ initJornada(render);
 initFacturas(render);
 initTips(saveBackupFile);
 initUpcoming();
-initAssistant(render);
+// Asistente de voz escondido mientras se mejora (js/config.js → ASSISTANT_ENABLED)
+if (config.ASSISTANT_ENABLED !== false) initAssistant(render);
 if (isLocked()) pauseWake(); // bloqueada: «Oye Rutivo» no escucha hasta desbloquear
 renderLockSettings($('#lockc'));
 render();

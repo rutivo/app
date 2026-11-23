@@ -35,6 +35,9 @@ export const FLIGHT_API = 'https://rutivo-vuelos.pokeboostmlg.workers.dev';
 
 // Firebase va DENTRO de la app (vendor/, versión fija, vigilada con SHA-256 en las pruebas):
 // así no se descarga código de fuera que alguien pudiera cambiar por el camino.
+// Asistente de voz: escondido mientras se mejora (el código sigue; true para volver a enseñarlo).
+export const ASSISTANT_ENABLED = false;
+
 export const FIREBASE_SDK = new URL('../vendor/firebasejs-10.14.1', import.meta.url).href;
 
 // Clave PÚBLICA de las notificaciones (Web Push). La privada está solo en Cloudflare.
