@@ -42,6 +42,33 @@ const STATE = {
     ok('5 · y en el móvil no queda nada tuyo', !(await page.evaluate(() => localStorage.getItem('cajaTransfer') || '')).includes('John Smith'));
     ok('6 · sin errores', !page.errors.length, page.errors.join(' | '));
     await A.ctx.close();
+
+    // ---------- Con las reglas ANTIGUAS de Firebase (sin la zona users/{uid}/enlaces) ----------
+    {
+      const store2 = createFirestore();
+      store2.db.set('enlaces/' + MIO, { o: 'u1', d: '{"v":1}', exp });
+      const B = await device(browser, app, store2, { local: STATE, name: 'B' });
+      const denied = [];
+      await B.ctx.route('**/__falso/**', (r) => {
+        const u = new URL(r.request().url());
+        const p = u.searchParams.get('p') || '';
+        if (/^users\/[^/]+\/enlaces(\/|$)/.test(p)) { denied.push(u.pathname.split('/').pop() + ' ' + p); return r.fulfill({ contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify({ error: { code: 'permission-denied', message: 'Missing or insufficient permissions.' } }) }); }
+        return r.fallback();
+      });
+      const pb = B.page;
+      await pb.waitForTimeout(2500);
+      await pb.click('#acctbtn'); await pb.waitForTimeout(400);
+      await pb.click('#adel summary');
+      await pb.fill('#adpw', 'secreta123');
+      await pb.click('#adgo'); await pb.click('#adgo');
+      // Se comprueba al salir «Cuenta borrada» (después recarga y el Firebase de pruebas vuelve a entrar solo)
+      const borrada = await pb.waitForFunction(() => /Cuenta borrada/.test(document.body.innerText), null, { timeout: 8000, polling: 50 }).then(() => true, () => false);
+      const msg = await pb.evaluate(() => document.querySelector('#aderr')?.textContent || '');
+      ok('7 · con las reglas antiguas de Firebase también se borra la cuenta (sin «No se pudo completar»)', borrada && Object.keys(store2.docsOf('u1')).length === 0 && !/No se pudo/.test(msg), (msg || 'sin mensaje') + ' · quedan: ' + JSON.stringify(Object.keys(store2.docsOf('u1'))) + ' · denegado: ' + denied.join(', '));
+      ok('8 · y su enlace antiguo para el cliente también', !store2.db.has('enlaces/' + MIO));
+      ok('9 · sin errores', !pb.errors.length, pb.errors.join(' | '));
+      await B.ctx.close();
+    }
   } finally {
     await browser.close();
     app.server.close();

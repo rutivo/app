@@ -123,7 +123,11 @@ export async function deleteAccount(password, beforeDelete, linkIds = []) {
   const ids = new Set([...linkIds, ...marks.docs.map((d) => d.id)].filter((id) => /^[A-Za-z0-9]{20}$/.test(id)));
   await Promise.allSettled([...ids].map((id) => fs.deleteDoc(fs.doc(db, 'enlaces', id))));
   for (const name of ['data', 'fotos', 'enlaces']) {
-    const snap = await fs.getDocs(fs.collection(db, 'users', user.uid, name));
+    // Las marcas de enlaces solo existen con las reglas nuevas: con las antiguas no se pueden
+    // ni leer ni crear (no hay ninguna), así que ese «no» no debe impedir borrar la cuenta.
+    // Datos y fotos, en cambio, se borran sí o sí: si falla, no se borra la cuenta.
+    const snap = await fs.getDocs(fs.collection(db, 'users', user.uid, name))
+      .catch((e) => { if (name === 'enlaces' && e && e.code === 'permission-denied') return { docs: [] }; throw e; });
     await Promise.all(snap.docs.map((d) => fs.deleteDoc(d.ref)));
   }
   await auth.deleteUser(user);
