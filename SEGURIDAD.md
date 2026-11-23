@@ -162,9 +162,13 @@ sin vulnerabilidades conocidas en Firebase 10.14.1 ni Tesseract 5.1.1.
   con un código de 20 letras y números al azar (≈ 119 bits, imposible de adivinar). Reglas:
   - lectura **sin cuenta** de ESE documento y solo hasta su caducidad (2 días después del
     servicio, como mucho 45 días); **no se pueden listar** ni buscar enlaces;
-  - solo lo escribe, cambia o borra el conductor que lo creó (campo `o` = su cuenta);
-  - forma fija: `d` (datos, texto < 4.000), `ph` (foto JPEG, ≤ 200.000: unos 150 KB, buena calidad), `exp`
-    (fecha), `st` (estado, para el paso 2), nada más.
+  - el enlace **no dice de quién es**: el dueño se apunta en su zona privada
+    (`users/{uid}/enlaces/{código}`, vacía), que solo él ve; solo con esa marca se puede
+    crear, cambiar o borrar el enlace, y nadie puede crear la marca de un código ajeno;
+  - forma fija: `d` (datos, texto < 4.000), `ph` (foto JPEG, ≤ 200.000: unos 150 KB, buena calidad),
+    `exp` (fecha), `st` (estado, para el paso 2), nada más;
+  - enlaces antiguos (con `o` = uid): su dueño los pasa al formato nuevo o los borra; mientras
+    Firebase tenga las reglas de antes, la app escribe el formato de antes (no se rompe nada).
   - Al borrar el servicio en la app, su enlace se borra; al eliminar la cuenta, se borran todos sus enlaces. Los caducados ya no se pueden leer;
     para que además se borren solos, se puede activar en la consola una política TTL sobre
     el campo `exp` de la colección `enlaces` (opcional).

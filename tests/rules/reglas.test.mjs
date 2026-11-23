@@ -2,7 +2,7 @@
 // No toca el proyecto real (proyecto «demo-»). Uso (desde la raíz):
 //   npx firebase emulators:exec --config tests/rules/firebase.json --project demo-rutivo "node tests/rules/reglas.test.mjs"
 import { assertFails, assertSucceeds, initializeTestEnvironment } from '@firebase/rules-unit-testing';
-import { Timestamp, collection, deleteDoc, doc, getDoc, getDocs, runTransaction, setDoc } from 'firebase/firestore';
+import { Timestamp, collection, deleteDoc, doc, getDoc, getDocs, runTransaction, setDoc, writeBatch } from 'firebase/firestore';
 import { readFileSync } from 'node:fs';
 
 const rules = readFileSync(new URL('../../firestore.rules', import.meta.url), 'utf8');
@@ -61,29 +61,47 @@ await t('otras rutas: el documento raíz del usuario', assertFails(setDoc(doc(u1
 await t('otras rutas: colecciones nuevas', assertFails(setDoc(doc(u1, 'otros/x'), { a: 1 })));
 await t('otras rutas: subcolecciones nuevas', assertFails(setDoc(doc(u1, 'users/u1/admin/x'), { a: 1 })));
 
-// ---- Enlaces para el cliente (enlaces/{código}) ----
+// ---- Enlaces para el cliente (enlaces/{código}) y la marca del dueño (users/{uid}/enlaces/{código}) ----
 const ID = 'AbCdEfGhIjKlMnOpQrSt';
 const ID2 = 'ZyXwVuTsRqPoNmLkJiHg';
+const OLD = 'OldOldOldOldOldOldOl';
 const soon = () => Timestamp.fromMillis(Date.now() + 2 * 864e5);
-const link = (o, extra = {}) => ({ o, d: '{"v":1,"n":"John"}', exp: soon(), ...extra });
-await t('enlace: el conductor crea el suyo (con foto de buena calidad)', assertSucceeds(setDoc(doc(u1, 'enlaces', ID), link('u1', { ph: '/9j/' + 'A'.repeat(199990) }))));
-await t('enlace: lo actualiza (p. ej. el estado «ya estoy»)', assertSucceeds(setDoc(doc(u1, 'enlaces', ID), link('u1', { st: 'aqui' }))));
+const link = (extra = {}) => ({ d: '{"v":1,"n":"John"}', exp: soon(), ...extra });
+/** Como la app: la marca «es mío» y el enlace, a la vez. */
+const put = (db, uid, id, data) => { const b = writeBatch(db); b.set(doc(db, 'users', uid, 'enlaces', id), {}); b.set(doc(db, 'enlaces', id), data); return b.commit(); };
+await t('enlace: el conductor crea el suyo (con foto de buena calidad)', assertSucceeds(put(u1, 'u1', ID, link({ ph: '/9j/' + 'A'.repeat(199990) }))));
+await t('enlace: lo actualiza (p. ej. el estado «ya estoy»)', assertSucceeds(put(u1, 'u1', ID, link({ st: 'aqui' }))));
 await t('enlace: el cliente lo abre SIN cuenta con el código', assertSucceeds(getDoc(doc(anon, 'enlaces', ID))));
+const seen = (await getDoc(doc(anon, 'enlaces', ID))).data(); // lo que ve el cliente
+await t('enlace: NO dice de quién es (sin el uid del conductor)', Promise.resolve().then(() => { if ('o' in seen || JSON.stringify(seen).includes('u1')) throw new Error(JSON.stringify(Object.keys(seen))); }));
 await t('enlace: NO se pueden listar (ni sin cuenta ni con cuenta)', assertFails(getDocs(collection(anon, 'enlaces'))));
 await t('enlace: NO se pueden listar con cuenta', assertFails(getDocs(collection(u2, 'enlaces'))));
-await t('enlace: otro conductor NO lo cambia', assertFails(setDoc(doc(u2, 'enlaces', ID), link('u2'))));
+await t('enlace: la marca de dueño solo la ve su dueño', assertFails(getDoc(doc(u2, 'users', 'u1', 'enlaces', ID))));
+await t('enlace: el dueño ve sus marcas (para borrarlas con la cuenta)', assertSucceeds(getDocs(collection(u1, 'users/u1/enlaces'))));
+await t('enlace: otro conductor NO lo cambia', assertFails(setDoc(doc(u2, 'enlaces', ID), link())));
+await t('enlace: otro conductor NO se adueña de él (marca + cambio)', assertFails(put(u2, 'u2', ID, link({ d: '{"v":1,"n":"Hack"}' }))));
+await t('enlace: otro conductor NO crea la marca de un enlace ajeno', assertFails(setDoc(doc(u2, 'users', 'u2', 'enlaces', ID), {})));
 await t('enlace: otro conductor NO lo borra', assertFails(deleteDoc(doc(u2, 'enlaces', ID))));
-await t('enlace: NO se crea a nombre de otro', assertFails(setDoc(doc(u2, 'enlaces', ID2), link('u1'))));
-await t('enlace: sin cuenta NO se crea', assertFails(setDoc(doc(anon, 'enlaces', ID2), link('x'))));
-await t('enlace: código corto o con símbolos, no', assertFails(setDoc(doc(u1, 'enlaces', 'corto'), link('u1'))));
-await t('enlace: campos extra, no', assertFails(setDoc(doc(u1, 'enlaces', ID2), link('u1', { precio: 95 }))));
-await t('enlace: datos demasiado grandes, no', assertFails(setDoc(doc(u1, 'enlaces', ID2), link('u1', { d: 'x'.repeat(4000) }))));
-await t('enlace: foto demasiado grande, no', assertFails(setDoc(doc(u1, 'enlaces', ID2), link('u1', { ph: 'x'.repeat(200001) }))));
-await t('enlace: caducidad de más de 45 días, no', assertFails(setDoc(doc(u1, 'enlaces', ID2), link('u1', { exp: Timestamp.fromMillis(Date.now() + 50 * 864e5) }))));
-await t('enlace: caducidad que no es fecha, no', assertFails(setDoc(doc(u1, 'enlaces', ID2), link('u1', { exp: 123 }))));
-await env.withSecurityRulesDisabled(async (ctx) => { await setDoc(doc(ctx.firestore(), 'enlaces', ID2), link('u1', { exp: Timestamp.fromMillis(Date.now() - 6e4) })); });
+await t('enlace: sin la marca de dueño NO se crea', assertFails(setDoc(doc(u1, 'enlaces', ID2), link())));
+await t('enlace: sin cuenta NO se crea', assertFails(setDoc(doc(anon, 'enlaces', ID2), link())));
+await t('enlace: con el uid dentro (formato antiguo), ya no', assertFails(put(u1, 'u1', ID2, link({ o: 'u1' }))));
+await t('enlace: código corto o con símbolos, no', assertFails(put(u1, 'u1', 'corto', link())));
+await t('enlace: la marca con datos, no', assertFails(setDoc(doc(u1, 'users', 'u1', 'enlaces', ID2), { x: 1 })));
+await t('enlace: campos extra, no', assertFails(put(u1, 'u1', ID2, link({ precio: 95 }))));
+await t('enlace: datos demasiado grandes, no', assertFails(put(u1, 'u1', ID2, link({ d: 'x'.repeat(4000) }))));
+await t('enlace: foto demasiado grande, no', assertFails(put(u1, 'u1', ID2, link({ ph: 'x'.repeat(200001) }))));
+await t('enlace: caducidad de más de 45 días, no', assertFails(put(u1, 'u1', ID2, link({ exp: Timestamp.fromMillis(Date.now() + 50 * 864e5) }))));
+await t('enlace: caducidad que no es fecha, no', assertFails(put(u1, 'u1', ID2, link({ exp: 123 }))));
+// Enlaces antiguos (con «o»): su dueño los pasa al formato nuevo o los borra; otro, no
+await env.withSecurityRulesDisabled(async (ctx) => { await setDoc(doc(ctx.firestore(), 'enlaces', OLD), { ...link(), o: 'u1' }); });
+await t('enlace antiguo: otro conductor NO se adueña', assertFails(put(u2, 'u2', OLD, link())));
+await t('enlace antiguo: su dueño lo pasa al formato nuevo (sin su uid)', assertSucceeds(put(u1, 'u1', OLD, link())));
+await env.withSecurityRulesDisabled(async (ctx) => { await setDoc(doc(ctx.firestore(), 'enlaces', ID2), { ...link(), o: 'u1' }); });
+await t('enlace antiguo: su dueño lo borra', assertSucceeds(deleteDoc(doc(u1, 'enlaces', ID2))));
+await env.withSecurityRulesDisabled(async (ctx) => { await setDoc(doc(ctx.firestore(), 'enlaces', ID2), link({ exp: Timestamp.fromMillis(Date.now() - 6e4) })); });
 await t('enlace: caducado, el cliente ya NO lo puede abrir', assertFails(getDoc(doc(anon, 'enlaces', ID2))));
 await t('enlace: el conductor borra el suyo', assertSucceeds(deleteDoc(doc(u1, 'enlaces', ID))));
+await t('enlace: y su marca', assertSucceeds(deleteDoc(doc(u1, 'users', 'u1', 'enlaces', ID))));
 await t('enlace: borrado, ya no se abre', assertFails(getDoc(doc(anon, 'enlaces', ID))));
 
 await env.cleanup();

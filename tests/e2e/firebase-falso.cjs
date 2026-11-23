@@ -42,6 +42,15 @@ export async function getDocs(col) { const j = await call('list', col.path); ret
 export const setDoc = (ref, data) => call('set', ref.path, data);
 export const deleteDoc = (ref) => call('del', ref.path);
 export async function getDoc(ref) { const j = await call('get', ref.path); return { exists: () => j.data != null, data: () => j.data }; }
+// Lote de escrituras (todo o nada, como Firestore)
+export function writeBatch() {
+  const ops = [];
+  return {
+    set(ref, data) { ops.push({ op: 'set', path: ref.path, data }); },
+    delete(ref) { ops.push({ op: 'del', path: ref.path }); },
+    commit: () => (ops.length ? call('commit', ops[0].path, { reads: [], ops }) : Promise.resolve()),
+  };
+}
 // Transacción: lo leído se comprueba en el servidor al confirmar (como Firestore)
 export async function runTransaction(db, fn) {
   const reads = [];
@@ -73,6 +82,38 @@ function check(uid, op, p, body) {
   return null;
 }
 
+const NO = { code: 'permission-denied', message: 'Missing or insufficient permissions.' };
+const linkPath = (p) => /^enlaces\//.test(p) || /^users\/[^/]+\/enlaces(\/|$)/.test(p);
+/** Las reglas de los enlaces (firestore.rules): `before`/`after` = la base antes y después del lote. */
+function linkRule(uid, op, p, body, before, after) {
+  // Reglas de antes (enlace con «o» = tu uid, sin marcas): para probar el paso de unas a otras
+  if (linkRule.old) {
+    if (/^users\//.test(p)) return NO;
+    if (op === 'del') return (before.get(p) || {}).o === uid ? null : NO;
+    if (op !== 'set' || (before.has(p) && before.get(p).o !== uid)) return NO;
+    return body && body.o === uid ? null : NO;
+  }
+  const mark = p.match(/^users\/([^/]+)\/enlaces(?:\/([^/]+))?$/);
+  if (mark) {
+    if (mark[1] !== uid) return NO;
+    if (op === 'get' || op === 'list' || op === 'del') return null;
+    const id = mark[2];
+    if (Object.keys(body || {}).length) return NO;
+    if (!before.has(p)) { // crear la marca: solo para un código libre o un enlace antiguo tuyo
+      const ln = before.get('enlaces/' + id);
+      if (!/^[A-Za-z0-9]{20}$/.test(id) || (ln && ln.o !== uid)) return NO;
+    }
+    return null;
+  }
+  const id = p.slice(8);
+  if (op === 'del') return before.has('users/' + uid + '/enlaces/' + id) || (before.get(p) || {}).o === uid ? null : NO;
+  if (op !== 'set' || !/^[A-Za-z0-9]{20}$/.test(id) || !after.has('users/' + uid + '/enlaces/' + id)) return NO;
+  const k = Object.keys(body || {});
+  const okLink = k.every((x) => ['d', 'ph', 'exp', 'st'].includes(x)) && typeof body.d === 'string' && body.d.length < 4000 &&
+    (!('ph' in body) || (typeof body.ph === 'string' && body.ph.length <= 200000)) && body.exp && typeof body.exp.__ts === 'number' && body.exp.__ts < Date.now() + 45 * 864e5;
+  return okLink ? null : NO;
+}
+
 function createFirestore() {
   const db = new Map(); // ruta completa → datos
   const state = { offline: false, reject: new Map(), writes: [], ops: {} };
@@ -90,21 +131,16 @@ function createFirestore() {
       const reply = (o) => r.fulfill({ contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify(o) });
       const forced = state.reject.get(p.split('/').pop());
       if (forced && op === 'set') return reply({ error: forced });
-      // Enlaces para el cliente: las mismas condiciones que firestore.rules (match /enlaces/{id})
-      if (p.startsWith('enlaces/')) {
-        const no = { error: { code: 'permission-denied', message: 'Missing or insufficient permissions.' } };
-        const id = p.slice(8);
-        const prev = db.get(p);
-        if (op === 'del') { if (!prev || prev.o !== uid) return reply(no); db.delete(p); return reply({ ok: true }); }
-        if (op !== 'set' || !/^[A-Za-z0-9]{20}$/.test(id) || (prev && prev.o !== uid)) return reply(no);
-        const k = Object.keys(body || {});
-        const okLink = k.every((x) => ['o', 'd', 'ph', 'exp', 'st'].includes(x)) && body.o === uid && typeof body.d === 'string' && body.d.length < 4000 &&
-          (!('ph' in body) || (typeof body.ph === 'string' && body.ph.length <= 200000)) && body.exp && typeof body.exp.__ts === 'number' && body.exp.__ts < Date.now() + 45 * 864e5;
-        if (!okLink) return reply(no);
-        db.set(p, body); state.writes.push(p);
-        return reply({ ok: true });
+      // Enlaces para el cliente y su marca de dueño: como firestore.rules
+      if (linkPath(p) && op !== 'commit') {
+        const err = linkRule(uid, op, p, body, db, op === 'set' ? new Map([...db, [p, body]]) : db);
+        if (err) return reply({ error: err });
+        if (op === 'list') return reply({ docs: [...db].filter(([k]) => k.startsWith(p + '/') && !k.slice(p.length + 1).includes('/')).map(([k, v]) => ({ id: k.split('/').pop(), data: v })) });
+        if (op === 'get') return reply({ data: db.has(p) ? db.get(p) : null });
+        if (op === 'set') { db.set(p, body); state.writes.push(p); return reply({ ok: true }); }
+        if (op === 'del') { db.delete(p); return reply({ ok: true }); }
       }
-      const err = check(uid, op, p, body);
+      const err = op === 'commit' ? null : check(uid, op, p, body); // en un lote se comprueba cada escritura (abajo)
       if (err) return reply({ error: err });
       if (op === 'list') return reply({ docs: [...db].filter(([k]) => k.startsWith(p + '/') && !k.slice(p.length + 1).includes('/')).map(([k, v]) => ({ id: k.split('/').pop(), data: v })) });
       if (op === 'get') return reply({ data: db.has(p) ? db.get(p) : null });
@@ -113,8 +149,11 @@ function createFirestore() {
         // Si algo de lo leído ha cambiado desde entonces, se rechaza (como Firestore: «aborted»)
         if (state.beforeCommit) await state.beforeCommit(body);
         for (const rd of body.reads) if (JSON.stringify(db.has(rd.path) ? db.get(rd.path) : null) !== JSON.stringify(rd.data)) return reply({ error: { code: 'aborted', message: 'Transaction conflict.' } });
+        const after = new Map(db);
+        for (const o of body.ops) { if (o.op === 'set') after.set(o.path, o.data); else after.delete(o.path); }
         for (const o of body.ops) {
-          const e = check(uid, o.op === 'set' ? 'set' : 'del', o.path, o.data);
+          const kind = o.op === 'set' ? 'set' : 'del';
+          const e = linkPath(o.path) ? linkRule(uid, kind, o.path, o.data, db, after) : check(uid, kind, o.path, o.data);
           if (e) return reply({ error: e });
         }
         // Si el lote incluye un documento rechazado, se rechaza todo el lote (como Firestore)
@@ -207,4 +246,4 @@ function restLinks(store) {
   };
 }
 
-module.exports = { createFirestore, serveApp, device, restLinks };
+module.exports = { createFirestore, serveApp, device, restLinks, linkRule };

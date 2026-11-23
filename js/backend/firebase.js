@@ -5,6 +5,7 @@
 //   users/{uid}/data/{trozo}   datos de la app, troceados por mes/año
 //   users/{uid}/fotos/{id}     fotos de facturas de gasolina
 //   enlaces/{código}           enlaces para el cliente (los abre sin cuenta quien tenga el código)
+//   users/{uid}/enlaces/{código}  marca privada «este enlace es mío» (el enlace no dice de quién es)
 import { APP_CHECK_SITE_KEY, FIREBASE_CONFIG, FIREBASE_SDK } from '../config.js';
 
 let sdk = null;
@@ -116,9 +117,12 @@ export async function deleteAccount(password, beforeDelete, linkIds = []) {
   const user = authInstance.currentUser;
   await auth.reauthenticateWithCredential(user, auth.EmailAuthProvider.credential(user.email, password));
   beforeDelete();
-  // Si alguno ya no existe (caducado y borrado, de otro móvil…), da igual: se sigue
-  await Promise.allSettled(linkIds.filter((id) => /^[A-Za-z0-9]{20}$/.test(id)).map((id) => fs.deleteDoc(fs.doc(db, 'enlaces', id))));
-  for (const name of ['data', 'fotos']) {
+  // Sus enlaces para el cliente: los de sus marcas privadas y los que conoce este móvil.
+  // Si alguno ya no existe (caducado y borrado, de otro móvil…), da igual: se sigue.
+  const marks = await fs.getDocs(fs.collection(db, 'users', user.uid, 'enlaces')).catch(() => ({ docs: [] }));
+  const ids = new Set([...linkIds, ...marks.docs.map((d) => d.id)].filter((id) => /^[A-Za-z0-9]{20}$/.test(id)));
+  await Promise.allSettled([...ids].map((id) => fs.deleteDoc(fs.doc(db, 'enlaces', id))));
+  for (const name of ['data', 'fotos', 'enlaces']) {
     const snap = await fs.getDocs(fs.collection(db, 'users', user.uid, name));
     await Promise.all(snap.docs.map((d) => fs.deleteDoc(d.ref)));
   }
@@ -165,7 +169,22 @@ export function userStore(uid) {
     },
     removePhoto: (id) => fs.deleteDoc(photo(id)),
     /** Enlace para el cliente: `rec` = {d, ph?}; `exp` = hasta cuándo se puede abrir (ms). */
-    putLink: (id, rec, exp) => fs.setDoc(fs.doc(db, 'enlaces', id), { ...rec, o: uid, exp: fs.Timestamp.fromMillis(exp) }),
-    removeLink: (id) => fs.deleteDoc(fs.doc(db, 'enlaces', id)),
+    // El enlace va sin tu uid; «es mío» se apunta en tu zona privada (las dos cosas a la vez)
+    async putLink(id, rec, exp) {
+      const b = fs.writeBatch(db);
+      b.set(fs.doc(db, 'users', uid, 'enlaces', id), {});
+      b.set(fs.doc(db, 'enlaces', id), { ...rec, exp: fs.Timestamp.fromMillis(exp) });
+      try {
+        await b.commit();
+      } catch (err) {
+        if (!err || err.code !== 'permission-denied') throw err;
+        // Reglas de Firebase anteriores (aún no actualizadas): el formato de antes
+        await fs.setDoc(fs.doc(db, 'enlaces', id), { ...rec, o: uid, exp: fs.Timestamp.fromMillis(exp) });
+      }
+    },
+    async removeLink(id) {
+      await fs.deleteDoc(fs.doc(db, 'enlaces', id)); // primero el enlace (para borrarlo hace falta la marca)
+      await fs.deleteDoc(fs.doc(db, 'users', uid, 'enlaces', id)).catch(() => {});
+    },
   };
 }

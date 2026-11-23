@@ -3,7 +3,7 @@
 // borrado el servicio, ya no se abre. Sin conexión, sale el enlace largo.
 // Uso: node tests/e2e/enlace-corto.e2e.cjs
 const { chromium } = require('playwright');
-const { createFirestore, serveApp, device, restLinks } = require('./firebase-falso.cjs');
+const { createFirestore, serveApp, device, restLinks, linkRule } = require('./firebase-falso.cjs');
 
 const res = [];
 const ok = (n, c, extra = '') => { res.push(!!c); console.log((c ? 'PASS ' : 'FAIL ') + n + (extra ? ' — ' + extra : '')); };
@@ -58,7 +58,7 @@ const STATE = {
     ok('2 · el WhatsApp lleva el mensaje y el enlace corto', wa.endsWith('\n' + url) && wa.length < 260, wa.length + ' caracteres');
     const id = url.split('#')[1];
     const docu = store.db.get('enlaces/' + id);
-    ok('3 · se guarda en la nube: tus datos de contacto y la foto, sin precio ni agencia ni NIF', docu && docu.o === 'u1' && docu.ph && /^[/_]9j[/_]/.test(docu.ph) && !/"i"|95,|Viajes Costa|12345678Z/.test(docu.d), docu ? docu.d : 'no');
+    ok('3 · se guarda en la nube: tus datos de contacto y la foto, sin precio, agencia, NIF ni tu código de usuario (el «es mío» va aparte, en tu zona)', docu && !('o' in docu) && store.db.has('users/u1/enlaces/' + id) && docu.ph && /^[/_]9j[/_]/.test(docu.ph) && !/"i"|95,|Viajes Costa|12345678Z/.test(docu.d), docu ? docu.d : 'no');
     const srvLk = await page.evaluate(() => JSON.parse(localStorage.getItem('cajaTransfer')).srv[0].lk);
     ok('4 · el servicio recuerda su enlace (el mismo si lo vuelves a mandar)', srvLk === id);
 
@@ -157,6 +157,21 @@ const STATE = {
     await page.click('#ls [data-ds="s1"]');
     await page.waitForTimeout(800);
     ok('12 · al borrar el servicio, su enlace se borra de la nube', !store.db.has('enlaces/' + id));
+
+    // Mientras Firebase tenga aún las reglas de antes: el enlace sale corto igual (formato de antes)
+    linkRule.old = true;
+    await page.evaluate(async (st) => { const m = await import('/js/store.js'); m.S.srv.push({ ...st.srv[0], id: 's3', lk: undefined, pa: 'Ana Ruiz' }); m.save(); }, STATE);
+    await page.click('.tabs button[data-v="tr"]');
+    await page.waitForTimeout(600);
+    for (const b of await page.$$('button:has-text("Entendido")')) if (await b.isVisible()) await b.click();
+    await page.waitForTimeout(300);
+    await page.click('#ls [data-lnk="s3"]');
+    await page.waitForFunction(() => !document.querySelector('#lksend').classList.contains('wait'), null, { timeout: 8000 });
+    const oldUrl = (await page.getAttribute('#lkview', 'href')).replace('?vista=1', '');
+    const oldDoc = store.db.get('enlaces/' + oldUrl.split('#')[1]);
+    ok('12b · con las reglas de Firebase de antes, el enlace sigue saliendo corto (formato de antes)', /#[A-Za-z0-9]{20}$/.test(oldUrl) && oldDoc && oldDoc.o === 'u1', oldUrl.slice(-30));
+    linkRule.old = false;
+    await page.click('.bsheet [data-close]');
 
     // Sin conexión: enlace largo (no te quedas sin poder mandarlo)
     await page.evaluate(async (st) => { const m = await import('/js/store.js'); m.S.srv.push({ ...st.srv[0], id: 's2', lk: undefined }); m.save(); }, STATE);

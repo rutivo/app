@@ -8,6 +8,7 @@ const res = [];
 const ok = (n, c, extra = '') => { res.push(!!c); console.log((c ? 'PASS ' : 'FAIL ') + n + (extra ? ' — ' + extra : '')); };
 const MIO = 'AbCdEfGhIjKlMnOpQrSt';
 const DE_OTRO = 'ZyXwVuTsRqPoNmLkJiHg';
+const NUEVO = 'NuevoNuevoNuevoNuevo'; // formato nuevo: sin uid, con la marca en tu zona (y que este móvil no conoce)
 const STATE = {
   mov: [{ id: 'm1', f: '2026-11-20', t: 'in', p: 'efectivo', i: 50, c: 'Carrera' }], gas: [], huc: [], prv: [], jor: [], fac: [], cli: {},
   srv: [{ id: 's1', f: '2026-12-01', h: '10:00', cl: 'Viajes Costa', o: 'Aeropuerto', d: 'Marbella', i: 95, p: 'pendiente', pa: 'John Smith', lk: MIO }],
@@ -22,6 +23,8 @@ const STATE = {
     const exp = { __ts: Date.now() + 5 * 864e5 };
     store.db.set('enlaces/' + MIO, { o: 'u1', d: '{"v":1}', exp });
     store.db.set('enlaces/' + DE_OTRO, { o: 'u2', d: '{"v":1}', exp });
+    store.db.set('enlaces/' + NUEVO, { d: '{"v":1}', exp });
+    store.db.set('users/u1/enlaces/' + NUEVO, {});
     const A = await device(browser, app, store, { local: STATE, name: 'A' });
     const page = A.page;
     await page.waitForTimeout(2500);
@@ -34,7 +37,7 @@ const STATE = {
     await page.click('#adgo'); // segundo toque: confirmar
     await page.waitForTimeout(2500);
     ok('2 · al eliminar la cuenta se borran tus datos de la nube', Object.keys(store.docsOf('u1')).length === 0, JSON.stringify(Object.keys(store.docsOf('u1'))));
-    ok('3 · y también el enlace que mandaste a tu cliente', !store.db.has('enlaces/' + MIO));
+    ok('3 · y también los enlaces que mandaste a tus clientes (el antiguo y el nuevo, aunque este móvil no lo conozca), con sus marcas', !store.db.has('enlaces/' + MIO) && !store.db.has('enlaces/' + NUEVO) && !store.db.has('users/u1/enlaces/' + NUEVO));
     ok('4 · el enlace de otro conductor no se toca', store.db.has('enlaces/' + DE_OTRO));
     ok('5 · y en el móvil no queda nada tuyo', !(await page.evaluate(() => localStorage.getItem('cajaTransfer') || '')).includes('John Smith'));
     ok('6 · sin errores', !page.errors.length, page.errors.join(' | '));
