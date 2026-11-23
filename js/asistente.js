@@ -117,9 +117,6 @@ function fixDictation(t) {
     .replace(/^ahora (tengo|hay) que salir\b/, 'a que hora $1 que salir')
     // «Dile a John que llevo en 10 minutos» → llego
     .replace(/\bllevo en (\d{1,2}) minutos\b/g, 'llego en $1 minutos')
-    // Coletillas que Whisper se inventa con el ruido del coche: «… como gasto», «como gas …»
-    .replace(/^como gas[a-z]* /, '')
-    .replace(/^(?!.*\d)(.{8,}?)( de euros)? como( gasto| gas| guas)?$/, '$1')
     .replace(/\ba (puntame|punta|puntalo|puntar|notame|nota|notar)\b/g, 'a$1')
     .replace(/\ba punto (de |me |de me )?(?=\d)/g, 'apuntame ') // Whisper: «apúntame 15» → «a punto de 15»
     .replace(/\b(apunta|anota|ingresa|pon|mete|suma|guarda|registra) (me|melo|lo)\b/g, '$1$2')
