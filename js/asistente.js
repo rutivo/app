@@ -1,6 +1,7 @@
 // © 2026 Alejandro Antonio Fernández Moyano. Todos los derechos reservados. Ver LICENSE.
 // Asistente de Rutivo: entiende preguntas y órdenes en español sobre tus datos.
 // Funciones puras: todo se calcula en el móvil, sin enviar nada fuera.
+import { categoryOf } from './graficas.js';
 import { hoursOf } from './jornada.js';
 import { cashStats, invoiceTotals } from './money.js';
 import { quarterData } from './report.js';
@@ -871,10 +872,14 @@ function answer(t, state, now, helpers) {
   // --- Gasolina ---
   if (/(gasolina|gasoil|diesel|combustible|repost|litros)/.test(t)) {
     const p = periodOf(t, day, 'mes');
-    const list = state.gas.filter((g) => inRange(g.f, p));
-    const total = r2(sum(list, (g) => g.i));
-    const liters = r2(sum(list, (g) => g.l || 0));
-    return reply('⛽ Gasolina ' + p.label + ': **' + eur(total) + '**' + (liters ? ' · ' + String(liters).replace('.', ',') + ' L' : '') + ' · ' + list.length + (list.length === 1 ? ' ticket' : ' tickets') + (liters ? ' · ' + eur(total / liters) + '/L de media' : ''),
+    // Lo mismo que las gráficas: los gastos de gasolina de la caja (cada ticket de Gasolina
+    // ya tiene su gasto en la caja, y también cuenta lo apuntado a mano en la caja)
+    const total = r2(sum(state.mov.filter((m) => m.t === 'out' && inRange(m.f, p) && categoryOf(m.c) === 'gasolina'), (m) => m.i));
+    const list = (state.gas || []).filter((g) => inRange(g.f, p));
+    const withL = list.filter((g) => +g.l > 0);
+    const liters = r2(sum(withL, (g) => +g.l));
+    const perL = liters ? sum(withL, (g) => g.i) / liters : 0;
+    return reply('⛽ Gasolina ' + p.label + ': **' + eur(total) + '**' + (liters ? ' · ' + String(liters).replace('.', ',') + ' L' : '') + ' · ' + list.length + (list.length === 1 ? ' ticket' : ' tickets') + (liters ? ' · ' + eur(perL) + '/L de media' : ''),
       'En gasolina ' + p.label + ' llevas ' + spoken(total) + (liters ? ', ' + Math.round(liters) + ' litros' : ''));
   }
 

@@ -249,7 +249,8 @@ async function deleteMyAccount(button) {
   button.disabled = true;
   error('');
   try {
-    await fb.deleteAccount(password, stopSync);
+    // También los enlaces que mandaste a tus clientes (no se pueden buscar: se borran por su código)
+    await fb.deleteAccount(password, stopSync, (S.srv || []).map((s) => s.lk).filter(Boolean));
   } catch (err) {
     button.disabled = false;
     error(fb.authErrorMessage(err));

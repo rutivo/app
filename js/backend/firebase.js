@@ -109,12 +109,15 @@ export async function logout() {
  * Borra la cuenta y todos sus datos en la nube. Pide la contraseña porque
  * Firebase exige haber entrado hace poco para borrar una cuenta.
  * `beforeDelete()` se llama tras comprobar la contraseña y antes de borrar.
+ * `linkIds`: los enlaces para el cliente que creó (enlaces/{código}), que también se borran.
  */
-export async function deleteAccount(password, beforeDelete) {
+export async function deleteAccount(password, beforeDelete, linkIds = []) {
   const { auth, fs, authInstance, db } = await load();
   const user = authInstance.currentUser;
   await auth.reauthenticateWithCredential(user, auth.EmailAuthProvider.credential(user.email, password));
   beforeDelete();
+  // Si alguno ya no existe (caducado y borrado, de otro móvil…), da igual: se sigue
+  await Promise.allSettled(linkIds.filter((id) => /^[A-Za-z0-9]{20}$/.test(id)).map((id) => fs.deleteDoc(fs.doc(db, 'enlaces', id))));
   for (const name of ['data', 'fotos']) {
     const snap = await fs.getDocs(fs.collection(db, 'users', user.uid, name));
     await Promise.all(snap.docs.map((d) => fs.deleteDoc(d.ref)));

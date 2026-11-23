@@ -164,7 +164,7 @@ sin vulnerabilidades conocidas en Firebase 10.14.1 ni Tesseract 5.1.1.
   - solo lo escribe, cambia o borra el conductor que lo creó (campo `o` = su cuenta);
   - forma fija: `d` (datos, texto < 4.000), `ph` (foto JPEG, ≤ 200.000: unos 150 KB, buena calidad), `exp`
     (fecha), `st` (estado, para el paso 2), nada más.
-  - Al borrar el servicio en la app, su enlace se borra. Los caducados ya no se pueden leer;
+  - Al borrar el servicio en la app, su enlace se borra; al eliminar la cuenta, se borran todos sus enlaces. Los caducados ya no se pueden leer;
     para que además se borren solos, se puede activar en la consola una política TTL sobre
     el campo `exp` de la colección `enlaces` (opcional).
 - **Sin cuenta o sin conexión:** el enlace lleva los datos dentro, después de `#` (esa parte

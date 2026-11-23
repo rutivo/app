@@ -15,6 +15,7 @@ const state = {
     { f: '2026-11-18', t: 'in', p: 'efectivo', i: 80, c: 'Carrera' },
     { f: '2026-10-10', t: 'in', p: 'tarjeta', i: 300, c: 'Carrera' },
     { f: '2026-10-11', t: 'out', p: 'tarjeta', i: 50, c: 'Gasolina: Repsol' },
+    { f: '2026-11-05', t: 'out', p: 'tarjeta', i: 55, c: 'Gasolina: Cepsa' }, // el gasto que crea el ticket de gasolina de noviembre
   ],
   srv: [
     { id: 'a', f: '2026-11-10', h: '10:00', cl: 'Charly Transfers', o: 'Aeropuerto', d: 'Marbella', i: 95, p: 'pendiente', pa: 'MR RICHARD SMITH' },
@@ -386,4 +387,10 @@ test('el tiempo: el sitio que dices, o si no, donde estás', async () => {
   assert.equal(weatherPlace('¿Qué tiempo hace?'), '');
   assert.equal(weatherPlace('¿qué tiempo hace en la calle?'), '');
   assert.equal(ask('¿Qué tiempo hace en Madrid?', state, NOW).place, 'Madrid');
+});
+
+test('gasolina: el asistente cuenta lo mismo que las gráficas (también la apuntada a mano en la caja)', () => {
+  const st = { ...state, mov: [...state.mov, { f: '2026-11-18', t: 'out', p: 'efectivo', i: 30, c: 'gasoil' }] };
+  // 55 del ticket (su gasto en la caja) + 30 apuntados en la caja sin ticket = 85; litros solo de los tickets
+  assert.match(ask('cuanto gasto en gasolina', st, NOW).text, /este mes: \*\*85,00\s€\*\* · 37 L · 1 ticket · 1,49\s€\/L/);
 });
