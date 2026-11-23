@@ -250,6 +250,7 @@ let onProgress = () => {};
 let mic = null;
 let running = false;
 let paused = false;
+let ready = false; // solo escucha si el asistente se ha preparado (initWake); escondido = nunca pide el micro
 let state = 'off';
 const heard = []; // últimas frases analizadas (para comprobar que funciona)
 export const wakeLog = () => heard.slice();
@@ -375,7 +376,7 @@ async function loop() {
 
 /** Empieza a escuchar «Oye Rutivo» (si está activado y la app se ve). */
 export function startWake() {
-  if (!wakeEnabled() || paused || !earSupported() || document.visibilityState !== 'visible') return;
+  if (!ready || !wakeEnabled() || paused || !earSupported() || document.visibilityState !== 'visible') return;
   loop();
 }
 
@@ -402,6 +403,7 @@ export function resumeWake() {
  * `progress({loaded, total} | null)`: descarga del reconocedor (null = terminada).
  */
 export async function initWake(wake, stateChanged = () => {}, progress = () => {}) {
+  ready = true;
   onWake = wake;
   onState = stateChanged;
   onProgress = progress;
