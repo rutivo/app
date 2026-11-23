@@ -177,11 +177,20 @@ export function lockNow() {
   // se atiende al levantar el dedo (sin esperar ni el «doble toque» del navegador).
   const stop = (e) => { if (e.cancelable) e.preventDefault(); };
   for (const ev of ['touchmove', 'gesturestart', 'gesturechange', 'gestureend', 'dblclick']) overlay.addEventListener(ev, stop, { passive: false });
+  // Solo cuenta como toque si el dedo se levanta casi donde se puso (deslizar no teclea)
+  let start = null;
+  overlay.addEventListener('touchstart', (e) => {
+    const p = e.changedTouches[0];
+    start = p ? { x: p.clientX, y: p.clientY } : null;
+  }, { passive: true });
   overlay.addEventListener('touchend', (e) => {
     const b = e.target.closest('[data-lk]');
     if (!b || !e.cancelable) return;
     e.preventDefault(); // sin «click» detrás: no cuenta dos veces y no hay zoom
-    press(b);
+    const p = e.changedTouches[0];
+    const moved = !start || !p || Math.hypot(p.clientX - start.x, p.clientY - start.y) > 14;
+    start = null;
+    if (!moved) press(b);
   }, { passive: false });
   // Teclado físico (ordenador)
   overlay.tabIndex = -1;
