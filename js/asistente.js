@@ -29,16 +29,22 @@ export function normalize(text) {
 const VOCAB = ['apunta', 'apuntame', 'apuntar', 'anotame', 'ingresa', 'ingresame', 'ingresar', 'ponme', 'meteme', 'sumame',
   'euros', 'efectivo', 'tarjeta', 'datafono', 'bizum', 'transferencia', 'gasolina', 'gasoil', 'diesel', 'peaje', 'parking', 'propina',
   'lavado', 'taller', 'desayuno', 'hucha', 'resumen', 'kilometros', 'trimestre',
-  'apuntado', 'anotado', 'ingresado', 'pagado', 'cobrado', 'gastado', 'apuntando', 'ingresos', 'tarjetas'];
+  'apuntado', 'anotado', 'ingresado', 'pagado', 'cobrado', 'gastado', 'apuntando', 'ingresos', 'tarjetas',
+  'transfer', 'recogida', 'enlace', 'mensaje', 'llevame', 'mandale', 'aeropuerto', 'minutos', 'servicio', 'servicios', 'panel', 'ultimo'];
 // Palabras normales que se parecen a las de arriba y NO hay que tocar
 const KNOWN = ['pasado', 'pasada', 'semana', 'cuando', 'cuanto', 'cuantos', 'cuantas', 'llevo', 'llevado', 'lleve', 'gastos', 'ganado', 'pagar',
   'pague', 'gaste', 'cobre', 'pasaje', 'pasajero', 'tardes', 'hecho', 'mismo', 'resto', 'cuenta', 'puesto', 'ponemos', 'metido', 'sumado',
-  'efecto', 'tarde', 'hacia', 'manana', 'carrera', 'carreras', 'servicio', 'servicios', 'trabajo', 'gracias', 'ingreso', 'tengo', 'proximo'];
+  'efecto', 'tarde', 'hacia', 'manana', 'carrera', 'carreras', 'trabajo', 'gracias', 'ingreso', 'tengo', 'proximo',
+  'recogido', 'recoger', 'llevar', 'llevamos', 'llegado', 'llegada', 'llegadas', 'mensajes', 'ultima', 'ultimos'];
 const VSET = new Set([...VOCAB, ...KNOWN]);
 // Confusiones típicas que la distancia no arregla bien
 const SOUNDS = { heroes: 'euros', eros: 'euros', uros: 'euros', ueros: 'euros', euroz: 'euros', efectiva: 'efectivo', electivo: 'efectivo',
   afectivo: 'efectivo', defectivo: 'efectivo', targeta: 'tarjeta', derjeta: 'tarjeta', terjeta: 'tarjeta', darjeta: 'tarjeta', tarjeda: 'tarjeta', tarjet: 'tarjeta', tarjetas: 'tarjeta', apuntamos: 'apunta', apuntan: 'apunta', apuntes: 'apunta',
-  apunte: 'apunta', apuntadme: 'apuntame', ingreso: 'ingreso', propinas: 'propina', peajes: 'peaje', gasolinera: 'gasolina' };
+  apunte: 'apunta', apuntadme: 'apuntame', ingreso: 'ingreso', propinas: 'propina', peajes: 'peaje', gasolinera: 'gasolina',
+  // Lo que Whisper suele oír mal (medido con grabaciones con ruido de coche)
+  trasfer: 'transfer', tranfer: 'transfer', trasfers: 'transfer', transfers: 'transfer', transfe: 'transfer', transfert: 'transfer',
+  duros: 'euros', ph: 'peaje', recogita: 'recogida', recojida: 'recogida', bora: 'borra', vorra: 'borra', abra: 'abre', abren: 'abre', abran: 'abre',
+  mandalele: 'mandale', mandele: 'mandale', yevame: 'llevame', lievame: 'llevame', jevame: 'llevame', acunta: 'apunta', ajunta: 'apunta' };
 
 function dist(a, b) {
   if (Math.abs(a.length - b.length) > 2) return 9;
@@ -100,6 +106,20 @@ export function trimChatter(text) {
 function fixDictation(t) {
   t = fuzzyFix(t);
   return t
+    // «40 y 5» → 45 (Whisper escribe a medias los números con «y»)
+    .replace(/\b([2-9]0) y ([1-9])\b/g, (m, d, u) => String(+d + +u))
+    // «a punta», «a junta» → apunta; «y vame», «lleva me» → llévame; «vor al último» → borra lo último
+    .replace(/\b(a punta|a junta|a punta de)\b(?= \d| un| una| me)/g, 'apunta')
+    .replace(/^(y vame|y bame|lleva me|lleve me|yo vame)\b/, 'llevame')
+    .replace(/\b(borra|bor|vor|bora) (al|el|a el|a lo|lo) ultimo\b/g, 'borra lo ultimo')
+    .replace(/\bde la aeropuerto\b/g, 'del aeropuerto')
+    // «Ahora tengo que salir» suele ser «¿A qué hora tengo que salir?»
+    .replace(/^ahora (tengo|hay) que salir\b/, 'a que hora $1 que salir')
+    // «Dile a John que llevo en 10 minutos» → llego
+    .replace(/\bllevo en (\d{1,2}) minutos\b/g, 'llego en $1 minutos')
+    // Coletillas que Whisper se inventa con el ruido del coche: «… como gasto», «como gas …»
+    .replace(/^como gas[a-z]* /, '')
+    .replace(/^(?!.*\d)(.{8,}?)( de euros)? como( gasto| gas| guas)?$/, '$1')
     .replace(/\ba (puntame|punta|puntalo|puntar|notame|nota|notar)\b/g, 'a$1')
     .replace(/\ba punto (de |me |de me )?(?=\d)/g, 'apuntame ') // Whisper: «apúntame 15» → «a punto de 15»
     .replace(/\b(apunta|anota|ingresa|pon|mete|suma|guarda|registra) (me|melo|lo)\b/g, '$1$2')
@@ -220,11 +240,20 @@ const money = (state, p) => {
 const clean = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 
 /** Cliente o pasajero nombrado en la frase (por palabras sueltas). */
+/** Esqueleto de una palabra para comparar nombres oídos a medias (Juan ~ John, Jon ~ John). */
+const skel = (w) => w.replace(/h/g, '').replace(/[aeiouy]/g, '').replace(/v/g, 'b').replace(/ll/g, 'l');
+/** ¿Está la palabra `w` (de un nombre) en la frase, aunque se haya oído un poco mal? */
+function heardWord(t, w) {
+  if (has(t, w)) return true;
+  return t.split(' ').some((x) => x.length >= 3 && x[0] === w[0] && ((w.length >= 6 && dist(x, w) <= 2) || (w.length >= 4 && dist(x, w) <= 1) ||
+    (w.length >= 3 && x.length <= 5 && skel(x).length >= 2 && skel(x) === skel(w))));
+}
+
 function findName(t, names) {
   let best = null;
   for (const n of names) {
     const words = clean(n).split(/[^a-z0-9]+/).filter((w) => w.length >= 3 && !['s.l', 'sl', 'the', 'mrs', 'mr'].includes(w));
-    const hits = words.filter((w) => has(t, w)).length;
+    const hits = words.filter((w) => heardWord(t, w)).length;
     if (hits && (!best || hits > best.hits)) best = { name: n, hits };
   }
   return best ? best.name : null;
