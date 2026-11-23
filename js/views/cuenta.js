@@ -236,7 +236,8 @@ export function renderAccount() {
     } catch { $('#vermsg').textContent = 'Sin conexión. Inténtalo en un momento.'; }
   };
   const out = $('#alo');
-  if (out) out.onclick = () => signOut(out);
+  if (out) out.onclick = () => signOut();
+  paintLogout();
   const del = $('#adgo');
   if (del) del.onclick = () => deleteMyAccount(del);
 }
@@ -262,15 +263,38 @@ async function deleteMyAccount(button) {
   setTimeout(() => location.reload(), 1200);
 }
 
-async function signOut(button) {
+// «Cerrar sesión» pide un segundo toque. Se recuerda aquí (no en el botón): la pantalla
+// de Cuenta se repinta al sincronizar y en iPhone el botón se cambiaba por uno nuevo
+// sin confirmar, así que cada toque volvía a avisar y nunca salía.
+let logoutArm = { until: 0, text: '' };
+let leaving = false;
+function paintLogout() {
+  const label = $('#alo [data-label]');
+  if (label && Date.now() < logoutArm.until) label.textContent = logoutArm.text;
+}
+
+async function signOut() {
+  if (leaving) return;
+  const armed = Date.now() < logoutArm.until;
   // Antes de salir, subir lo pendiente: al salir se borran los datos del móvil.
   const saved = await flush();
   const risky = !saved || hasUnsavedChanges();
-  const text = risky ? 'Cambios sin subir. Toca otra vez para salir igualmente' : 'Toca otra vez para cerrar sesión';
-  if (!confirmTapTimed(button, text, risky ? null : 'Al salir se borran los datos de este móvil; seguirán en tu cuenta.')) return;
+  if (!armed) {
+    logoutArm = { until: Date.now() + 6000, text: risky ? 'Cambios sin subir. Toca otra vez para salir igualmente' : 'Toca otra vez para cerrar sesión' };
+    paintLogout();
+    if (!risky) toast('Al salir se borran los datos de este móvil; seguirán en tu cuenta.');
+    setTimeout(() => { if (Date.now() >= logoutArm.until && !leaving) { logoutArm = { until: 0, text: '' }; const l = $('#alo [data-label]'); if (l) l.textContent = 'Cerrar sesión'; } }, 6100);
+    return;
+  }
+  logoutArm = { until: 0, text: '' };
+  leaving = true;
+  const label = $('#alo [data-label]');
+  if (label) label.textContent = 'Cerrando sesión…';
   try {
     await fb.logout();
   } catch {
+    leaving = false;
+    if (label) label.textContent = 'Cerrar sesión';
     toast('No se pudo cerrar sesión. Revisa la conexión.');
     return;
   }

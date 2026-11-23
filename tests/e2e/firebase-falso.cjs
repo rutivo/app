@@ -17,12 +17,12 @@ const AUTH_JS = `
 const U = () => ({ uid: self.__uid || 'u1', email: (self.__uid || 'u1') + '@prueba.test', emailVerified: !!self.__verificado, reload: async () => {} });
 const A = { get currentUser() { return U(); }, languageCode: '' };
 export const getAuth = () => A;
-export const onAuthStateChanged = (a, f) => setTimeout(() => f(U()));
+export const onAuthStateChanged = (a, f) => setTimeout(() => f(sessionStorage.getItem('__fuera') ? null : U()));
 export const createUserWithEmailAndPassword = async () => ({ user: U() });
 export const signInWithEmailAndPassword = async () => ({ user: U() });
 export const sendPasswordResetEmail = async () => {};
 export const sendEmailVerification = async () => { self.__verifEnviados = (self.__verifEnviados || 0) + 1; };
-export const signOut = async () => {};
+export const signOut = async () => { if (self.__salidaReal) sessionStorage.setItem('__fuera', '1'); }; // __salidaReal: la sesión se cierra de verdad (si no, sigue dentro)
 export const reauthenticateWithCredential = async () => {};
 export const deleteUser = async () => {};
 export const EmailAuthProvider = { credential: () => ({}) };`;

@@ -166,7 +166,7 @@ const D = {
   'Esta acción no se puede deshacer. Si quieres conservarlos, exporta antes una copia.': 'This can’t be undone. If you want to keep your data, export a backup first.',
   'Enviado ✓. Revisa tu correo (y spam).': 'Sent ✓. Check your email (and spam).', 'Email confirmado ✓': 'Email confirmed ✓', 'Aún no consta como confirmado. Abre el enlace del email y vuelve a tocar.': 'Not confirmed yet. Open the link in the email and tap again.',
   'Sin conexión. Inténtalo en un momento.': 'Offline. Try again in a moment.', 'Toca otra vez para confirmar': 'Tap again to confirm', 'Cuenta borrada.': 'Account deleted.',
-  'Cambios sin subir. Toca otra vez para salir igualmente': 'Unsaved changes. Tap again to sign out anyway', 'Toca otra vez para cerrar sesión': 'Tap again to sign out',
+  'Cambios sin subir. Toca otra vez para salir igualmente': 'Unsaved changes. Tap again to sign out anyway', 'Cerrando sesión…': 'Signing out…', 'Toca otra vez para cerrar sesión': 'Tap again to sign out',
   'Al salir se borran los datos de este móvil; seguirán en tu cuenta.': 'Signing out removes the data from this phone; it stays in your account.', 'No se pudo cerrar sesión. Revisa la conexión.': 'Couldn’t sign out. Check your connection.',
   'Conectando con tu cuenta…': 'Connecting to your account…', 'Sin conexión: trabajando con los datos de este móvil.': 'Offline: working with this phone’s data.',
   'Sin conexión con tu cuenta: los datos están solo en este móvil.': 'No connection to your account: the data is only on this phone.', 'Sincronización': 'Sync', 'Entendido, borrar estos avisos': 'Got it, clear these notices',
