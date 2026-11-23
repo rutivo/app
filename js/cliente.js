@@ -2,7 +2,7 @@
 // Página que ve el cliente (cliente.html): lee los datos del enlace (después de «#»)
 // y consulta su vuelo. Todo el texto se pone con textContent: nada del enlace se
 // interpreta como HTML. No usa cuentas, ni Firebase, ni guarda nada.
-import { FIREBASE_CONFIG, FLIGHT_API } from './config.js';
+import { APP_CHECK_SITE_KEY, FIREBASE_CONFIG, FIREBASE_SDK, FLIGHT_API } from './config.js';
 import { STEP, T, decodeLink, fromRest, isLinkId, shouldAskFlight, spainClock, spainTime, stageOf } from './enlace.js';
 
 const app = document.getElementById('app');
@@ -172,12 +172,34 @@ function render(data) {
  * Enlace corto (#código): los datos se leen de la nube, sin cuenta, con la API REST
  * de Firestore. Las reglas solo dejan leer ESE documento y solo si no ha caducado.
  */
+/**
+ * App Check: demuestra a Firebase que la petición viene de la página de verdad
+ * (reCAPTCHA Enterprise, invisible). Así se puede «Aplicar» App Check en Firestore sin
+ * que los enlaces dejen de abrirse. Si no se puede (sin clave, bloqueado, lento), '' y
+ * se pide igual: mientras no se aplique, Firestore no lo exige.
+ */
+async function appCheckToken() {
+  if (!APP_CHECK_SITE_KEY || !FIREBASE_CONFIG) return '';
+  try {
+    const work = (async () => {
+      const [app, ac] = await Promise.all([import(FIREBASE_SDK + '/firebase-app.js'), import(FIREBASE_SDK + '/firebase-app-check.js')]);
+      const fa = app.initializeApp(FIREBASE_CONFIG);
+      const check = ac.initializeAppCheck(fa, { provider: new ac.ReCaptchaEnterpriseProvider(APP_CHECK_SITE_KEY), isTokenAutoRefreshEnabled: false });
+      return (await ac.getToken(check, false)).token || '';
+    })();
+    return await Promise.race([work, new Promise((r) => setTimeout(() => r(''), 6000))]);
+  } catch {
+    return '';
+  }
+}
+
 async function fromCloud(id) {
   if (!FIREBASE_CONFIG) return null;
   const url = 'https://firestore.googleapis.com/v1/projects/' + encodeURIComponent(FIREBASE_CONFIG.projectId) +
     '/databases/(default)/documents/enlaces/' + id + '?key=' + encodeURIComponent(FIREBASE_CONFIG.apiKey);
   try {
-    const res = await fetch(url, { referrerPolicy: 'no-referrer', cache: 'no-store' });
+    const token = await appCheckToken();
+    const res = await fetch(url, { referrerPolicy: 'no-referrer', cache: 'no-store', headers: token ? { 'X-Firebase-AppCheck': token } : {} });
     return res.ok ? fromRest(await res.json()) : null;
   } catch {
     return null;

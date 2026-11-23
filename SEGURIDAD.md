@@ -120,10 +120,11 @@ Clave «Browser key (auto created by Firebase)» del proyecto `rutivo-a8890`:
    llegan «verificadas». Solo entonces pulsar **Aplicar** en Cloud Firestore.
 4. Si App Check falla al arrancar (sin conexión, reCAPTCHA bloqueado), la app sigue
    funcionando: mientras no se pulse «Aplicar», Firestore no lo exige.
-5. **Ojo, enlaces para el cliente:** la página `cliente.html` lee los enlaces cortos de
-   Firestore SIN App Check (el cliente no tiene la app). Si se pulsa «Aplicar» en Cloud
-   Firestore, esos enlaces dejarán de abrirse hasta añadir App Check también a
-   `cliente.html`. Hacerlo antes de aplicar.
+5. **Enlaces para el cliente:** `cliente.html` ya manda su prueba de App Check
+   (reCAPTCHA Enterprise invisible, cabecera `X-Firebase-AppCheck`) al leer el enlace
+   corto; si no la consigue en 6 s, lo pide igual (sirve mientras no se «Aplique»).
+   Antes de pulsar «Aplicar»: publicar, esperar unos días y comprobar en Métricas que las
+   lecturas de la página del cliente también llegan «verificadas».
 
 ### Comprobado en el código
 - **Aislamiento entre usuarios**: las reglas reales (`firestore.rules`) probadas

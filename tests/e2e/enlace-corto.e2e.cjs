@@ -122,6 +122,34 @@ const STATE = {
     ok('11 · sin errores en la página del cliente', !cerrs.length, cerrs.join(' | '));
     await cctx.close();
 
+    // ---------- App Check en la página del cliente ----------
+    // Con la clave de App Check, la página manda la prueba («X-Firebase-AppCheck») al leer el enlace;
+    // si no la consigue, lo pide igual (mientras no se «Aplique», Firestore no la exige).
+    const appCheck = async (fails) => {
+      const x = await browser.newContext({ viewport: { width: 390, height: 844 }, locale: 'en-GB' });
+      const heads = [];
+      await x.route('**/*', (r) => {
+        const u = new URL(r.request().url());
+        if (u.pathname.endsWith('/js/config.js')) return r.fulfill({ contentType: 'text/javascript', body: "export const FIREBASE_CONFIG={apiKey:'prueba',projectId:'prueba'};export const FIREBASE_SDK=new URL('/__ac', location.href).href;export const FLIGHT_API='';export const PUSH_PUBLIC_KEY='';export const APP_CHECK_SITE_KEY='clave-publica';" });
+        if (u.pathname === '/__ac/firebase-app.js') return r.fulfill({ contentType: 'text/javascript', body: 'export const initializeApp = (c) => ({ c });' });
+        if (u.pathname === '/__ac/firebase-app-check.js') return r.fulfill({ contentType: 'text/javascript', body: 'export class ReCaptchaEnterpriseProvider { constructor(k) { this.k = k; } }\nexport const initializeAppCheck = (a, o) => ({ o });\nexport const getToken = async () => { ' + (fails ? "throw new Error('bloqueado');" : "return { token: 'prueba-app-check' };") + ' };' });
+        if (u.hostname === 'firestore.googleapis.com') { heads.push(r.request().headers()['x-firebase-appcheck'] || ''); return restLinks(store)(r); }
+        return u.hostname === '127.0.0.1' ? r.continue() : r.abort();
+      });
+      const pg = await x.newPage();
+      const st = store.db.get('enlaces/' + id);
+      if (st) st.exp.__ts = Date.now() + 864e5; // vuelve a estar vigente para esta prueba
+      await pg.goto(url);
+      await pg.waitForTimeout(1500);
+      const seen = /Hi John!/.test(await pg.evaluate(() => document.body.innerText));
+      await x.close();
+      return { heads, seen };
+    };
+    const withAc = await appCheck(false);
+    ok('11b · con App Check: la página manda su prueba a Firebase al abrir el enlace', withAc.heads[0] === 'prueba-app-check' && withAc.seen, JSON.stringify(withAc));
+    const noAc = await appCheck(true);
+    ok('11c · si App Check falla, el enlace se abre igual (sin la prueba)', noAc.heads[0] === '' && noAc.seen, JSON.stringify(noAc));
+
     // Borrar el servicio borra su enlace
     await page.click('[data-close]');
     await page.click('.tabs button[data-v="tr"]');
