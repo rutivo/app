@@ -278,7 +278,7 @@ async function analyze() {
       const secs = audio.length / 16000;
       let text = '';
       try {
-        text = await transcribe(audio, 45000, { maxTokens: WAKE_TOKENS });
+        text = await transcribe(audio, 45000, { maxTokens: WAKE_TOKENS, model: 'base' }); // vigilar: el ligero
       } catch {
         continue;
       }
@@ -310,9 +310,11 @@ async function loop() {
   woke = false;
   setState('listening');
   try {
-    // La primera vez (o si se borró) se descarga el reconocedor: se enseña cómo va
-    await prepareEar((p) => onProgress(p));
+    // La primera vez (o si se borró) se descarga el reconocedor: se enseña cómo va.
+    // Para vigilar «Oye Rutivo», el ligero; después, por detrás, el grande para entender las órdenes.
+    await prepareEar((p) => onProgress(p), 'base');
     onProgress(null);
+    prepareEar((p) => onProgress(p), 'small').then(() => onProgress(null), () => onProgress(null));
     const newMic = () => createMic({ maxMs: MAX_S * 1000, silenceMs: WAKE_SILENCE_MS });
     mic = mic || newMic();
     let deaf = 0;

@@ -393,7 +393,7 @@ async function weather(entry, r) {
 function earProgress(p) {
   if (earReady || !ui || !p.total || p.total < 5e6) return;
   const pct = Math.round((p.loaded / p.total) * 100);
-  if (ui.root.dataset.state !== 'listening') setState('thinking', '⬇️ Descargando el oído de Rutivo… ' + pct + ' % (solo la primera vez)');
+  if (ui.root.dataset.state !== 'listening') setState('thinking', '⬇️ Descargando el oído de Rutivo… ' + pct + ' % (solo la primera vez, ~240 MB; mejor con WiFi)');
 }
 
 /** Escucha con el micro propio. `auto`: viene de la conversación (sin toque). */
@@ -770,7 +770,7 @@ export function initAssistant(rerender) {
   // «Oye Rutivo»: el icono enseña si está escuchando (anillo) o si necesita un toque
   // Manos libres: «Oye Rutivo» habla contigo sin abrir esta pantalla
   initHandsFree(rerender, (text) => openAssistant(text));
-  // Mientras se descarga el reconocedor de voz (la primera vez, ~77 MB), se ve cuánto falta
+  // Mientras se descarga el reconocedor de voz (la primera vez, ~240 MB), se ve cuánto falta
   const files = new Map();
   let pill = null;
   const progress = (p) => {
@@ -781,7 +781,7 @@ export function initAssistant(rerender) {
     for (const [l, t] of files.values()) { got += l; all += t; }
     if (!all || got >= all) return;
     if (!pill) { pill = document.createElement('div'); pill.className = 'ear-dl'; document.body.appendChild(pill); }
-    pill.textContent = '⬇️ Preparando «Oye Rutivo»… ' + Math.floor((got / all) * 100) + '% (solo la primera vez)';
+    pill.textContent = '⬇️ Preparando la voz de Rutivo… ' + Math.floor((got / all) * 100) + '% (solo la primera vez; mejor con WiFi)';
   };
   let hint = null;
   initWake((rest) => handsFree(rest), (state) => {
