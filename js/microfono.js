@@ -325,7 +325,7 @@ export function createMic({ deafMs = 1500, maxMs = 15000, silenceMs = 1100, shor
           // iOS puede dejar la pista abierta pero silenciarla tras un rato o una interrupción.
           // No basta con comprobar si alguna vez llegó sonido: hay que vigilar la pista AHORA.
           const track = stream && stream.getAudioTracks()[0];
-          const trackEnded = !track || track.readyState !== 'live;
+          const trackEnded = !track || track.readyState !== 'live';
           // iOS silencia temporalmente la pista al cambiar de app. Si sigue viva,
           // NO cierres el stream ni vuelvas a pedir permiso: espera a que se reactive.
           if (track && track.readyState === 'live' && track.muted) return;
