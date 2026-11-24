@@ -29,6 +29,10 @@ async function run(browser, app, { geo, perm }) {
   await page.goto(app.url);
   await page.waitForTimeout(800);
   await page.click('#asisbtn');
+  await page.waitForSelector('.siri .siri-orb');
+  // El teclado es voluntario: desde que se quitó el dictado automático,
+  // las pruebas de consultas escritas deben pulsar el botón ⌨️ explícitamente.
+  if (await page.locator('.siri-form').evaluate((el) => el.hidden)) await page.click('[data-skb]');
   await page.waitForSelector('.siri .siri-form:not([hidden])');
   const ask = async (q) => {
     const n = await page.evaluate(() => document.querySelectorAll('.siri-msg.rutivo').length);
