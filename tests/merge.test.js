@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { hash, merge3, mergeTombs, sameState, snapshot, stable } from '../js/sync/merge.js';
+import { firstSyncSnapshot, hash, merge3, mergeTombs, sameState, snapshot, stable } from '../js/sync/merge.js';
 
 const NOW = Date.parse('2026-11-20T12:00:00Z');
 const st = (over = {}) => ({ mov: [], srv: [], fac: [], gas: [], huc: [], prv: [], jor: [], cfg: { nom: 'Antonio', iva: 10 }, cli: {}, ...over });
@@ -85,6 +85,28 @@ test('borrado en otro móvil pero cambiado aquí: se conserva y se avisa', () =>
 test('sin base (primera vez tras actualizar o móvil nuevo): se une todo, nada se borra', () => {
   const r = merge3(null, st({ mov: [m('a', 10), m('b', 20)] }), st({ mov: [m('b', 20), m('c', 30)] }), {}, NOW);
   assert.deepEqual(ids(r.state.mov), ['a', 'b', 'c']);
+});
+
+test('en un dispositivo nuevo, los valores iniciales no pisan los datos de cuenta guardados', () => {
+  const local = st({ cfg: { nom: '', nif: '', dir: '', iva: 10, lic: '', cp: '', loc: '', ico: 'taxi', col: 'azul', hd: 1, hm: 500 } });
+  const remote = st({ cfg: { nom: 'Alejandro', nif: '12345678Z', dir: 'C/ Larios 1', iva: 10, lic: '1274', cp: '29001', loc: 'Málaga', ico: 'taxi', col: 'azul', hd: 1, hm: 500 } });
+  const base = firstSyncSnapshot(local, false, local.cfg);
+  const r = merge3(base, local, remote, {}, NOW);
+  assert.deepEqual(r.state.cfg, remote.cfg);
+  assert.equal(r.conflicts.length, 0);
+});
+
+test('al migrar datos locales, los campos vacíos no pisan la ficha remota y los cambios propios se conservan', () => {
+  const defaults = { nom: '', nif: '', dir: '', iva: 10, lic: '', cp: '', loc: '', ico: 'taxi', col: 'azul', hd: 1, hm: 500 };
+  const local = st({ mov: [m('local', 10)], cfg: { ...defaults, lic: 'Licencia local' } });
+  const remote = st({ cfg: { ...defaults, nom: 'Alejandro', nif: '12345678Z', iva: 21, lic: 'Licencia nube' } });
+  const base = firstSyncSnapshot(local, true, defaults);
+  const r = merge3(base, local, remote, {}, NOW);
+  assert.equal(r.state.cfg.nom, 'Alejandro');
+  assert.equal(r.state.cfg.nif, '12345678Z');
+  assert.equal(r.state.cfg.iva, 21);
+  assert.equal(r.state.cfg.lic, 'Licencia local');
+  assert.equal(r.conflicts.length, 1);
 });
 
 test('ajustes y clientes: campo a campo (cada móvil cambia uno distinto)', () => {
