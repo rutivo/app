@@ -1,6 +1,6 @@
 // Pantalla "Facturas": datos del emisor, logo, emisión de facturas, PDF y copia de seguridad.
 import { $, $$, confirmTapTimed, disarm, downloadBlob, loadScript, onClick, saveFile, toast } from '../dom.js';
-import { COLORS, ICON_NAMES, ICONS, accentColor, iconSvg, logoSvg, rutivoLogoSvg } from '../logo.js';
+import { COLORS, ICON_NAMES, ICONS, accentColor, iconSvg, logoSvg } from '../logo.js';
 import { cloudEnabled, problemText, syncNow, syncProblems } from '../cloud.js';
 import { clientProblems, duplicateNumbers, fingerprint, isoWithZone, issuerProblems, lastHash, nextRectNumber, recordString } from '../facturaLegal.js';
 import { baseOf, invoiceTotals, nextInvoiceNumber } from '../money.js';
@@ -23,7 +23,7 @@ const lastIssued = () => (S.cfg.ult === undefined ? 0 : S.cfg.ult);
 // ---------- marca (cabecera de la app) ----------
 
 export function renderBrand() {
-  $('#brand').innerHTML = rutivoLogoSvg(220, 'var(--ink)');
+  $('#brand').innerHTML = logoSvg(190, 'var(--ink)');
   $('#lpv').innerHTML = logoSvg(220, 'var(--ink)');
   const color = accentColor();
   document.documentElement.style.setProperty('--acc', color);
