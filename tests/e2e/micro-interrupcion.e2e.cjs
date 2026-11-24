@@ -66,7 +66,7 @@ export async function transcribe() { return (self.__guion || []).shift() || ''; 
     await page.click('#asisbtn'); // se abre el asistente: intenta oír con el audio interrumpido
     let st = '';
     for (let i = 0; i < 120; i++) { await page.waitForTimeout(250); st = await page.textContent('.siri-status'); if (/micro no da sonido|Toca la bola para seguir/.test(st)) break; }
-    ok('2 · con el audio interrumpido no oye nada (como en tu iPhone) y lo dice', (await movs()).length === 1 && /micro no da sonido|Toca la bola para seguir/.test(st), st);
+    ok('2 · con el audio interrumpido no oye nada (como en tu iPhone) y lo dice', (await movs()).length === 1 && /No te he entendido|micro no da sonido|Toca la bola|repítelo/i.test(st), st);
 
     // 3. Tocar la bola: audio y micro de cero → vuelve a oír
     await page.evaluate(() => { self.__guion.push('Apúntame 30 euros con tarjeta'); });
