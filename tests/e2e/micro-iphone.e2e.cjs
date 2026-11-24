@@ -71,8 +71,11 @@ export async function transcribe() { return (self.__guion || []).shift() || ''; 
     for (let i = 0; i < 80 && !(await said()).some((t) => /ayudarte/.test(t)); i++) await page.waitForTimeout(250);
     let d = await said();
     ok('1 · «Oye Rutivo» dentro del asistente → «Dime, ¿en qué puedo ayudarte?»', d.includes('Dime, ¿en qué puedo ayudarte?'), JSON.stringify(d));
+    // El texto se registra al iniciar la locución; esperamos a onend, que es
+    // cuando Rutivo devuelve la sesión de audio al modo micro + altavoz.
+    await page.waitForFunction(() => navigator.audioSession.type === 'play-and-record', null, { timeout: 5000 });
     const session = await page.evaluate(() => navigator.audioSession.type);
-    ok('2 · se pide al iPhone micro y altavoz a la vez (play-and-record)', session === 'play-and-record', session);
+    ok('2 · al terminar de hablar se devuelve el iPhone al modo micro + altavoz', session === 'play-and-record', session);
     const requests = await page.evaluate(() => self.__pedidos);
     ok('3 · en iPhone se usa el micro de Rutivo (no se salta al teclado)', requests > 0, 'peticiones de micro: ' + requests);
     // Rutivo ha hablado → micro mudo → debe recuperarse solo y apuntar la orden siguiente
@@ -82,18 +85,15 @@ export async function transcribe() { return (self.__guion || []).shift() || ''; 
     const status = await page.evaluate(() => document.querySelector('.siri-status').textContent);
     ok('4 · no sale «El micro no da sonido»', !/no da sonido/.test(status), status);
     ok('5 · sin errores', !errs.length, errs.join(' | '));
-    // Si el usuario activa el dictado alternativo, el siguiente toque no debe
-    // volver a abrir el micro web que falló. El botón permite probarlo de nuevo.
+    // El teclado es una alternativa manual: no debe abrirse automáticamente
+    // ni pedir un segundo permiso de micro. El usuario lo abre con ⌨️.
     await page.click('.siri-x');
-    await page.evaluate(() => localStorage.setItem('asisDictado', '1'));
-    const beforeFallback = await page.evaluate(() => self.__pedidos);
+    const beforeKeyboard = await page.evaluate(() => self.__pedidos);
     await page.click('#asisbtn');
-    await page.waitForFunction(() => { const f = document.querySelector('.siri-form'); return !!f && !f.hidden; });
-    const fallback = await page.evaluate(() => ({ visible: !document.querySelector('.siri-form').hidden, retry: getComputedStyle(document.querySelector('[data-sretry]')).display !== 'none', requests: self.__pedidos }));
-    ok('6 · el dictado alternativo se mantiene y no vuelve a pedir el micro web', fallback.visible && fallback.retry && fallback.requests === beforeFallback, JSON.stringify(fallback));
-    await page.click('[data-sretry]');
-    await page.waitForFunction((n) => self.__pedidos > n, beforeFallback);
-    ok('7 · el botón permite volver a probar el micro de Rutivo', await page.evaluate(() => self.__pedidos > 0));
+    await page.click('[data-skb]');
+    const keyboard = await page.evaluate(() => ({ visible: !document.querySelector('.siri-form').hidden, requests: self.__pedidos }));
+    ok('6 · el teclado sigue disponible cuando el usuario lo pide expresamente', keyboard.visible, JSON.stringify(keyboard));
+    ok('7 · abrir el teclado no vuelve a solicitar el permiso del micrófono', keyboard.requests === beforeKeyboard, 'peticiones: ' + keyboard.requests);
     await ctx.close();
   } finally {
     await browser.close();
