@@ -22,7 +22,7 @@ import { driverName } from '../welcome.js';
 
 const VOICE_KEY = 'asisVoz';
 // Al dar una orden se hacen pausas («apúntame… treinta… en efectivo»): no cortar antes de tiempo
-const COMMAND_MIC = { silenceMs: 1400, shortMs: 600, follow: true };
+const COMMAND_MIC = { silenceMs: 850, shortMs: 350, follow: true };
 const SUGGEST = ['¿Cuánto llevo hoy?', '¿Cuál es mi próximo servicio?', '¿Qué tengo mañana?', '¿Qué tiempo hace?', '¿Quién me debe?', 'Apunta 50 € en efectivo', '¿Cuánto gané este mes?', '¿Qué puedo decirte?'];
 const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 const isIOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
@@ -69,6 +69,10 @@ function unlockVoice() {
   }
 }
 
+function setSpeechAudioMode(mode) {
+  try { if (navigator.audioSession && navigator.audioSession.type !== mode) navigator.audioSession.type = mode; } catch { /* navegador sin AudioSession */ }
+}
+
 function pickVoice() {
   const all = window.speechSynthesis ? speechSynthesis.getVoices() : [];
   const es = all.filter((v) => /^es/i.test(v.lang));
@@ -85,16 +89,17 @@ function keepListening() {
 function speak(text) {
   if (!voiceOn() || !window.speechSynthesis || !text) { setState('idle'); keepListening(); return; }
   try {
+    setSpeechAudioMode('playback');
     speechSynthesis.cancel();
     const u = new SpeechSynthesisUtterance(text);
     u.lang = 'es-ES';
     const v = pickVoice();
     if (v) u.voice = v;
-    u.rate = 1.03;
+    u.rate = 1.0;
     u.volume = 1; // siempre a tope (el volumen real lo pone el botón del móvil)
     // Si el sistema no deja hablar (iPhone sin un toque antes) o no avisa al terminar, no quedarse colgado
     let done = false;
-    const finish = () => { if (done) return; done = true; clearTimeout(guard); setState('idle'); keepListening(); };
+    const finish = () => { if (done) return; done = true; clearTimeout(guard); setSpeechAudioMode('play-and-record'); setState('idle'); keepListening(); };
     let guard = setTimeout(() => { if (!speechSynthesis.speaking) finish(); }, 1500);
     u.onstart = () => { clearTimeout(guard); guard = setTimeout(finish, Math.min(30000, 2500 + text.length * 90)); };
     u.onend = finish;

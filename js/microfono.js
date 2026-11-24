@@ -44,10 +44,10 @@ export function createVad({ chunkMs, silenceMs = 1100, maxMs = 15000, waitMs = 7
       // Ruido de fondo: sale de los momentos tranquilos (si empezaste a hablar
       // nada más abrirse el micro, baja en cuanto haces la primera pausa)
       if (floor === null) floor = rms;
-      const on = Math.max(0.012, floor * 2.6); // para empezar a contar como voz
+      const on = Math.max(0.006, floor * 2.0); // para empezar a contar como voz
       peak = Math.max(rms, peak * 0.995);
       // Ya hablando: las palabras más bajas también son voz, pero no un ruido muy por debajo de tu voz
-      const off = Math.max(0.009, floor * 1.7, follow && speaking ? peak * 0.15 : 0);
+      const off = Math.max(0.0045, floor * 1.35, follow && speaking ? peak * 0.12 : 0);
       if (rms > Math.max(on, speaking ? peak * 0.3 : 0)) strong = t;
       if (rms > (speaking ? off : on)) {
         heard += chunkMs;
@@ -116,7 +116,7 @@ const IOS = typeof navigator !== 'undefined' && (/iP(hone|ad|od)/.test(navigator
  */
 export function micConstraints(ios = IOS) {
   return ios
-    ? { echoCancellation: false, noiseSuppression: false, autoGainControl: true, channelCount: 1 }
+    ? { echoCancellation: false, noiseSuppression: true, autoGainControl: true, channelCount: 1 }
     : { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 };
 }
 

@@ -49,7 +49,7 @@ self.onmessage = async (e) => {
     const p = await load(src, model);
     if (type === 'load') return self.postMessage({ id, text: '' });
     // `max`: tope de palabras (para «Oye Rutivo…» basta con pocas; con ruido, Whisper se inventa frases largas y tarda)
-    const out = await p(audio, { language: 'spanish', task: 'transcribe', chunk_length_s: 30, ...(max > 0 ? { max_new_tokens: max } : {}) });
+    const out = await p(audio, { language: 'spanish', task: 'transcribe', chunk_length_s: 30, num_beams: 1, ...(max > 0 ? { max_new_tokens: max } : { max_new_tokens: 96 }) });
     self.postMessage({ id, text: out.text || '' });
   } catch (err) {
     self.postMessage({ id, error: String(err && err.message ? err.message : err) });
