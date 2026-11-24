@@ -14,12 +14,12 @@ const ok = (n, c, extra = '') => { res.push(!!c); console.log((c ? 'PASS ' : 'FA
 const REPO = path.resolve(__dirname, '..', '..');
 const RTT = 300;
 const CONFIG = "export const FIREBASE_CONFIG=null;export const TRIAL_ENABLED=false;export const FIREBASE_SDK='';export const FLIGHT_API='';export const PUSH_PUBLIC_KEY='';export const APP_CHECK_SITE_KEY='';";
-const types = { '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.png': 'image/png', '.woff2': 'font/woff2', '.webmanifest': 'application/manifest+json', '.wasm': 'application/wasm' };
+const types = { '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.png': 'image/png', '.woff2': 'font/woff2', '.webmanifest': 'application/manifest+json', '.svg': 'image/svg+xml', '.wasm': 'application/wasm' };
 
 /** Copia de la app (lo que se publica) en una carpeta temporal. */
 function copyApp(dest, from = REPO) {
   fs.mkdirSync(dest, { recursive: true });
-  for (const f of ['index.html', 'legal.html', 'cliente.html', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png', 'sw.js', '.nojekyll']) if (fs.existsSync(path.join(from, f))) fs.copyFileSync(path.join(from, f), path.join(dest, f));
+  for (const f of ['index.html', 'legal.html', 'cliente.html', 'manifest.webmanifest', 'rutivo-icon.svg', 'icon-192.png', 'icon-512.png', 'sw.js', '.nojekyll']) if (fs.existsSync(path.join(from, f))) fs.copyFileSync(path.join(from, f), path.join(dest, f));
   for (const d of ['js', 'css', 'fonts', 'scripts']) if (fs.existsSync(path.join(from, d))) fs.cpSync(path.join(from, d), path.join(dest, d), { recursive: true });
   // Sin nube ni servicios externos (y la huella recalculada con este config.js)
   fs.writeFileSync(path.join(dest, 'js', 'config.js'), CONFIG);
