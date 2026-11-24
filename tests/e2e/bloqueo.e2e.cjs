@@ -65,7 +65,10 @@ const typePin = async (page, pin) => { for (const d of pin) await page.click('#l
     await page.selectOption('#lkmin', '0');
     await page.dispatchEvent('#lkmin', 'change');
     await hide('hidden');
-    ok('8 · con «al momento», en cuanto sales queda tapada (tampoco se ve en la multitarea)', await locked(page));
+    // La app espera 5 s antes de bloquear: iOS puede ocultar brevemente la PWA
+    // al mostrar Face ID o un permiso del sistema. Comprobar antes era una carrera.
+    await page.waitForTimeout(5200);
+    ok('8 · con «al momento», tras confirmar que sigue en segundo plano queda tapada (tampoco se ve en la multitarea)', await locked(page));
     await hide('visible');
     await typePin(page, '4821');
 
