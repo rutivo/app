@@ -50,7 +50,7 @@ let convo = false; // conversación por voz: tras contestar, vuelve a escuchar s
 // Modo dictado: si el micro de la app no capta nada en este móvil, se usa el 🎤 del teclado (siempre funciona)
 const DICT_KEY = 'asisDictado';
 // Si el micro propio falla, se recuerda el dictado del teclado como alternativa estable.
-const dictation = () => !Recognition || readFlag(DICT_KEY) === '1';
+const dictation = () => false; // El teclado solo se abre si el usuario pulsa expresamente el botón ⌨️.
 
 // ---------- voz que habla ----------
 
@@ -519,15 +519,15 @@ function showKeyboard(hint) {
 
 /** Pasar al dictado del teclado (y recordarlo en este móvil). */
 function useDictation(why) {
-  // Libera el micrófono web antes de abrir el dictado de iOS; si queda abierto,
-  // el teclado puede no conseguir tomar el micro.
+  // No abrir el teclado como sustituto automático: el usuario quiere hablar
+  // directamente con Rutivo. Mantener el botón de teclado como opción manual.
   if (mic) { mic.close(); mic = null; }
   stopSharedMic();
   earBusy = false;
   convo = false;
-  writeFlag(DICT_KEY, '1');
-  if (ui) ui.root.classList.add('dict');
-  showKeyboard(why || 'Toca el 🎤 del teclado y habla. Se envía solo cuando terminas.');
+  if (ui) ui.root.classList.add('voice-error');
+  setState('idle', why || 'No he podido activar el micrófono de Rutivo. Toca la bola para reintentar.');
+
 }
 
 /** Empieza a escuchar. Se llama SIEMPRE desde un toque (lo exige el iPhone). */
@@ -536,10 +536,11 @@ function listen() {
   // Tras una interrupción del iPhone (una notificación) o una escucha fallida: audio y micro de cero, dentro de este toque
   if (audioNeedsReset()) { resetAudio(); if (mic) { mic.close(); mic = null; } }
   try { speechSynthesis.cancel(); } catch { /* */ }
-  // Si ya se activó el dictado alternativo, respetarlo: no volver a entrar en
-  // el micrófono que acaba de fallar (antes se reintentaba y quedaba en bucle).
-  if (dictation()) return useDictation('Toca el 🎤 del teclado y habla. Se envía solo cuando terminas.');
+  // Prioridad: micrófono propio de Rutivo + reconocimiento Whisper local.
+  // En iPhone SpeechRecognition no está disponible de forma fiable; no debemos
+  // enviar al usuario al teclado por esa razón.
   if (useEar()) return listenEar();
+  if (dictation()) return useDictation('El reconocimiento de voz no está disponible.');
   // Tocar mientras escucha = parar. Si una escucha anterior se quedó colgada, se descarta y se empieza otra.
   if (rec && recLive && ui && ui.root.dataset.state === 'listening') { finishListening(); return; }
   stopListening();
