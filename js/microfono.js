@@ -319,8 +319,11 @@ export function createMic({ deafMs = 1500, maxMs = 15000, silenceMs = 1100, shor
           if (session !== s || s.busy) return;
           const now = Date.now();
           if (now - s.started > maxMs + 3000) return finish(true);
-          // Mudo: no llega audio, o llega pero es silencio absoluto (iPhone, tras hablar el asistente o volver de segundo plano)
-          if (s.sound || now - s.started < deafMs) return;
+          // iOS puede dejar la pista abierta pero silenciarla tras un rato o una interrupción.
+          // No basta con comprobar si alguna vez llegó sonido: hay que vigilar la pista AHORA.
+          const track = stream && stream.getAudioTracks()[0];
+          const broken = !track || track.readyState !== 'live' || track.muted || !ctx || ctx.state === 'closed' || ctx.state === 'interrupted' || (ctx.state !== 'running' && now - s.started >= deafMs);
+          if (!broken && (s.sound || now - s.started < deafMs)) return;
           if (s.retried) return finish(false, new DeafMicError());
           s.busy = true;
           s.retried = true;

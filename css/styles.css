@@ -861,7 +861,9 @@ details[open] > summary.row-btn .chev { transform: rotate(90deg); }
 .asis-fab::before { content: ''; position: absolute; inset: -20%; background: conic-gradient(from 0deg, #2f74ff, #b06ef3, #ff5fa2, #ffb340, #35e07a, #2fd3ff, #2f74ff);
   animation: siriSpin 6s linear infinite; }
 .asis-fab i { position: absolute; inset: 6px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #3a5fae, #0b1f4d 70%); }
-.asis-fab i::after { content: '🎙️'; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 24px; }
+.asis-fab i::after { content: 'R'; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #fff; font: 900 29px/1 Manrope,Arial,sans-serif; letter-spacing: -2px; text-shadow: 0 1px 10px rgba(255,255,255,.45); }
+.asis-fab i { box-shadow: inset 0 0 0 2px rgba(255,255,255,.22), 0 0 18px rgba(88,130,255,.65); }
+.asis-fab[data-wake="listening"] i::after { text-shadow: 0 0 12px #fff, 0 0 24px #58d9ff; }
 @keyframes siriSpin { to { transform: rotate(360deg); } }
 
 .siri { position: fixed; inset: 0; z-index: 60; display: flex; flex-direction: column; padding: calc(12px + env(safe-area-inset-top, 0px)) 16px calc(16px + env(safe-area-inset-bottom, 0px));
