@@ -11,7 +11,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: pruebas-${{ github.ref }}
@@ -27,6 +27,19 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      # Mantiene la huella del service worker al día para que los móviles
+      # puedan instalar la versión completa y no se queden con la caché anterior.
+      - name: Actualizar huella del service worker
+        if: github.event_name == 'push' && github.ref == 'refs/heads/claude/well-coded-application-1bvedo'
+        run: |
+          npm run version
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add sw.js
+          if ! git diff --cached --quiet; then
+            git commit -m "Actualizar huella del service worker"
+            git push
+          fi
       - run: npm test
 
   librerias:
