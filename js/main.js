@@ -74,8 +74,8 @@ function initTabs() {
 
 /** Icono Rutivo: mantiene sincronizados el icono de Safari y el de inicio. */
 function drawFavicon() {
-  const apple = new URL('../icon-192.png?v=4', import.meta.url).href;
-  const icon = new URL('../rutivo-icon.svg?v=4', import.meta.url).href;
+  const apple = new URL('../icon-192.png?v=5', import.meta.url).href;
+  const icon = new URL('../rutivo-icon.svg?v=5', import.meta.url).href;
   for (const [rel, href] of [['apple-touch-icon', apple], ['icon', icon]]) {
     let link = document.querySelector('link[rel="' + rel + '"]');
     if (!link) { link = document.createElement('link'); link.rel = rel; document.head.appendChild(link); }

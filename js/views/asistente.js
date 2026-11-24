@@ -4,7 +4,7 @@
 import { ask, trimChatter, weatherText } from '../asistente.js';
 import { bottomSheet, readFlag, writeFlag } from '../dom.js';
 import { cachedStatus, etaLine, openFlight } from '../flight.js';
-import { initWake, pauseWake, resumeWake, trainWake, wakeEnabled, wakeLog, wakeModel, wakeStats } from '../despertar.js';
+import { initWake, pauseWake, resumeWake, wakeEnabled } from '../despertar.js';
 import { audioNeedsReset, audioRunning, createMic, markAudioBroken, resetAudio, stopSharedMic } from '../microfono.js';
 import { currentPosition } from '../ruta.js';
 import { cancelHandsFree, handsFree, initHandsFree } from './manosLibres.js';
@@ -33,6 +33,7 @@ let lastDone = null; // lo último apuntado por voz (para «no, eran 45» o «bo
 let stopped = false; // se tocó «Parar»: lo que estuviera entendiendo ya no se hace
 let emptyTries = 0; // veces seguidas que no se entendió nada
 let deafRetry = false; // ya se reintentó tras quedarse mudo el micro
+let micRecoveries = 0;
 /** El hilo de la conversación con lo último apuntado (el asistente lo usa para corregir o quitar). */
 const withDone = () => ({ ...ctx, done: lastDone });
 let rerenderAll = () => {};
@@ -434,21 +435,22 @@ async function listenEar(auto = false) {
         }
         deafRetry = false;
         markAudioBroken();
-        if (isIOS) return useDictation('El micro de Rutivo se ha quedado bloqueado. Toca el 🎤 del teclado para hablar; puedes volver a probar el micro de la app.');
-        return setState('idle', auto ? '👆 Toca la bola para seguir hablando' : 'El micro no da sonido. Toca la bola otra vez (si sigue, cierra y abre Rutivo).');
+        if (micRecoveries < 2) { micRecoveries++; convo = true; resetAudio(); setState('thinking', 'Recuperando el micrófono…'); setTimeout(() => { if (ui && convo) listenEar(true); }, 900); return; }
+        micRecoveries = 0;
+        return setState('idle', 'El micrófono se ha interrumpido. Toca la bola para volver a escuchar.');
       }
-      if (err && err.name === 'NotAllowedError') return showKeyboard('No tengo permiso para el micrófono. Ajustes → Safari → Micrófono → Permitir (o «Preguntar») y vuelve a tocar la bola. Mientras, usa el 🎤 del teclado.');
-      return showKeyboard('No puedo abrir el micrófono (¿lo usa otra app?). Usa el 🎤 del teclado.');
+      if (err && err.name === 'NotAllowedError') return setState('idle', 'Necesito permiso para el micrófono. Actívalo en Ajustes del iPhone y vuelve a tocar la bola.');
+      return setState('idle', 'No he podido abrir el micrófono. Toca la bola para reintentarlo.');
     }
-    deafRetry = false;
     if (ui) ui.root.style.setProperty('--lvl', '0');
     if (!ui) { earBusy = false; return; }
     if (!audio) {
       earBusy = false;
       convo = false; // si en la conversación ya no dices nada, deja de escuchar
       if ((mic && mic.lastPeak < 0.0008) || !audioRunning()) markAudioBroken(); // silencio absoluto o audio parado (iPhone interrumpido): el próximo toque rehace el audio
-      if (isIOS) return useDictation('Rutivo no ha captado tu voz. Toca el 🎤 del teclado para hablar; si quieres, puedes volver a probar el micro de la app.');
-      return setState('idle', auto ? LABELS.idle : 'No te he oído. Toca la bola y habla cerca del móvil.');
+      if (micRecoveries < 2) { micRecoveries++; convo = true; if (mic) { mic.close(); mic = null; } resetAudio(); setState('thinking', 'Volviendo a conectar el micrófono…'); setTimeout(() => { if (ui && convo) listenEar(true); }, 800); return; }
+      micRecoveries = 0;
+      return setState('idle', 'No he captado la voz esta vez. Toca la bola y seguimos.');
     }
     setState('thinking', earReady ? 'Entendiendo…' : '⬇️ Preparando el oído de Rutivo (solo la primera vez)…');
     await earLoading;
@@ -457,7 +459,8 @@ async function listenEar(auto = false) {
     if (!ui) return;
     if (stopped) return setState('idle', 'Parado. Toca la bola para hablar.');
     if (!text) {
-      if (isIOS) { emptyTries = 0; convo = false; return useDictation('No he podido entender la voz. Prueba con el 🎤 del teclado; puedes volver a probar el micro de la app.'); }
+      if (isIOS && micRecoveries < 2) { micRecoveries++; emptyTries = 0; convo = true; setState('thinking', 'No te he entendido; vuelvo a escucharte…'); setTimeout(() => { if (ui && convo) listenEar(true); }, 650); return; }
+      micRecoveries = 0;
       // En plena conversación, una vez: lo vuelve a intentar solo (sin tener que tocar la bola)
       if ((auto || convo) && emptyTries < 1) {
         emptyTries++;
@@ -470,13 +473,14 @@ async function listenEar(auto = false) {
       return setState('idle', 'No te he entendido. Toca la bola y repítelo.');
     }
     emptyTries = 0;
+    micRecoveries = 0;
     convo = true;
     const clean = trimChatter(text);
     handle(clean, [], clean !== text ? 0.4 : undefined); // si había charla de fondo, pide confirmar
   } catch {
     earBusy = false;
     convo = false;
-    if (ui) showKeyboard('No he podido preparar el oído de Rutivo (¿sin internet la primera vez?). De momento usa el 🎤 del teclado.');
+    if (ui) setState('idle', 'No he podido preparar el reconocimiento de voz. Comprueba la conexión y toca la bola para reintentar.');
   }
 }
 
@@ -540,7 +544,7 @@ function listen() {
   // En iPhone SpeechRecognition no está disponible de forma fiable; no debemos
   // enviar al usuario al teclado por esa razón.
   if (useEar()) return listenEar();
-  if (dictation()) return useDictation('El reconocimiento de voz no está disponible.');
+  if (!Recognition) return setState('idle', 'El reconocimiento de voz no está disponible en este navegador.');
   // Tocar mientras escucha = parar. Si una escucha anterior se quedó colgada, se descarta y se empieza otra.
   if (rec && recLive && ui && ui.root.dataset.state === 'listening') { finishListening(); return; }
   stopListening();
@@ -567,7 +571,7 @@ function listen() {
     setTimeout(() => {
       if (rec === r && !sound && !heard && ui) {
         stopListening();
-        useDictation('El micro de la app se abre pero no oye nada en este móvil. Usa el 🎤 del teclado: habla y se envía solo.');
+        setState('idle', 'El micrófono no ha captado voz. Toca la bola para reintentarlo.');
       }
     }, 5000);
   };
@@ -606,7 +610,7 @@ function listen() {
       return useDictation('El micro de la app no capta nada en este móvil. A partir de ahora: toca el 🎤 del teclado y habla (se envía solo).');
     }
     if (failed === 'aborted') return setState('idle');
-    if (failed && failed !== 'no-speech') return showKeyboard(micHelp(failed));
+    if (failed && failed !== 'no-speech') return setState('idle', micHelp(failed));
     setState('idle', heard ? LABELS.idle : micHelp('no-speech'));
   };
   setState('listening');
@@ -614,14 +618,14 @@ function listen() {
     r.start();
   } catch {
     rec = null;
-    showKeyboard(micHelp('error'));
+    setState('idle', micHelp('error'));
   }
   // Si el micro no arranca en 4 s, no quedarse en «Te escucho…»: abrir el teclado para dictar
   setTimeout(() => {
     if (rec === r && !started && !heard && ui) {
       stopListening();
       if (++misses >= 2) { misses = 0; return useDictation('El micro de la app no arranca en este móvil. A partir de ahora: toca el 🎤 del teclado y habla (se envía solo).'); }
-      showKeyboard('El micrófono no ha arrancado. Toca el 🎤 del teclado y dicta, o vuelve a tocar la bola.');
+      setState('idle', 'El micrófono no ha arrancado. Toca la bola para reintentarlo.');
     }
   }, 4000);
   // Por si el sistema no cierra solo
@@ -651,9 +655,6 @@ export function openAssistant(cmd) {
     '<form class="siri-form" hidden><input autocomplete="off" enterkeyhint="send" placeholder="Escribe o dicta con el 🎤 del teclado"><button aria-label="Enviar">➤</button></form>' +
     '<div class="siri-status"></div>' +
     '<button type="button" class="siri-wake" data-swake></button>' +
-    '<button type="button" class="siri-wake" data-strain></button>' +
-    '<div class="siri-heard"></div>' +
-    '<button type="button" class="siri-retry" data-sretry>🎙️ Usar el micro de la app</button>' +
     '<div class="siri-bottom"><button type="button" class="siri-kb" data-skb aria-label="Escribir">⌨️</button>' +
     '<button type="button" class="siri-orb" data-sorb aria-label="Hablar"><i></i><i></i><i></i><span class="siri-wave" aria-hidden="true">' + '<b></b>'.repeat(9) + '</span></button>' +
     '<button type="button" class="siri-kb siri-stop" data-sstop aria-label="Parar">⏹</button></div>';
@@ -665,18 +666,6 @@ export function openAssistant(cmd) {
   const wakeBtn = root.querySelector('[data-swake]');
   const paintWake = () => { wakeBtn.textContent = wakeEnabled() ? '👂 «Oye Rutivo» activado' : '👂 Activar «Oye Rutivo»'; wakeBtn.classList.toggle('on', wakeEnabled()); };
   paintWake();
-  const trainBtn = root.querySelector('[data-strain]');
-  const paintTrain = () => {
-    trainBtn.textContent = wakeModel() ? '🎯 «Oye Rutivo» con tu voz ✓ · Volver a entrenar' : '🎯 Entrena «Oye Rutivo» con tu voz (contesta en 1 s)';
-    trainBtn.classList.toggle('on', !!wakeModel());
-  };
-  paintTrain();
-  // Lo último que oyó «Oye Rutivo» fuera de esta pantalla (para saber qué entiende si no responde)
-  const heardTexts = wakeLog().filter((h) => h.text).slice(-3).map((h) => '«' + h.text.trim().slice(0, 60) + '»');
-  const st = wakeStats();
-  const num = (v) => (v == null || !Number.isFinite(v) ? '—' : v.toFixed(2).replace('.', ','));
-  root.querySelector('.siri-heard').textContent = (heardTexts.length ? '👂 Lo último que oí fuera: ' + heardTexts.join(' · ') : '') +
-    (st ? (heardTexts.length ? '\n' : '') + '🎯 Detector: lo más parecido hace poco ' + num(st.last) + ' · contesta si baja de ' + num(st.thr) + (st.ok != null ? ' · tu prueba ' + num(st.ok) : '') : '');
   root.addEventListener('click', (e) => {
     const el = e.target.closest('button');
     if (!el) return;
@@ -686,30 +675,10 @@ export function openAssistant(cmd) {
       paintWake();
       return setState('idle', wakeEnabled() ? 'Listo: con la app abierta, di «Oye Rutivo» y te escucho.' : '«Oye Rutivo» desactivado. Toca el icono para hablar.');
     }
-    if (el.matches('[data-strain]')) {
-      if (trainBtn.disabled) return;
-      stopListening();
-      convo = false;
-      trainBtn.disabled = true;
-      const say = ['', 'otra vez', 'una última vez'];
-      trainWake((i, st) => {
-        if (!ui) return;
-        if (st === 'escucha') setState('listening', '🎯 Di «Oye Rutivo» ' + (say[i] || '') + ' (' + (i + 1) + ' de 3)');
-        else if (st === 'prueba') setState('listening', '🎯 Ahora dilo una vez más, para comprobar cómo te oye este móvil');
-        else if (st === 'otra') setState('idle', '🤔 No te he oído bien. Dilo otra vez, normal, como lo dirías en el coche.');
-        else if (i <= 3) setState('idle', '✔ ' + i + ' de 3');
-      }).then((ok) => {
-        trainBtn.disabled = false;
-        paintTrain();
-        if (ui) setState('idle', ok ? '✅ Listo. Con la app abierta, di «Oye Rutivo» y te contesto al momento.' : 'No se pudo entrenar. Prueba otra vez en un sitio con menos ruido.');
-      }, () => { trainBtn.disabled = false; if (ui) setState('idle', 'No se pudo usar el micro. Toca otra vez.'); });
-      return;
-    }
     if (el.matches('[data-sstop]')) return stopAll();
     if (el.matches('[data-sclear]')) { history.length = 0; ctx = {}; paint(); return setState('idle', 'Conversación borrada.'); }
     if (el.matches('[data-svoz]')) { writeFlag(VOICE_KEY, voiceOn() ? '0' : '1'); paintVoz(); try { speechSynthesis.cancel(); } catch { /* */ } return setState('idle'); }
     if (el.matches('[data-sorb]')) return listen(); // escuchar; si ya escucha, «he terminado»; si habla, se calla y te escucha
-    if (el.matches('[data-sretry]')) { writeFlag(DICT_KEY, '0'); root.classList.remove('dict'); ui.form.hidden = true; return listen(); }
     if (el.matches('[data-asyes]')) { unlockVoice(); return handle('sí'); }
     if (el.matches('[data-asno]')) { unlockVoice(); return handle('no'); }
     if (el.matches('[data-skb]')) { if (ui.form.hidden) showKeyboard(); else ui.form.hidden = true; return; }
@@ -733,13 +702,12 @@ export function openAssistant(cmd) {
   // El dictado del teclado va escribiendo; cuando deja de escribir 1,8 s, se envía solo
   ui.input.addEventListener('input', (e) => {
     clearTimeout(autoSend);
-    if (!dictation() || !ui.input.value.trim()) return;
+    if (!ui.input.value.trim()) return;
     if (e.inputType === 'insertText' && e.data && e.data.length === 1) return; // tecleando a mano: espera a «Enviar»
     setState('idle', '✍️ ' + ui.input.value.trim().slice(-60));
     autoSend = setTimeout(send, 1800);
   });
   ui.input.addEventListener('focus', unlockVoice);
-  if (!useEar() && dictation()) root.classList.add('dict');
   paint();
   setState('idle');
   if (fromWake && cmd) { convo = true; handle(cmd); } // «Oye Rutivo, apúntame…»: la orden directamente
