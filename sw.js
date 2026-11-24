@@ -19,6 +19,7 @@ const FILES = [
   './manifest.webmanifest',
   './icon-192.png',
   './icon-512.png',
+  './rutivo-icon.svg',
   './css/styles.css',
   './fonts/manrope-latin.woff2',
   './fonts/manrope-latin-ext.woff2',
