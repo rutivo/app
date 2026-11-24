@@ -331,16 +331,22 @@ export function createMic({ deafMs = 1500, maxMs = 15000, silenceMs = 1100, shor
           // No basta con comprobar si alguna vez llegó sonido: hay que vigilar la pista AHORA.
           const track = stream && stream.getAudioTracks()[0];
           const trackEnded = !track || track.readyState !== 'live';
-          // iOS silencia temporalmente la pista al cambiar de app. Si sigue viva,
-          // NO cierres el stream ni vuelvas a pedir permiso: espera a que se reactive.
-          if (track && track.readyState === 'live' && track.muted) return;
-          const broken = trackEnded || !ctx || ctx.state === 'closed' || ctx.state === 'interrupted' || (ctx.state !== 'running' && now - s.started >= deafMs);
+          // iOS puede silenciar temporalmente una pista. Damos un margen para
+          // que se reactive; si permanece muda más de deafMs, la sustituimos.
+          if (track && track.readyState === 'live' && track.muted) {
+            if (!s.mutedSince) s.mutedSince = now;
+            if (now - s.mutedSince < deafMs) return;
+          } else {
+            s.mutedSince = 0;
+          }
+          const mutedTooLong = !!(track && track.readyState === 'live' && track.muted && s.mutedSince && now - s.mutedSince >= deafMs);
+          const broken = trackEnded || mutedTooLong || !ctx || ctx.state === 'closed' || ctx.state === 'interrupted' || (ctx.state !== 'running' && now - s.started >= deafMs);
           if (!broken && (s.sound || now - s.started < deafMs)) return;
           if (s.retried) return finish(false, new DeafMicError());
           s.busy = true;
           s.retried = true;
           teardown();
-          needFresh = trackEnded;
+          needFresh = trackEnded || mutedTooLong;
           try {
             await wake();
           } catch (err) {
