@@ -85,6 +85,10 @@ export function createVad({ chunkMs, silenceMs = 1100, maxMs = 15000, waitMs = 7
 let shared = null;
 let users = 0;
 let pending = null;
+// Safari/iOS no siempre permite consultar el permiso con Permissions API.
+// Guardamos que ya hubo una concesión real para poder reanudar sin pedirlo
+// de nuevo al abrir la PWA (el permiso sigue siendo decisión de iOS).
+const MIC_GRANTED_KEY = 'rutivoMicGranted';
 
 // «Vivo» = funcionando de verdad: en iPhone el sistema puede dejarlo abierto pero silenciado (muted)
 const live = (s) => !!s && s.getAudioTracks().some((t) => t.readyState === 'live' && !t.muted);
@@ -124,6 +128,8 @@ export async function acquireStream(fresh = false) {
       pending = navigator.mediaDevices.getUserMedia({ audio: micConstraints() }).finally(() => { pending = null; });
     }
     shared = await pending;
+    // Solo se marca después de que getUserMedia haya concedido el acceso.
+    try { localStorage.setItem(MIC_GRANTED_KEY, '1'); } catch { /* almacenamiento no disponible */ }
     return shared;
   } catch (err) {
     users--;
