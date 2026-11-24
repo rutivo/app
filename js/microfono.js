@@ -91,7 +91,8 @@ let pending = null;
 const MIC_GRANTED_KEY = 'rutivoMicGranted';
 
 // «Vivo» = funcionando de verdad: en iPhone el sistema puede dejarlo abierto pero silenciado (muted)
-const live = (s) => !!s && s.getAudioTracks().some((t) => t.readyState === 'live');
+const hasLiveTrack = (s) => !!s && s.getAudioTracks().some((t) => t.readyState === 'live');
+const live = (s) => !!s && s.getAudioTracks().some((t) => t.readyState === 'live' && !t.muted);
 const stopShared = () => { if (shared) { shared.getTracks().forEach((t) => t.stop()); shared = null; } };
 
 /** Cierra el micro compartido cuando se cambia al dictado nativo del teclado. */
@@ -126,7 +127,7 @@ export async function acquireStream(fresh = false) {
   playAndRecord();
   try {
     if (fresh) stopShared();
-    if (live(shared)) return shared;
+    if (hasLiveTrack(shared)) return shared;
     if (!pending) {
       pending = navigator.mediaDevices.getUserMedia({ audio: micConstraints() }).finally(() => { pending = null; });
     }
