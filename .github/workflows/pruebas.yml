@@ -78,3 +78,5 @@ jobs:
       - run: npm run test:e2e
         env:
           TZ: Europe/Madrid
+
+# Reejecución de validación completa para Rutivo Voice.
