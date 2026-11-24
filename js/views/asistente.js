@@ -520,6 +520,10 @@ function micHelp(error) {
 }
 
 function showKeyboard(hint) {
+  // Al pasar a escribir, detener la escucha activa sin cerrar la pista compartida:
+  // evita que Rutivo siga grabando detrás del teclado y conserva el permiso concedido.
+  convo = false;
+  if (mic) mic.cancel();
   ui.form.hidden = false;
   setState('idle', hint || LABELS.idle);
   ui.input.focus(); // dentro del toque: el iPhone abre el teclado
