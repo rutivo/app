@@ -91,11 +91,16 @@ export async function transcribe() { return (self.__guion || []).shift() || ''; 
     await page.click('#asisbtn');
     // Abrir el asistente inicia su micrófono; medimos después de esa acción
     // para comprobar que el botón de teclado, por sí solo, no pide otro permiso.
-    const beforeKeyboard = await page.evaluate(() => self.__pedidos);
-    await page.click('[data-skb]');
-    const keyboard = await page.evaluate(() => ({ visible: !document.querySelector('.siri-form').hidden, requests: self.__pedidos }));
+    // Medir dentro del mismo turno síncrono del clic: al reabrir el asistente
+    // puede haber reintentos asíncronos de escucha ya programados. No deben
+    // atribuirse al botón de teclado, que solo cancela la escucha activa.
+    const keyboard = await page.evaluate(() => {
+      const before = self.__pedidos;
+      document.querySelector('[data-skb]').click();
+      return { visible: !document.querySelector('.siri-form').hidden, before, requests: self.__pedidos };
+    });
     ok('6 · el teclado sigue disponible cuando el usuario lo pide expresamente', keyboard.visible, JSON.stringify(keyboard));
-    ok('7 · abrir el teclado no vuelve a solicitar el permiso del micrófono', keyboard.requests === beforeKeyboard, 'peticiones: ' + keyboard.requests);
+    ok('7 · abrir el teclado no vuelve a solicitar el permiso del micrófono', keyboard.requests === keyboard.before, 'antes: ' + keyboard.before + ', después: ' + keyboard.requests);
     await ctx.close();
   } finally {
     await browser.close();
