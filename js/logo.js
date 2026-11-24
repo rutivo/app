@@ -108,22 +108,3 @@ export function logoSvg(width, ink) {
     '</g></svg>'
   );
 }
-
-
-/** Marca principal de Rutivo: más visible y diferenciada del logo personal del conductor. */
-export function rutivoLogoSvg(width = 190, ink = 'var(--ink)') {
-  return (
-    '<svg class="rutivo-brand-mark" viewBox="0 0 330 92" width="' + width + '" role="img" aria-label="Rutivo">' +
-    '<defs>' +
-    '<linearGradient id="rutivoBrandGradient" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#3988ff"/><stop offset="1" stop-color="#123da8"/></linearGradient>' +
-    '<linearGradient id="rutivoBrandShine" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".9"/><stop offset="1" stop-color="#fff" stop-opacity=".12"/></linearGradient>' +
-    '</defs>' +
-    '<circle cx="46" cy="46" r="42" fill="url(#rutivoBrandGradient)"/>' +
-    '<circle cx="46" cy="46" r="38" fill="none" stroke="url(#rutivoBrandShine)" stroke-width="1.8"/>' +
-    '<path d="M27 66V25h22c13 0 20 6 20 17 0 8-4 13-11 15l13 9H54L43 57h-5v9zm11-19h10c6 0 9-2 9-6s-3-6-9-6H38z" fill="#fff"/>' +
-    '<path d="M68 19l3-7 3 7 7 3-7 3-3 7-3-7-7-3z" fill="#8ee7ff"/>' +
-    '<text x="101" y="55" font-family="Manrope,Arial,sans-serif" font-size="39" font-weight="900" letter-spacing="1.2" fill="' + ink + '">RUTIVO</text>' +
-    '<text x="103" y="76" font-family="Manrope,Arial,sans-serif" font-size="10" font-weight="700" letter-spacing="3.1" fill="#3988ff">TU NEGOCIO EN MARCHA</text>' +
-    '</svg>'
-  );
-}
