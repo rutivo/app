@@ -208,8 +208,8 @@ export async function handsFree(first = '') {
   let handed = false; // pasa a la pantalla del asistente (que gestiona el micro)
   try {
     if (!text) {
-      show('👂 Dime, ¿en qué puedo ayudarte?', 'speaking');
-      await say('Dime, ¿en qué puedo ayudarte?');
+      show('👋 Hola, ¿en qué puedo ayudarte?', 'speaking');
+      await say('Hola, ¿en qué puedo ayudarte?');
     }
     for (let turn = 0; turn < 5 && !cancelled; turn++) {
       if (!text) {
