@@ -5,7 +5,7 @@ import { ask, trimChatter, weatherText } from '../asistente.js';
 import { bottomSheet, readFlag, writeFlag } from '../dom.js';
 import { cachedStatus, etaLine, openFlight } from '../flight.js';
 import { initWake, pauseWake, resumeWake, trainWake, wakeEnabled, wakeLog, wakeModel, wakeStats } from '../despertar.js';
-import { audioNeedsReset, audioRunning, createMic, markAudioBroken, resetAudio } from '../microfono.js';
+import { audioNeedsReset, audioRunning, createMic, markAudioBroken, resetAudio, stopSharedMic } from '../microfono.js';
 import { currentPosition } from '../ruta.js';
 import { cancelHandsFree, handsFree, initHandsFree } from './manosLibres.js';
 import { leavePlanOf, scheduleReminders } from '../reminders.js';
@@ -519,6 +519,12 @@ function showKeyboard(hint) {
 
 /** Pasar al dictado del teclado (y recordarlo en este móvil). */
 function useDictation(why) {
+  // Libera el micrófono web antes de abrir el dictado de iOS; si queda abierto,
+  // el teclado puede no conseguir tomar el micro.
+  if (mic) { mic.close(); mic = null; }
+  stopSharedMic();
+  earBusy = false;
+  convo = false;
   writeFlag(DICT_KEY, '1');
   if (ui) ui.root.classList.add('dict');
   showKeyboard(why || 'Toca el 🎤 del teclado y habla. Se envía solo cuando terminas.');

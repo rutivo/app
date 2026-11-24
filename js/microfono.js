@@ -94,6 +94,9 @@ const MIC_GRANTED_KEY = 'rutivoMicGranted';
 const live = (s) => !!s && s.getAudioTracks().some((t) => t.readyState === 'live' && !t.muted);
 const stopShared = () => { if (shared) { shared.getTracks().forEach((t) => t.stop()); shared = null; } };
 
+/** Cierra el micro compartido cuando se cambia al dictado nativo del teclado. */
+export function stopSharedMic() { stopShared(); users = 0; }
+
 
 /**
  * iPhone (Safari 17+): micro y altavoz a la vez. Sin esto, cuando Rutivo habla
