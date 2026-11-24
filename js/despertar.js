@@ -408,18 +408,34 @@ export async function initWake(wake, stateChanged = () => {}, progress = () => {
   onState = stateChanged;
   onProgress = progress;
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') startWake();
-    else if (mic) { mic.cancel(); mic.close(); mic = null; } // en segundo plano el sistema lo corta igual
+    if (document.visibilityState === 'visible') {
+      // Al volver de segundo plano, primero dejamos que termine la escucha
+      // anterior: iOS a veces tarda en liberar el micrófono.
+      setTimeout(startWake, 700);
+    } else if (mic) {
+      mic.cancel(); mic.close(); mic = null; // iOS corta la captura al suspender la PWA
+    }
+  });
+  // Safari puede restaurar la PWA desde memoria (bfcache) sin un cambio de
+  // visibilidad fiable. pageshow cubre ese regreso y evita quedarse desconectado.
+  window.addEventListener('pageshow', () => {
+    if (document.visibilityState === 'visible') setTimeout(startWake, 700);
   });
   // Cualquier toque en la app sirve para (re)activar el micro si hace falta (iPhone lo exige)
   document.addEventListener('pointerdown', () => { if (state === 'tap' || state === 'off') startWake(); }, { passive: true });
   if (!wakeEnabled() || !earSupported()) return setState('off');
-  // Al abrir la app solo arranca solo si el permiso del micro ya está dado (sin preguntas por sorpresa)
+  // Al abrir la app solo arranca si el permiso está concedido o Rutivo ya lo
+  // obtuvo antes. Safari puede devolver 'prompt' aunque la PWA tenga permiso.
+  let grantedBefore = false;
+  try { grantedBefore = localStorage.getItem('rutivoMicGranted') === '1'; } catch { /* nada */ }
   try {
     const p = await navigator.permissions.query({ name: 'microphone' });
-    if (p.state === 'granted') startWake();
-    else setState('tap');
+    if (p.state === 'granted' || (p.state === 'prompt' && grantedBefore)) startWake();
+    else setState('tap'); // 'denied' siempre respeta lo elegido en Ajustes
   } catch {
-    setState('tap');
+    // En Safari/iOS Permissions API puede no existir o rechazar la consulta.
+    // getUserMedia seguirá respetando cualquier revocación hecha en Ajustes.
+    if (grantedBefore) startWake();
+    else setState('tap');
   }
 }
