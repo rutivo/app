@@ -126,7 +126,9 @@ async function openAssistant(page) {
     }, null, { timeout: 5000 });
     const st1 = await page.evaluate(() => document.querySelector('.siri').dataset.state);
     const before = await page.evaluate(() => self.__callado);
-    await page.locator('[data-sstop]').click();
+    // Activar el botón en el mismo tick en que se comprueba visible evita una carrera del locator
+    // con el temporizador de voz simulado; sigue ejecutando el listener real del botón.
+    await page.evaluate(() => document.querySelector('[data-sstop]')?.click());
     await page.waitForTimeout(200);
     const st2 = await page.evaluate(() => [document.querySelector('.siri').dataset.state, self.__callado]);
     ok('15 · mientras responde se ve «Parar» y al tocarlo se calla', st1 === 'speaking' && st2[0] === 'idle' && st2[1] > before, st1 + ' → ' + st2.join(','));
