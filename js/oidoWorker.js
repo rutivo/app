@@ -37,6 +37,20 @@ async function load(src, size) {
         if (p.status === 'progress') self.postMessage({ type: 'progress', model: name, file: p.file, loaded: p.loaded, total: p.total });
       },
     });
+    // Calienta el motor WASM mientras el usuario termina de hablar. Así la primera
+    // orden no paga además el coste de inicializar el decodificador.
+    asr[name] = asr[name].then(async (p) => {
+      if (!asr[name].warmed) {
+        try {
+          await p(new Float32Array(16000), {
+            language: 'spanish', task: 'transcribe', chunk_length_s: 30,
+            num_beams: 1, max_new_tokens: 8,
+          });
+        } catch { /* el calentamiento no debe impedir el reconocimiento real */ }
+        asr[name].warmed = true;
+      }
+      return p;
+    });
     // Si no se pudo cargar (sin red, sin memoria…), se olvida para poder reintentar
     asr[name].catch(() => { delete asr[name]; });
   }
