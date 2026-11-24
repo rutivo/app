@@ -346,7 +346,7 @@ export function createMic({ deafMs = 1500, maxMs = 15000, silenceMs = 1100, shor
           s.busy = true;
           s.retried = true;
           teardown();
-          needFresh = trackEnded || mutedTooLong;
+          needFresh = trackEnded || mutedTooLong || !s.sound;
           try {
             await wake();
           } catch (err) {
