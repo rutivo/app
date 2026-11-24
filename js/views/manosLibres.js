@@ -27,44 +27,74 @@ let last = null; // último apunte hecho a manos libres (para «no, eran 45», �
 // ---------- voz ----------
 
 let unlocked = false;
-/** En iPhone la voz solo funciona si antes hubo un toque: el primer toque en la app la desbloquea. */
-function unlockVoice() {
-  if (unlocked || !window.speechSynthesis) return;
-  try {
-    const u = new SpeechSynthesisUtterance(' ');
-    u.volume = 0;
-    speechSynthesis.speak(u);
-    unlocked = true;
-  } catch {
-    /* sin voz */
-  }
+let voiceWarmup = null;
+let spanishVoice = null;
+
+/** Guarda la voz española en cuanto iOS/Safari la pone disponible. */
+function refreshVoice() {
+  if (!window.speechSynthesis) return null;
+  const all = speechSynthesis.getVoices();
+  const es = all.filter((v) => /^es/i.test(v.lang));
+  spanishVoice = es.find((v) => /es[-_]ES/i.test(v.lang) && /(Mónica|Monica|Marisol|Google|premium|enhanced|mejorad)/i.test(v.name)) ||
+    es.find((v) => /es[-_]ES/i.test(v.lang)) || es[0] || null;
+  return spanishVoice;
 }
 
-function pickVoice() {
-  const all = window.speechSynthesis ? speechSynthesis.getVoices() : [];
-  const es = all.filter((v) => /^es/i.test(v.lang));
-  return es.find((v) => /es[-_]ES/i.test(v.lang) && /(Mónica|Monica|Marisol|Google|premium|enhanced|mejorad)/i.test(v.name)) ||
-    es.find((v) => /es[-_]ES/i.test(v.lang)) || es[0] || null;
+/** En iPhone la voz solo funciona tras un toque. Aprovechamos ese toque para
+ * inicializar el sintetizador y cargar la lista de voces antes de que Rutivo responda. */
+function unlockVoice() {
+  if (!window.speechSynthesis) return;
+  refreshVoice();
+  if (unlocked) {
+    try { speechSynthesis.resume(); } catch { /* Safari */ }
+    return;
+  }
+  unlocked = true;
+  voiceWarmup = new Promise((resolve) => {
+    let settled = false;
+    const finish = () => { if (settled) return; settled = true; refreshVoice(); resolve(); };
+    try {
+      const u = new SpeechSynthesisUtterance(' ');
+      u.lang = 'es-ES';
+      u.volume = 0;
+      u.onend = finish;
+      u.onerror = finish;
+      speechSynthesis.speak(u);
+      speechSynthesis.resume();
+      // Algunos Safari no notifican onend para una frase silenciosa.
+      setTimeout(finish, 650);
+    } catch {
+      finish();
+    }
+  });
+}
+
+if (window.speechSynthesis && speechSynthesis.addEventListener) {
+  speechSynthesis.addEventListener('voiceschanged', refreshVoice);
 }
 
 /** Dice el texto y espera a que termine (nunca se queda colgado). */
-function say(text) {
+async function say(text) {
+  if (!text || readFlag(VOICE_KEY) === '0' || !window.speechSynthesis) return;
+  // El toque inicial ya habrá calentado el motor: no cargar la voz al recibir la primera orden.
+  if (!unlocked) unlockVoice();
+  if (voiceWarmup) await voiceWarmup;
   return new Promise((resolve) => {
-    if (!text || readFlag(VOICE_KEY) === '0' || !window.speechSynthesis) return resolve();
     let done = false;
     let guard;
     const finish = () => { if (done) return; done = true; clearTimeout(guard); setTimeout(resolve, 250); }; // pausa: que el micro no se oiga a sí mismo
     try {
-      speechSynthesis.cancel();
+      if (speechSynthesis.speaking || speechSynthesis.pending) speechSynthesis.cancel();
+      speechSynthesis.resume();
       const u = new SpeechSynthesisUtterance(text);
       u.lang = 'es-ES';
-      const v = pickVoice();
+      const v = spanishVoice || refreshVoice();
       if (v) u.voice = v;
       u.rate = 1.03;
       u.volume = 1; // siempre a tope (el volumen real lo pone el botón del móvil)
       u.onend = finish;
       u.onerror = finish;
-      guard = setTimeout(() => { if (!speechSynthesis.speaking) finish(); }, 1500);
+      guard = setTimeout(() => { if (!speechSynthesis.speaking && !speechSynthesis.pending) finish(); }, 2200);
       u.onstart = () => { clearTimeout(guard); guard = setTimeout(finish, Math.min(20000, 2500 + text.length * 90)); };
       speechSynthesis.speak(u);
     } catch {
