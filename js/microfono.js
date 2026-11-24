@@ -186,7 +186,11 @@ export const markAudioBroken = () => { needReset = true; };
  */
 export function resetAudio() {
   needReset = false;
-  stopShared();
+  // Una interrupción de iOS no significa que haya que pedir permiso otra vez.
+  // Conserva la pista concedida si sigue viva (aunque esté muted temporalmente)
+  // y reconstruye solo el AudioContext. Solo descarta la pista si iOS la terminó.
+  const track = shared && shared.getAudioTracks()[0];
+  if (!track || track.readyState !== 'live') stopShared();
   try { if (sharedCtx && sharedCtx.state !== 'closed') sharedCtx.close(); } catch { /* ya cerrado */ }
   sharedCtx = null;
   return audioCtx();
