@@ -103,6 +103,16 @@ test('órdenes: apuntar carreras y gastos (lo de la hucha no se apunta como otra
   assert.deepEqual(g.action.item, { f: '2026-11-19', t: 'out', p: 'tarjeta', i: 50, c: 'Gasolina' });
 });
 
+test('si el usuario no necesita nada, Rutivo se despide con la frase de activación', () => {
+  const r = ask('nada', state, NOW);
+  assert.match(r.text, /¡Ah, genial! Si me necesitas, recuerda: solo tienes que decir «Oye Rutivo» y te atenderé\./);
+  assert.match(r.speech, /solo tienes que decir Oye Rutivo y te atenderé/);
+  assert.deepEqual(r.ctx, {});
+  for (const phrase of ['no necesito nada', 'no gracias', 'por ahora nada', 'de momento nada']) {
+    assert.match(ask(phrase, state, NOW).text, /¡Ah, genial!/);
+  }
+});
+
 test('si no entiende, lo dice y da ejemplos', () => {
   assert.match(ask('dame la receta de la paella', state, NOW).text, /No te he entendido/);
 });
