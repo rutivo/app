@@ -1175,6 +1175,11 @@ export function ask(input, state, now = new Date(), helpers = {}, ctx = {}) {
   // Solo «Oye Rutivo»: contesta como al llamarle desde la pantalla principal
   if (!t && /\b(rutivo|rutibo|ruti|rutivos)\b/.test(normalize(input))) return { ...reply('👂 Dime, ¿en qué puedo ayudarte?', 'Dime, ¿en qué puedo ayudarte?'), ctx };
   if (!t) return { ...reply('Te escucho. Pregúntame, por ejemplo: «¿Cuánto llevo hoy?»'), ctx };
+  // Cierre amable cuando el usuario responde que no necesita nada.
+  if (/^(nada|nada gracias|no necesito nada|no necesito nada mas|no gracias|por ahora nada|de momento nada|eso es todo)$/.test(t)) {
+    const text = '¡Ah, genial! Si me necesitas, recuerda: solo tienes que decir «Oye Rutivo» y te atenderé.';
+    return { ...reply(text, '¡Ah, genial! Si me necesitas, recuerda: solo tienes que decir Oye Rutivo y te atenderé.'), ctx: {} };
+  }
   let hello = '';
   // "Hola, apunta 50 euros": saludar y seguir con la orden
   const g = GREET.test(t) ? null : t.match(/^(buenos dias|buenas tardes|buenas noches|hola|buenas)\s+(.{6,})$/);
