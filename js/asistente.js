@@ -319,7 +319,7 @@ const NOT_CONCEPT = [
   /\b\d+(\.\d+)?\s*(euros?\s*)?(en|con|por)\s+(el |la )?(efectivo|metalico|tarjeta|datafono|visa|bizum|transferencia|tpv)\b/g,
   /\b(y )?(el resto|lo demas|lo otro)\b/g,
   /\b(la mitad( en cada uno| y la mitad)?|mitad y mitad|a medias|a partes iguales)\b/g,
-  /\b(anade|anademe|anadir|agrega|agregame|agregar|registra|registrame|registrar|incluye|incluyeme|apuntalo|anotalo|guardalo)\b/g,
+  /\b(anade|anademe|anadir|agrega|agregame|agregar|registra|registrame|registrar|contabiliza|contabilizar|incluye|incluyeme|apuntalo|anotalo|guardalo)\b/g,
   /\b(acabo de (cobrar|pagar|hacer)|me (han|ha) dejado|me dejaron|he hecho|nuevo|nueva|entrada|salida|ahorra|ahorrame)\b/g,
   /\b\d+(\.\d+)?\s*(litros?)\b/g,
   /\b(quiero|quisiera|necesito|puedes|podrias|me puedes) (que )?(me )?/g,
