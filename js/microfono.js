@@ -185,12 +185,14 @@ export const markAudioBroken = () => { needReset = true; };
  * otra vez en la misma sesión).
  */
 export function resetAudio() {
+  // Guardar el estado ANTES de limpiar el indicador: iOS puede dejar una pista
+  // aparentemente viva pero silenciada para siempre después de una llamada o
+  // notificación. En ese caso hay que renovar también el stream, no solo el
+  // AudioContext. Safari conserva el permiso del sitio al renovar la pista.
+  const interrupted = needReset || (!!sharedCtx && sharedCtx.state === 'interrupted');
   needReset = false;
-  // Una interrupción de iOS no significa que haya que pedir permiso otra vez.
-  // Conserva la pista concedida si sigue viva (aunque esté muted temporalmente)
-  // y reconstruye solo el AudioContext. Solo descarta la pista si iOS la terminó.
   const track = shared && shared.getAudioTracks()[0];
-  if (!track || track.readyState !== 'live') stopShared();
+  if (interrupted || !track || track.readyState !== 'live' || track.muted) stopShared();
   try { if (sharedCtx && sharedCtx.state !== 'closed') sharedCtx.close(); } catch { /* ya cerrado */ }
   sharedCtx = null;
   return audioCtx();
