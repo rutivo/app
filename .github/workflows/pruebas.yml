@@ -27,6 +27,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - name: Comprobar huella del service worker
+        run: npm run version
       - run: npm test
 
   librerias:
