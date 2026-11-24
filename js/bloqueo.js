@@ -237,12 +237,24 @@ function unlock() {
 export function initLock(h = {}) {
   hooks = { ...hooks, ...h };
   if (lockEnabled()) lockNow();
+  let immediateTimer = null;
   document.addEventListener('visibilitychange', () => {
     if (!lockEnabled()) return;
     if (document.visibilityState === 'hidden') {
       hiddenAt = Date.now();
-      if ((lockSettings().mins || 0) === 0) lockNow(); // «al momento»: tapado ya (tampoco se ve en la multitarea)
-    } else if (hiddenAt && Date.now() - hiddenAt >= (lockSettings().mins || 0) * 60e3) lockNow();
+      clearTimeout(immediateTimer);
+      if ((lockSettings().mins || 0) === 0) {
+        // iOS puede ocultar brevemente la PWA al mostrar Face ID o un permiso del sistema.
+        // Espera un margen y bloquea solo si sigue en segundo plano.
+        immediateTimer = setTimeout(() => {
+          if (document.visibilityState === 'hidden' && lockEnabled() && (lockSettings().mins || 0) === 0) lockNow();
+        }, 5000);
+      }
+    } else {
+      clearTimeout(immediateTimer);
+      if (hiddenAt && Date.now() - hiddenAt >= (lockSettings().mins || 0) * 60e3) lockNow();
+      hiddenAt = 0;
+    }
   });
 }
 

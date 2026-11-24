@@ -9,6 +9,7 @@ import { clearSyncConflicts, connect, disconnectAndWipe, flush, hasUnsavedChange
 import { FIREBASE_CONFIG } from '../config.js';
 import { $, confirmTapTimed, toast } from '../dom.js';
 import { disablePush } from '../push.js';
+import { pauseWake, resumeWake } from '../despertar.js';
 
 /** Quita los avisos pendientes del servidor (llevan nombres de pasajeros). Sin esperar más de 4 s. */
 const dropAlerts = () => Promise.race([disablePush().catch(() => {}), new Promise((r) => setTimeout(r, 4000))]);
@@ -37,6 +38,7 @@ export const accountsEnabled = () => !!FIREBASE_CONFIG;
 let wall = null;
 
 function showWall({ offline = false } = {}) {
+  pauseWake();
   if (wall) return;
   const migrating = hasLocalData() && !localOwner();
   wall = document.createElement('div');
@@ -337,17 +339,20 @@ async function startFirebase() {
     await fb.watchSession((user) => {
       if (user) {
         hideWall();
+        resumeWake();
         const changed = !currentUser || currentUser.uid !== user.uid;
         currentUser = user;
         renderAccount();
         if (changed) connect(fb.userStore(user.uid), user.uid, rerenderAll);
       } else {
+        pauseWake();
         currentUser = null;
         renderAccount();
         showWall();
       }
     });
   } catch {
+    pauseWake();
     // No se pudo cargar Firebase (sin conexión). Si este móvil ya tenía una
     // cuenta, se sigue trabajando en local; si no, hace falta conexión.
     renderAccount();
