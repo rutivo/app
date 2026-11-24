@@ -88,8 +88,10 @@ export async function transcribe() { return (self.__guion || []).shift() || ''; 
     // El teclado es una alternativa manual: no debe abrirse automáticamente
     // ni pedir un segundo permiso de micro. El usuario lo abre con ⌨️.
     await page.click('.siri-x');
-    const beforeKeyboard = await page.evaluate(() => self.__pedidos);
     await page.click('#asisbtn');
+    // Abrir el asistente inicia su micrófono; medimos después de esa acción
+    // para comprobar que el botón de teclado, por sí solo, no pide otro permiso.
+    const beforeKeyboard = await page.evaluate(() => self.__pedidos);
     await page.click('[data-skb]');
     const keyboard = await page.evaluate(() => ({ visible: !document.querySelector('.siri-form').hidden, requests: self.__pedidos }));
     ok('6 · el teclado sigue disponible cuando el usuario lo pide expresamente', keyboard.visible, JSON.stringify(keyboard));
