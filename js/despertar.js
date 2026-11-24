@@ -408,8 +408,18 @@ export async function initWake(wake, stateChanged = () => {}, progress = () => {
   onState = stateChanged;
   onProgress = progress;
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') startWake();
-    else if (mic) { mic.cancel(); mic.close(); mic = null; } // en segundo plano el sistema lo corta igual
+    if (document.visibilityState === 'visible') {
+      // Al volver de segundo plano, primero dejamos que termine la escucha
+      // anterior: iOS a veces tarda en liberar el micrófono.
+      setTimeout(startWake, 700);
+    } else if (mic) {
+      mic.cancel(); mic.close(); mic = null; // iOS corta la captura al suspender la PWA
+    }
+  });
+  // Safari puede restaurar la PWA desde memoria (bfcache) sin un cambio de
+  // visibilidad fiable. pageshow cubre ese regreso y evita quedarse desconectado.
+  window.addEventListener('pageshow', () => {
+    if (document.visibilityState === 'visible') setTimeout(startWake, 700);
   });
   // Cualquier toque en la app sirve para (re)activar el micro si hace falta (iPhone lo exige)
   document.addEventListener('pointerdown', () => { if (state === 'tap' || state === 'off') startWake(); }, { passive: true });
@@ -420,6 +430,12 @@ export async function initWake(wake, stateChanged = () => {}, progress = () => {
     if (p.state === 'granted') startWake();
     else setState('tap');
   } catch {
-    setState('tap');
+    // En Safari/iOS Permissions API puede no existir o rechazar la consulta.
+    // Si Rutivo ya obtuvo el permiso anteriormente, intentamos reutilizarlo;
+    // getUserMedia seguirá respetando cualquier revocación hecha en Ajustes.
+    let grantedBefore = false;
+    try { grantedBefore = localStorage.getItem('rutivoMicGranted') === '1'; } catch { /* nada */ }
+    if (grantedBefore) startWake();
+    else setState('tap');
   }
 }
