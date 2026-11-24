@@ -115,16 +115,21 @@ async function openAssistant(page) {
 
     // ---------- 8. Parar mientras habla ----------
     await page.evaluate(() => { self.__largo = 1; });
-    await page.fill('.siri-form input', '¿Qué rentabilidad llevo este mes?');
+    // Consulta síncrona y breve: aislar la prueba del botón de cualquier cálculo asíncrono.
+    await page.fill('.siri-form input', '¿Cuánto tengo en efectivo?');
     await page.press('.siri-form input', 'Enter');
-    await page.waitForTimeout(300);
+    await page.waitForFunction(() => {
+      const root = document.querySelector('.siri');
+      const stop = document.querySelector('[data-sstop]');
+      return root?.dataset.state === 'speaking' && stop?.getClientRects().length > 0 &&
+        getComputedStyle(stop).visibility === 'visible';
+    }, null, { timeout: 5000 });
     const st1 = await page.evaluate(() => document.querySelector('.siri').dataset.state);
-    const stopVisible = await page.evaluate(() => getComputedStyle(document.querySelector('[data-sstop]')).visibility === 'visible');
     const before = await page.evaluate(() => self.__callado);
-    await page.click('[data-sstop]');
+    await page.locator('[data-sstop]').click();
     await page.waitForTimeout(200);
     const st2 = await page.evaluate(() => [document.querySelector('.siri').dataset.state, self.__callado]);
-    ok('15 · mientras responde se ve «Parar» y al tocarlo se calla', st1 === 'speaking' && stopVisible && st2[0] === 'idle' && st2[1] > before, st1 + ' → ' + st2.join(','));
+    ok('15 · mientras responde se ve «Parar» y al tocarlo se calla', st1 === 'speaking' && st2[0] === 'idle' && st2[1] > before, st1 + ' → ' + st2.join(','));
     await page.evaluate(() => { self.__largo = 0; });
 
     // ---------- 9. En tu cuenta, y en ninguna otra ----------
