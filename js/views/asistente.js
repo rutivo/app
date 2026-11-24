@@ -22,7 +22,7 @@ import { driverName } from '../welcome.js';
 
 const VOICE_KEY = 'asisVoz';
 // Al dar una orden se hacen pausas («apúntame… treinta… en efectivo»): no cortar antes de tiempo
-const COMMAND_MIC = { silenceMs: 850, shortMs: 350, follow: true };
+const COMMAND_MIC = { silenceMs: 700, shortMs: 250, follow: true };
 const SUGGEST = ['¿Cuánto llevo hoy?', '¿Cuál es mi próximo servicio?', '¿Qué tengo mañana?', '¿Qué tiempo hace?', '¿Quién me debe?', 'Apunta 50 € en efectivo', '¿Cuánto gané este mes?', '¿Qué puedo decirte?'];
 const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 const isIOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
