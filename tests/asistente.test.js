@@ -141,6 +141,7 @@ test('muchas formas de pedir que apunte', () => {
   assert.deepEqual(item('que me ingrese 50 € en efectivo'), { f: '2026-11-19', t: 'in', p: 'efectivo', i: 50, c: 'Carrera' });
   assert.deepEqual(item('Ingrésame cincuenta euros'), { f: '2026-11-19', t: 'in', p: 'efectivo', i: 50, c: 'Carrera' });
   assert.deepEqual(item('ponme 30 con tarjeta'), { f: '2026-11-19', t: 'in', p: 'tarjeta', i: 30, c: 'Carrera' });
+  assert.deepEqual(item('contabiliza 18 euros en efectivo'), { f: '2026-11-19', t: 'in', p: 'efectivo', i: 18, c: 'Carrera' });
   assert.deepEqual(item('me puedes apuntar 20 euros por favor'), { f: '2026-11-19', t: 'in', p: 'efectivo', i: 20, c: 'Carrera' });
   assert.deepEqual(item('me han pagado 95 por bizum'), { f: '2026-11-19', t: 'in', p: 'tarjeta', i: 95, c: 'Carrera' });
   assert.deepEqual(item('50 euros en efectivo'), { f: '2026-11-19', t: 'in', p: 'efectivo', i: 50, c: 'Carrera' });
