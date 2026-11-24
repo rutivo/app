@@ -108,7 +108,7 @@ test('si el usuario no necesita nada, Rutivo se despide con la frase de activaci
   assert.match(r.text, /¡Ah, genial! Si me necesitas, recuerda: solo tienes que decir «Oye Rutivo» y te atenderé\./);
   assert.match(r.speech, /solo tienes que decir Oye Rutivo y te atenderé/);
   assert.deepEqual(r.ctx, {});
-  for (const phrase of ['no necesito nada', 'no gracias', 'por ahora nada', 'de momento nada']) {
+  for (const phrase of ['no hace falta nada', 'no hace falta nada más', 'no me hace falta nada', 'no necesito nada', 'no gracias', 'por ahora nada', 'de momento nada']) {
     assert.match(ask(phrase, state, NOW).text, /¡Ah, genial!/);
   }
 });
