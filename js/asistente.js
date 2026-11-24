@@ -27,7 +27,7 @@ export function normalize(text) {
 }
 
 // Palabras que Rutivo conoce; con ruido, el dictado las cambia por otras parecidas.
-const VOCAB = ['apunta', 'apuntame', 'apuntar', 'anotame', 'ingresa', 'ingresame', 'ingresar', 'ponme', 'meteme', 'sumame',
+const VOCAB = ['apunta', 'apuntame', 'apuntar', 'anotame', 'ingresa', 'ingresame', 'ingresar', 'contabiliza', 'contabilizar', 'ponme', 'meteme', 'sumame',
   'euros', 'efectivo', 'tarjeta', 'datafono', 'bizum', 'transferencia', 'gasolina', 'gasoil', 'diesel', 'peaje', 'parking', 'propina',
   'lavado', 'taller', 'desayuno', 'hucha', 'resumen', 'kilometros', 'trimestre',
   'apuntado', 'anotado', 'ingresado', 'pagado', 'cobrado', 'gastado', 'apuntando', 'ingresos', 'tarjetas',
@@ -274,12 +274,12 @@ const reply = (text, speech, extra = {}) => ({ kind: 'answer', text, speech: spe
  *  {kind:'action', action:{list, item}, text, speech} (la vista lo guarda y permite deshacer).
  */
 // Verbos de "apuntar", con o sin pronombre: apúntame, ingrésame, ponme, mételo…
-const WRITE_VERB = /^(apunta|apuntar|anota|anotar|anade|anadir|pon|poner|mete|meter|registra|registrar|suma|sumar|guarda|guardar|ingresa|ingrese|ingresar|ingres|cobra|carga|cargar|agrega|agregar|incluye|incluir)(me|lo|la|le|melo|mela|selo)?( |$)/;
+const WRITE_VERB = /^(apunta|apuntar|anota|anotar|anade|anadir|contabiliza|contabilizar|pon|poner|mete|meter|registra|registrar|suma|sumar|guarda|guardar|ingresa|ingrese|ingresar|ingres|cobra|carga|cargar|agrega|agregar|incluye|incluir)(me|lo|la|le|melo|mela|selo)?( |$)/;
 const WRITE_PHRASE = /^(me han pagado|me pagaron|me ha pagado|me han dejado|me dejaron|he cobrado|cobre|cobrado|acabo de cobrar|acabo de hacer|he hecho (una carrera|un servicio|un viaje|un traslado)( de)?|he hecho|he gastado|gaste|he pagado|pague|acabo de pagar|he echado|eche|he puesto|he repostado|reposte|repostado|ahorra|ahorrame)( |$)/;
 const QUESTION = /^(cuanto|cuantos|cuantas|cuando|que|quien|quienes|como|cual|cuales|donde|dime|sabes|resumen|dame)( |$)/;
 
 /** ¿Es una orden de apuntar dinero? */
-const WRITE_ANY = /\b(apunt|anot|ingres|registr|anad|agreg)[a-z]*\b|\b(ponme|pon|meteme|mete|sumame|guardame|cobra|cobrado|cobre|pagado|pague|gaste|gastado|echado|eche|reposte|repostado)\b|\bcomo (ingreso|gasto)\b/;
+const WRITE_ANY = /\b(apunt|anot|ingres|registr|anad|agreg|contabiliz)[a-z]*\b|\b(ponme|pon|meteme|mete|sumame|guardame|cobra|cobrado|cobre|pagado|pague|gaste|gastado|echado|eche|reposte|repostado)\b|\bcomo (ingreso|gasto)\b/;
 
 const STATEMENT = /\b(efectivo|metalico|tarjeta|datafono|bizum|transferencia|visa|propina|peaje|parking|gasolina|gasoil|diesel|taller|lavado|seguro|carrera|servicio|traslado|viaje|transfer|cobro|entrada|salida|gasto|ingreso|euros|hucha)\b/;
 const ASKING = /\b(cuanto|cuanta|cuantos|cuantas|que tal|dime|muestrame|ensename|cual|cuales|resumen|llevo (de|en)|tengo)\b/;
