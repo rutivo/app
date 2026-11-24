@@ -82,6 +82,18 @@ export async function transcribe() { return (self.__guion || []).shift() || ''; 
     const status = await page.evaluate(() => document.querySelector('.siri-status').textContent);
     ok('4 · no sale «El micro no da sonido»', !/no da sonido/.test(status), status);
     ok('5 · sin errores', !errs.length, errs.join(' | '));
+    // Si el usuario activa el dictado alternativo, el siguiente toque no debe
+    // volver a abrir el micro web que falló. El botón permite probarlo de nuevo.
+    await page.click('.siri-x');
+    await page.evaluate(() => localStorage.setItem('asisDictado', '1'));
+    const beforeFallback = await page.evaluate(() => self.__pedidos);
+    await page.click('#asisbtn');
+    await page.waitForFunction(() => { const f = document.querySelector('.siri-form'); return !!f && !f.hidden; });
+    const fallback = await page.evaluate(() => ({ visible: !document.querySelector('.siri-form').hidden, retry: getComputedStyle(document.querySelector('[data-sretry]')).display !== 'none', requests: self.__pedidos }));
+    ok('6 · el dictado alternativo se mantiene y no vuelve a pedir el micro web', fallback.visible && fallback.retry && fallback.requests === beforeFallback, JSON.stringify(fallback));
+    await page.click('[data-sretry]');
+    await page.waitForFunction((n) => self.__pedidos > n, beforeFallback);
+    ok('7 · el botón permite volver a probar el micro de Rutivo', await page.evaluate(() => self.__pedidos > 0));
     await ctx.close();
   } finally {
     await browser.close();

@@ -72,61 +72,14 @@ function initTabs() {
   onClick('[data-gotab]', (el) => showView(el.dataset.gotab));
 }
 
-/** Icono provisional dibujado al vuelo (pestaña del navegador / atajo de inicio). */
+/** Icono Rutivo: mantiene sincronizados el icono de Safari y el de inicio. */
 function drawFavicon() {
-  try {
-    const c = document.createElement('canvas');
-    c.width = c.height = 192;
-    const x = c.getContext('2d');
-    const round = (ctx, px, py, w, h, r) => {
-      ctx.beginPath();
-      ctx.moveTo(px + r, py);
-      ctx.arcTo(px + w, py, px + w, py + h, r);
-      ctx.arcTo(px + w, py + h, px, py + h, r);
-      ctx.arcTo(px, py + h, px, py, r);
-      ctx.arcTo(px, py, px + w, py, r);
-      ctx.closePath();
-    };
-    const bg = x.createLinearGradient(18, 16, 174, 180);
-    bg.addColorStop(0, '#4b9aff');
-    bg.addColorStop(1, '#123a9b');
-    round(x, 5, 5, 182, 182, 43);
-    x.fillStyle = bg;
-    x.fill();
-    x.strokeStyle = 'rgba(255,255,255,.5)';
-    x.lineWidth = 3;
-    x.stroke();
-    x.fillStyle = 'rgba(255,255,255,.12)';
-    x.beginPath();
-    x.arc(96, 96, 72, 0, Math.PI * 2);
-    x.fill();
-    x.fillStyle = '#fff';
-    x.textAlign = 'center';
-    x.textBaseline = 'middle';
-    x.font = '900 112px Manrope,Arial,sans-serif';
-    x.fillText('R', 91, 103);
-    x.fillStyle = '#8ee7ff';
-    x.beginPath();
-    x.moveTo(145, 30);
-    x.lineTo(153, 48);
-    x.lineTo(171, 56);
-    x.lineTo(153, 64);
-    x.lineTo(145, 82);
-    x.lineTo(137, 64);
-    x.lineTo(119, 56);
-    x.lineTo(137, 48);
-    x.closePath();
-    x.fill();
-    const url = c.toDataURL('image/png');
-    for (const rel of ['apple-touch-icon', 'icon']) {
-      // Actualiza el enlace que ya existe en index.html: dejar el icono antiguo
-      // como primer apple-touch-icon hacía que iOS siguiera usando el PNG anterior.
-      let l = document.querySelector('link[rel="' + rel + '"]');
-      if (!l) { l = document.createElement('link'); l.rel = rel; document.head.appendChild(l); }
-      l.href = url;
-    }
-  } catch {
-    /* sin canvas */
+  const apple = new URL('../icon-192.png?v=4', import.meta.url).href;
+  const icon = new URL('../rutivo-icon.svg?v=4', import.meta.url).href;
+  for (const [rel, href] of [['apple-touch-icon', apple], ['icon', icon]]) {
+    let link = document.querySelector('link[rel="' + rel + '"]');
+    if (!link) { link = document.createElement('link'); link.rel = rel; document.head.appendChild(link); }
+    link.href = href;
   }
 }
 

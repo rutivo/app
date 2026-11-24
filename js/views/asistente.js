@@ -49,7 +49,7 @@ let earBusy = false;
 let convo = false; // conversación por voz: tras contestar, vuelve a escuchar solo
 // Modo dictado: si el micro de la app no capta nada en este móvil, se usa el 🎤 del teclado (siempre funciona)
 const DICT_KEY = 'asisDictado';
-// En iPhone, por defecto el dictado del teclado: tras hablar Rutivo, el micro web deja de oír (fallo de iOS)
+// Si el micro propio falla, se recuerda el dictado del teclado como alternativa estable.
 const dictation = () => !Recognition || readFlag(DICT_KEY) === '1';
 
 // ---------- voz que habla ----------
@@ -434,6 +434,7 @@ async function listenEar(auto = false) {
         }
         deafRetry = false;
         markAudioBroken();
+        if (isIOS) return useDictation('El micro de Rutivo se ha quedado bloqueado. Toca el 🎤 del teclado para hablar; puedes volver a probar el micro de la app.');
         return setState('idle', auto ? '👆 Toca la bola para seguir hablando' : 'El micro no da sonido. Toca la bola otra vez (si sigue, cierra y abre Rutivo).');
       }
       if (err && err.name === 'NotAllowedError') return showKeyboard('No tengo permiso para el micrófono. Ajustes → Safari → Micrófono → Permitir (o «Preguntar») y vuelve a tocar la bola. Mientras, usa el 🎤 del teclado.');
@@ -446,6 +447,7 @@ async function listenEar(auto = false) {
       earBusy = false;
       convo = false; // si en la conversación ya no dices nada, deja de escuchar
       if ((mic && mic.lastPeak < 0.0008) || !audioRunning()) markAudioBroken(); // silencio absoluto o audio parado (iPhone interrumpido): el próximo toque rehace el audio
+      if (isIOS) return useDictation('Rutivo no ha captado tu voz. Toca el 🎤 del teclado para hablar; si quieres, puedes volver a probar el micro de la app.');
       return setState('idle', auto ? LABELS.idle : 'No te he oído. Toca la bola y habla cerca del móvil.');
     }
     setState('thinking', earReady ? 'Entendiendo…' : '⬇️ Preparando el oído de Rutivo (solo la primera vez)…');
@@ -455,6 +457,7 @@ async function listenEar(auto = false) {
     if (!ui) return;
     if (stopped) return setState('idle', 'Parado. Toca la bola para hablar.');
     if (!text) {
+      if (isIOS) { emptyTries = 0; convo = false; return useDictation('No he podido entender la voz. Prueba con el 🎤 del teclado; puedes volver a probar el micro de la app.'); }
       // En plena conversación, una vez: lo vuelve a intentar solo (sin tener que tocar la bola)
       if ((auto || convo) && emptyTries < 1) {
         emptyTries++;
@@ -527,10 +530,10 @@ function listen() {
   // Tras una interrupción del iPhone (una notificación) o una escucha fallida: audio y micro de cero, dentro de este toque
   if (audioNeedsReset()) { resetAudio(); if (mic) { mic.close(); mic = null; } }
   try { speechSynthesis.cancel(); } catch { /* */ }
-  // Usar primero el micrófono propio de Rutivo también en iPhone. El dictado
-  // del teclado queda como alternativa manual o para navegadores sin reconocimiento.
+  // Si ya se activó el dictado alternativo, respetarlo: no volver a entrar en
+  // el micrófono que acaba de fallar (antes se reintentaba y quedaba en bucle).
+  if (dictation()) return useDictation('Toca el 🎤 del teclado y habla. Se envía solo cuando terminas.');
   if (useEar()) return listenEar();
-  if (dictation()) return showKeyboard('Toca el 🎤 del teclado y habla. Se envía solo cuando terminas.');
   // Tocar mientras escucha = parar. Si una escucha anterior se quedó colgada, se descarta y se empieza otra.
   if (rec && recLive && ui && ui.root.dataset.state === 'listening') { finishListening(); return; }
   stopListening();
