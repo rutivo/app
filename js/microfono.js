@@ -91,7 +91,7 @@ let pending = null;
 const MIC_GRANTED_KEY = 'rutivoMicGranted';
 
 // «Vivo» = funcionando de verdad: en iPhone el sistema puede dejarlo abierto pero silenciado (muted)
-const live = (s) => !!s && s.getAudioTracks().some((t) => t.readyState === 'live' && !t.muted);
+const live = (s) => !!s && s.getAudioTracks().some((t) => t.readyState === 'live');
 const stopShared = () => { if (shared) { shared.getTracks().forEach((t) => t.stop()); shared = null; } };
 
 /** Cierra el micro compartido cuando se cambia al dictado nativo del teclado. */
@@ -165,7 +165,10 @@ const watchCtx = (c) => { c.onstatechange = () => { if (c.state === 'interrupted
 export function audioCtx() {
   const AC = window.AudioContext || window.webkitAudioContext;
   playAndRecord();
-  if (!sharedCtx || sharedCtx.state === 'closed') { sharedCtx = new AC(); watchCtx(sharedCtx); }
+  if (!sharedCtx || sharedCtx.state === 'closed' || sharedCtx.state === 'interrupted') {
+    try { if (sharedCtx && sharedCtx.state !== 'closed') sharedCtx.close(); } catch { /* iOS puede haberlo cerrado */ }
+    sharedCtx = new AC(); watchCtx(sharedCtx);
+  }
   if (sharedCtx.state !== 'running') sharedCtx.resume().catch(() => {});
   return sharedCtx;
 }
@@ -273,7 +276,7 @@ export function createMic({ deafMs = 1500, maxMs = 15000, silenceMs = 1100, shor
   /** ¿Se ha quedado mudo? (pista parada o silenciada por el sistema, o audio interrumpido) */
   function stale() {
     const track = stream && stream.getAudioTracks()[0];
-    return !track || track.readyState === 'ended' || track.muted || !ctx || ctx.state === 'closed' || ctx.state === 'interrupted';
+    return !track || track.readyState === 'ended' || !ctx || ctx.state === 'closed' || ctx.state === 'interrupted';
   }
 
   async function wake() {
@@ -322,13 +325,17 @@ export function createMic({ deafMs = 1500, maxMs = 15000, silenceMs = 1100, shor
           // iOS puede dejar la pista abierta pero silenciarla tras un rato o una interrupción.
           // No basta con comprobar si alguna vez llegó sonido: hay que vigilar la pista AHORA.
           const track = stream && stream.getAudioTracks()[0];
-          const broken = !track || track.readyState !== 'live' || track.muted || !ctx || ctx.state === 'closed' || ctx.state === 'interrupted' || (ctx.state !== 'running' && now - s.started >= deafMs);
+          const trackEnded = !track || track.readyState !== 'live;
+          // iOS silencia temporalmente la pista al cambiar de app. Si sigue viva,
+          // NO cierres el stream ni vuelvas a pedir permiso: espera a que se reactive.
+          if (track && track.readyState === 'live' && track.muted) return;
+          const broken = trackEnded || !ctx || ctx.state === 'closed' || ctx.state === 'interrupted' || (ctx.state !== 'running' && now - s.started >= deafMs);
           if (!broken && (s.sound || now - s.started < deafMs)) return;
           if (s.retried) return finish(false, new DeafMicError());
           s.busy = true;
           s.retried = true;
           teardown();
-          needFresh = true;
+          needFresh = trackEnded;
           try {
             await wake();
           } catch (err) {
