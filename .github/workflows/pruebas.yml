@@ -11,7 +11,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: pruebas-${{ github.ref }}
@@ -27,14 +27,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: npm run version
-      - name: Guardar la huella actualizada
-        if: github.event_name == 'push'
-        run: |
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add sw.js
-          git diff --cached --quiet || (git commit -m 'Actualizar huella de caché' && git push origin HEAD:${GITHUB_REF_NAME})
       - run: npm test
 
   librerias:
