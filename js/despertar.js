@@ -424,17 +424,17 @@ export async function initWake(wake, stateChanged = () => {}, progress = () => {
   // Cualquier toque en la app sirve para (re)activar el micro si hace falta (iPhone lo exige)
   document.addEventListener('pointerdown', () => { if (state === 'tap' || state === 'off') startWake(); }, { passive: true });
   if (!wakeEnabled() || !earSupported()) return setState('off');
-  // Al abrir la app solo arranca solo si el permiso del micro ya está dado (sin preguntas por sorpresa)
+  // Al abrir la app solo arranca si el permiso está concedido o Rutivo ya lo
+  // obtuvo antes. Safari puede devolver 'prompt' aunque la PWA tenga permiso.
+  let grantedBefore = false;
+  try { grantedBefore = localStorage.getItem('rutivoMicGranted') === '1'; } catch { /* nada */ }
   try {
     const p = await navigator.permissions.query({ name: 'microphone' });
-    if (p.state === 'granted') startWake();
-    else setState('tap');
+    if (p.state === 'granted' || (p.state === 'prompt' && grantedBefore)) startWake();
+    else setState('tap'); // 'denied' siempre respeta lo elegido en Ajustes
   } catch {
     // En Safari/iOS Permissions API puede no existir o rechazar la consulta.
-    // Si Rutivo ya obtuvo el permiso anteriormente, intentamos reutilizarlo;
     // getUserMedia seguirá respetando cualquier revocación hecha en Ajustes.
-    let grantedBefore = false;
-    try { grantedBefore = localStorage.getItem('rutivoMicGranted') === '1'; } catch { /* nada */ }
     if (grantedBefore) startWake();
     else setState('tap');
   }
