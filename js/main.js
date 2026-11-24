@@ -119,10 +119,11 @@ function drawFavicon() {
     x.fill();
     const url = c.toDataURL('image/png');
     for (const rel of ['apple-touch-icon', 'icon']) {
-      const l = document.createElement('link');
-      l.rel = rel;
+      // Actualiza el enlace que ya existe en index.html: dejar el icono antiguo
+      // como primer apple-touch-icon hacía que iOS siguiera usando el PNG anterior.
+      let l = document.querySelector('link[rel="' + rel + '"]');
+      if (!l) { l = document.createElement('link'); l.rel = rel; document.head.appendChild(l); }
       l.href = url;
-      document.head.appendChild(l);
     }
   } catch {
     /* sin canvas */
