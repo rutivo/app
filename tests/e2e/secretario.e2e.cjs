@@ -38,6 +38,7 @@ const said = (page) => page.evaluate(() => self.__dicho.slice());
 const lastSaid = async (page) => { const d = await said(page); return d[d.length - 1] || ''; };
 async function say(page, text) {
   const n = (await said(page)).length;
+  if (await page.locator('.siri-form').evaluate((el) => el.hidden)) await page.click('[data-skb]');
   await page.fill('.siri-form input', text);
   await page.press('.siri-form input', 'Enter');
   for (let i = 0; i < 30 && (await said(page)).length === n; i++) await page.waitForTimeout(100);
@@ -46,7 +47,7 @@ async function say(page, text) {
 }
 async function openAssistant(page) {
   await page.click('#asisbtn');
-  await page.waitForSelector('.siri .siri-form:not([hidden])');
+  await page.waitForSelector('.siri .siri-orb');
 }
 
 (async () => {
