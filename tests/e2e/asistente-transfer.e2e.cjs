@@ -48,6 +48,9 @@ async function say(page, text) {
 async function openAssistant(page) {
   for (const b of await page.$$('button:has-text("Entendido")')) if (await b.isVisible()) await b.click();
   await page.click('#asisbtn');
+  await page.waitForSelector('.siri');
+  // Este flujo escribe órdenes de texto: mostrar el teclado con su botón explícito.
+  await page.click('.siri [data-skb]');
   await page.waitForSelector('.siri .siri-form:not([hidden])');
 }
 
