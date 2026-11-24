@@ -19,7 +19,7 @@ export async function transcribe() { return (self.__guion || []).shift() || ''; 
   const app = await serveApp();
   const browser = await chromium.launch({ args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream'] });
   try {
-    const ctx = await browser.newContext({ locale: 'es-ES', permissions: ['microphone'], viewport: { width: 400, height: 860 } });
+    const ctx = await browser.newContext({ locale: 'es-ES', userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1', permissions: ['microphone'], viewport: { width: 400, height: 860 }, isMobile: true, hasTouch: true });
     await ctx.route('**/*', (r) => {
       const u = new URL(r.request().url());
       if (u.pathname.endsWith('/js/config.js')) return r.fulfill({ contentType: 'text/javascript', body: "export const FIREBASE_CONFIG=null;export const FIREBASE_SDK='';export const FLIGHT_API='';export const PUSH_PUBLIC_KEY='';export const APP_CHECK_SITE_KEY='';" });
@@ -73,6 +73,8 @@ export async function transcribe() { return (self.__guion || []).shift() || ''; 
     ok('1 · «Oye Rutivo» dentro del asistente → «Dime, ¿en qué puedo ayudarte?»', d.includes('Dime, ¿en qué puedo ayudarte?'), JSON.stringify(d));
     const session = await page.evaluate(() => navigator.audioSession.type);
     ok('2 · se pide al iPhone micro y altavoz a la vez (play-and-record)', session === 'play-and-record', session);
+    const requests = await page.evaluate(() => self.__pedidos);
+    ok('3 · en iPhone se usa el micro de Rutivo (no se salta al teclado)', requests > 0, 'peticiones de micro: ' + requests);
     // Rutivo ha hablado → micro mudo → debe recuperarse solo y apuntar la orden siguiente
     let mov = [];
     for (let i = 0; i < 120 && !mov.length; i++) { await page.waitForTimeout(250); mov = await page.evaluate(() => JSON.parse(localStorage.getItem('cajaTransfer')).mov); }
