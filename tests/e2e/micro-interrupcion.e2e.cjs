@@ -54,7 +54,15 @@ export async function transcribe() { return (self.__guion || []).shift() || ''; 
     //    Se cierra el asistente antes, para que no quede ninguna escucha a medias.
     await page.click('[data-sx]');
     await page.waitForTimeout(600);
-    await page.evaluate(async () => { for (const c of self.__ctxs) { c.__roto = true; await c.suspend(); } });
+    await page.evaluate(() => {
+      // Safari/iOS emite AudioContext.statechange con state === 'interrupted'.
+      // suspend() solo produce 'suspended' y no reproduce una interrupción del sistema.
+      for (const c of self.__ctxs) {
+        c.__roto = true;
+        Object.defineProperty(c, 'state', { configurable: true, get: () => 'interrupted' });
+        if (typeof c.onstatechange === 'function') c.onstatechange(new Event('statechange'));
+      }
+    });
     await page.click('#asisbtn'); // se abre el asistente: intenta oír con el audio interrumpido
     let st = '';
     for (let i = 0; i < 120; i++) { await page.waitForTimeout(250); st = await page.textContent('.siri-status'); if (/micro no da sonido|Toca la bola para seguir/.test(st)) break; }
