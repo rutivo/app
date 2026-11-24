@@ -12,7 +12,7 @@ test('la versión de sw.js corresponde a los archivos actuales (si falla: npm ru
 
 test('todos los archivos de la app están en la lista de sw.js (abre sin conexión)', () => {
   const listed = new Set(swFiles());
-  const own = [...walk(join(ROOT, 'js')), ...walk(join(ROOT, 'css')), ...walk(join(ROOT, 'fonts'))].map((f) => './' + relative(ROOT, f));
+  const own = [...walk(join(ROOT, 'js')), ...walk(join(ROOT, 'css')), ...walk(join(ROOT, 'fonts'))].map((f) => './' + relative(ROOT, f).replaceAll('\\', '/'));
   const missing = own.filter((f) => !listed.has(f));
   assert.deepEqual(missing, []);
 });
