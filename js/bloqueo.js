@@ -252,7 +252,11 @@ export function initLock(h = {}) {
       }
     } else {
       clearTimeout(immediateTimer);
-      if (hiddenAt && Date.now() - hiddenAt >= (lockSettings().mins || 0) * 60e3) lockNow();
+      // «Al momento» conserva la misma gracia de 5 s al regresar: Face ID y
+      // los permisos del sistema pueden ocultar brevemente la PWA en iOS.
+      const mins = (lockSettings().mins || 0);
+      const threshold = mins === 0 ? 5000 : mins * 60e3;
+      if (hiddenAt && Date.now() - hiddenAt >= threshold) lockNow();
       hiddenAt = 0;
     }
   });
