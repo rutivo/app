@@ -1,4 +1,4 @@
-// «Oye Rutivo» en la pantalla principal → «Dime, ¿en qué puedo ayudarte?» →
+// «Oye Rutivo» en la pantalla principal → saludo hablado →
 // «Apúntame 20 como gasto con tarjeta» → lo apunta y lo confirma en voz alta.
 // Navegador real con micro simulado y la regla de audio del iPhone (solo arranca
 // dentro de un toque). El reconocedor de voz se sustituye por uno que «oye» un
@@ -55,7 +55,7 @@ async function run(browser, app, guion, lento = 0) {
     // Lo que dice Rutivo en voz alta
     self.__dicho = [];
     const fake = {
-      speaking: false, getVoices: () => [], cancel() {},
+      speaking: false, pending: false, getVoices: () => [], cancel() {}, resume() {},
       speak(u) { self.__dicho.push(u.text); setTimeout(() => { if (u.onstart) u.onstart(); setTimeout(() => u.onend && u.onend(), 200); }, 20); },
     };
     Object.defineProperty(window, 'speechSynthesis', { configurable: true, get: () => fake });
@@ -79,7 +79,7 @@ const waitFor = async (page, fn, ms = 40000) => { const t = Date.now(); while (D
     await page.mouse.click(200, 300); // un toque cualquiera en la pantalla principal
     await waitFor(page, async () => (await said(page)).some((t) => /ayudarte/.test(t)));
     let d = await said(page);
-    ok('1 · al decir «Oye Rutivo» en la pantalla principal contesta «Dime, ¿en qué puedo ayudarte?»', d[0] === 'Dime, ¿en qué puedo ayudarte?', JSON.stringify(d));
+    ok('1 · al decir «Oye Rutivo» en la pantalla principal contesta «Hola, ¿en qué puedo ayudarte?»', d[0] === 'Hola, ¿en qué puedo ayudarte?', JSON.stringify(d));
     ok('2 · sin abrir el asistente (solo el globo pequeño)', !(await page.$('.siri')) && !!(await page.$('.hf')));
     await waitFor(page, async () => (await movs(page)).length > 0);
     let m = await movs(page);
