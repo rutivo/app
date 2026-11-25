@@ -64,11 +64,14 @@ const typePin = async (page, pin) => { for (const d of pin) await page.click('#l
     await page.click('#acctbtn'); await page.waitForTimeout(400);
     await page.selectOption('#lkmin', '0');
     await page.dispatchEvent('#lkmin', 'change');
+    // La vuelta inmediata del diálogo Face ID / permiso del micrófono no debe
+    // bloquear otra vez la app aunque el ajuste sea «Al momento».
+    await hide('hidden'); await hide('visible');
+    ok('8 · con «al momento», volver enseguida de un permiso del sistema no vuelve a pedir el PIN', !(await locked(page)));
+    // Si de verdad se queda fuera más de 5 s, sí debe proteger los datos.
     await hide('hidden');
-    // La app espera 5 s antes de bloquear: iOS puede ocultar brevemente la PWA
-    // al mostrar Face ID o un permiso del sistema. Comprobar antes era una carrera.
     await page.waitForTimeout(5200);
-    ok('8 · con «al momento», tras confirmar que sigue en segundo plano queda tapada (tampoco se ve en la multitarea)', await locked(page));
+    ok('8b · con «al momento», tras 5 s reales en segundo plano queda tapada', await locked(page));
     await hide('visible');
     await typePin(page, '4821');
 
