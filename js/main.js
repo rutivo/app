@@ -76,14 +76,47 @@ function initTabs() {
 function drawFavicon() {
   try {
     const c = document.createElement('canvas');
-    c.width = c.height = 180;
+    c.width = c.height = 192;
     const x = c.getContext('2d');
-    x.fillStyle = '#1d5fe0';
-    x.fillRect(0, 0, 180, 180);
+    const round = (ctx, px, py, w, h, r) => {
+      ctx.beginPath();
+      ctx.moveTo(px + r, py);
+      ctx.arcTo(px + w, py, px + w, py + h, r);
+      ctx.arcTo(px + w, py + h, px, py + h, r);
+      ctx.arcTo(px, py + h, px, py, r);
+      ctx.arcTo(px, py, px + w, py, r);
+      ctx.closePath();
+    };
+    const bg = x.createLinearGradient(18, 16, 174, 180);
+    bg.addColorStop(0, '#4b9aff');
+    bg.addColorStop(1, '#123a9b');
+    round(x, 5, 5, 182, 182, 43);
+    x.fillStyle = bg;
+    x.fill();
+    x.strokeStyle = 'rgba(255,255,255,.5)';
+    x.lineWidth = 3;
+    x.stroke();
+    x.fillStyle = 'rgba(255,255,255,.12)';
+    x.beginPath();
+    x.arc(96, 96, 72, 0, Math.PI * 2);
+    x.fill();
     x.fillStyle = '#fff';
     x.textAlign = 'center';
-    x.font = '800 44px Arial,sans-serif';
-    x.fillText('RUTIVO', 90, 118);
+    x.textBaseline = 'middle';
+    x.font = '900 112px Manrope,Arial,sans-serif';
+    x.fillText('R', 91, 103);
+    x.fillStyle = '#8ee7ff';
+    x.beginPath();
+    x.moveTo(145, 30);
+    x.lineTo(153, 48);
+    x.lineTo(171, 56);
+    x.lineTo(153, 64);
+    x.lineTo(145, 82);
+    x.lineTo(137, 64);
+    x.lineTo(119, 56);
+    x.lineTo(137, 48);
+    x.closePath();
+    x.fill();
     const url = c.toDataURL('image/png');
     for (const rel of ['apple-touch-icon', 'icon']) {
       const l = document.createElement('link');

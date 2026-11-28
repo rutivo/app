@@ -7,8 +7,8 @@
 // haya cambiado el documento mientras tanto.
 import { $ } from './dom.js';
 import * as idb from './localDb.js';
-import { LISTS, S, clearLocal, hasLocalData, replaceState, setSaveListener, writeLocal } from './store.js';
-import { merge3, sameState, snapshot } from './sync/merge.js';
+import { LISTS, S, clearLocal, hasLocalData, replaceState, sanitizeState, setSaveListener, writeLocal } from './store.js';
+import { firstSyncSnapshot, merge3, sameState, snapshot } from './sync/merge.js';
 import { buildShards, classifyError, joinShards, shardLabel } from './sync/shards.js';
 
 const OWNER_KEY = 'cajaOwner'; // usuario al que pertenecen los datos de este móvil
@@ -169,11 +169,23 @@ function notify() {
 /** El estado que sabemos que hay en la nube (según lo último leído o escrito). */
 const remoteKnown = () => joinShards(Object.entries(lastSent).map(([id, j]) => ({ id, data: { j } }))).R;
 
+const DEFAULT_CFG = { nom: '', nif: '', dir: '', iva: 10, lic: '', cp: '', loc: '', ico: 'taxi', col: 'azul', hd: 1, hm: 500 };
+function hasLocalDataToSync() {
+  if (hasLocalData() || Object.keys(S.cli || {}).length) return true;
+  return Object.entries(S.cfg || {}).some(([key, value]) => {
+    if (Object.prototype.hasOwnProperty.call(DEFAULT_CFG, key)) return value !== DEFAULT_CFG[key];
+    if (typeof value === 'string') return value.trim() !== '';
+    if (Array.isArray(value)) return value.length > 0;
+    return value !== null && value !== undefined && (typeof value !== 'object' || Object.keys(value).length > 0);
+  });
+}
+
 /** Aplica el estado fusionado a la app (sin tocar lo que no cambia). */
 function apply(state) {
-  for (const k of LISTS) S[k] = state[k];
-  S.cfg = state.cfg;
-  S.cli = state.cli;
+  const clean = sanitizeState(state);
+  for (const k of LISTS) S[k] = clean[k];
+  S.cfg = clean.cfg;
+  S.cli = clean.cli;
   writeLocal();
   rerenderFn();
 }
@@ -368,16 +380,18 @@ function schedule() {
  */
 async function firstSync(uid) {
   const owner = getOwner();
+  let keepLocalData = hasLocalDataToSync();
   if (owner && owner !== uid) {
     clearLocal();
     replaceState(null);
+    keepLocalData = false;
   }
   uidNow = uid;
   base = null;
   // La base se lee del almacén grande (asíncrono): ninguna sincronización empieza antes
   baseReady = (async () => {
     const loaded = owner === uid ? await loadBase(uid) : null;
-    if (uidNow === uid) base = loaded;
+    if (uidNow === uid) base = loaded || { snap: firstSyncSnapshot(S, keepLocalData, DEFAULT_CFG), tombs: {}, metaTs: null };
   })();
   await baseReady;
   if (uidNow !== uid) return; // se cerró la sesión mientras se leía

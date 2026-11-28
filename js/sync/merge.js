@@ -68,6 +68,15 @@ export function snapshot(state) {
   return { lists, cfg: fields(state.cfg), cli: fields(state.cli) };
 }
 
+/** En el primer acceso, solo los valores de configuración realmente editados cuentan como locales. */
+export function firstSyncSnapshot(local, keepLocalData, defaultCfg = {}) {
+  if (!keepLocalData) return snapshot(local);
+  const baseline = { ...local, cfg: {}, cli: {} };
+  for (const k of LIST_KEYS) baseline[k] = [];
+  for (const [key, value] of Object.entries(defaultCfg)) if (local.cfg && local.cfg[key] === value) baseline.cfg[key] = value;
+  return snapshot(baseline);
+}
+
 /** Une las lápidas de dos lados y olvida las muy antiguas. */
 export function mergeTombs(a = {}, b = {}, now = Date.now()) {
   const out = {};
