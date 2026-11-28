@@ -19,7 +19,7 @@ const types = { '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/ja
 /** Copia de la app (lo que se publica) en una carpeta temporal. */
 function copyApp(dest, from = REPO) {
   fs.mkdirSync(dest, { recursive: true });
-  for (const f of ['index.html', 'legal.html', 'cliente.html', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png', 'sw.js', '.nojekyll']) if (fs.existsSync(path.join(from, f))) fs.copyFileSync(path.join(from, f), path.join(dest, f));
+  for (const f of ['index.html', 'legal.html', 'cliente.html', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png', 'rutivo-icon.svg', 'sw.js', '.nojekyll']) if (fs.existsSync(path.join(from, f))) fs.copyFileSync(path.join(from, f), path.join(dest, f));
   for (const d of ['js', 'css', 'fonts', 'scripts']) if (fs.existsSync(path.join(from, d))) fs.cpSync(path.join(from, d), path.join(dest, d), { recursive: true });
   // Sin nube ni servicios externos (y la huella recalculada con este config.js)
   fs.writeFileSync(path.join(dest, 'js', 'config.js'), CONFIG);
